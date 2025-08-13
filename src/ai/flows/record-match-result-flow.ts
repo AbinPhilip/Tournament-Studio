@@ -75,39 +75,35 @@ const recordMatchResultFlow = ai.defineFlow(
             matchesRef,
             where('eventType', '==', completedMatch.eventType),
             where('round', '==', completedMatch.round),
-            where('status', '==', 'COMPLETED'),
-            where('winnerId', '!=', input.winnerId) // Exclude the current match's winner
+            where('status', '==', 'COMPLETED')
         );
         
         const completedRoundMatchesSnap = await getDocs(q);
+        const winnersInRound = completedRoundMatchesSnap.docs.map(d => d.data().winnerId).filter(Boolean);
 
-        // Find a winner that isn't already scheduled for the next round
-        let opponentWinnerId: string | null = null;
-        for(const docSnap of completedRoundMatchesSnap.docs) {
-             const potentialOpponentWinnerId = docSnap.data().winnerId;
-             
-             // Check if this potential opponent is already scheduled in the next round
-             const nextRoundOpponentQuery = query(
-                matchesRef,
-                where('round', '==', completedMatch.round + 1),
-                where('eventType', '==', completedMatch.eventType),
-             );
-             
-             const nextRoundMatchesSnap = await getDocs(nextRoundOpponentQuery);
-             const isOpponentScheduled = nextRoundMatchesSnap.docs.some(matchDoc => {
-                const match = matchDoc.data();
-                return match.team1Id === potentialOpponentWinnerId || match.team2Id === potentialOpponentWinnerId;
-             });
+        const currentWinnerId = input.winnerId;
 
-             if(!isOpponentScheduled) {
-                opponentWinnerId = potentialOpponentWinnerId;
-                break;
-             }
+        // Check if the current winner is already scheduled in the next round
+        const nextRoundQuery = query(
+            matchesRef,
+            where('round', '==', completedMatch.round + 1),
+            where('eventType', '==', completedMatch.eventType)
+        );
+        const nextRoundMatchesSnap = await getDocs(nextRoundQuery);
+        const scheduledNextRoundIds = new Set(nextRoundMatchesSnap.docs.flatMap(doc => [doc.data().team1Id, doc.data().team2Id]));
+
+        if (scheduledNextRoundIds.has(currentWinnerId)) {
+            // This winner is already scheduled, no action needed.
+            await batch.commit();
+            return;
         }
-        
+
+        // Find an opponent who is also a winner and is not yet scheduled for the next round
+        const opponentWinnerId = winnersInRound.find(id => id !== currentWinnerId && !scheduledNextRoundIds.has(id));
+
         if (opponentWinnerId) {
             // We have a pair! Schedule the next match.
-            const winnerTeamRef = doc(db, 'teams', input.winnerId);
+            const winnerTeamRef = doc(db, 'teams', currentWinnerId);
             const opponentTeamRef = doc(db, 'teams', opponentWinnerId);
             
             const [winnerTeamSnap, opponentTeamSnap] = await Promise.all([getDoc(winnerTeamRef), getDoc(opponentTeamRef)]);
@@ -140,7 +136,7 @@ const recordMatchResultFlow = ai.defineFlow(
             if (availableCourt) {
                 const newMatchRef = doc(collection(db, 'matches'));
                 const newMatchData: Omit<Match, 'id'> = {
-                    team1Id: input.winnerId,
+                    team1Id: currentWinnerId,
                     team2Id: opponentWinnerId,
                     team1Name: winnerTeam.player1Name + (winnerTeam.player2Name ? ` & ${winnerTeam.player2Name}` : ''),
                     team2Name: opponentTeam.player1Name + (opponentTeam.player2Name ? ` & ${opponentTeam.player2Name}` : ''),
