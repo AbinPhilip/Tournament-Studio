@@ -70,8 +70,8 @@ export default function UpdateUserView() {
 
     setData(updatedData);
     toast({
-        title: "Success",
-        description: `"${selectedItem.name}" has been updated.`,
+        title: "Update Successful",
+        description: `"${selectedItem.name}" has been updated to "${editValue}".`,
     });
     setIsDialogOpen(false);
     setSelectedItem(null);

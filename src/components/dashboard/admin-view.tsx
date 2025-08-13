@@ -145,7 +145,7 @@ export default function AdminView() {
   const teamType = teamForm.watch('type');
 
   const handleDeleteUser = () => {
-    if(!userToDelete) return;
+    if(!userToDelete || userToDelete.id === user?.id) return;
     setUsers(users.filter(u => u.id !== userToDelete.id));
     setUserToDelete(null);
   }
@@ -492,7 +492,7 @@ export default function AdminView() {
                                 <DropdownMenuLabel>Actions</DropdownMenuLabel>
                                 <DropdownMenuItem disabled>Edit user</DropdownMenuItem>
                                 <DropdownMenuSeparator />
-                                <DropdownMenuItem className="text-destructive focus:text-destructive focus:bg-destructive/10" onSelect={() => setUserToDelete(u)}>
+                                <DropdownMenuItem className="text-destructive focus:text-destructive focus:bg-destructive/10" onSelect={() => setUserToDelete(u)} disabled={u.id === user?.id}>
                                 <Trash2 className="mr-2 h-4 w-4" />
                                 Delete
                                 </DropdownMenuItem>
@@ -551,5 +551,3 @@ export default function AdminView() {
     </div>
   );
 }
-
-    
