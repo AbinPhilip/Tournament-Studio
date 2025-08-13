@@ -437,7 +437,7 @@ export default function TournamentSettingsPage() {
         existingMatchesQuery.forEach(doc => deleteBatch.delete(doc.ref));
         await deleteBatch.commit();
         
-        const { id, startedAt, ...restOfTournament } = tournament;
+        const { startedAt, ...restOfTournament } = tournament;
         const plainTournament = {
             ...restOfTournament,
             date: format(tournament.date, 'yyyy-MM-dd'),
@@ -1122,3 +1122,5 @@ export default function TournamentSettingsPage() {
     </div>
   );
 }
+
+    
