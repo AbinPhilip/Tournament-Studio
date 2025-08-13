@@ -1,3 +1,4 @@
+
 'use server';
 /**
  * @fileOverview A flow for sending a welcome email to new users.
@@ -18,6 +19,42 @@ const WelcomeEmailInputSchema = z.object({
 });
 export type WelcomeEmailInput = z.infer<typeof WelcomeEmailInputSchema>;
 
+const WelcomeEmailOutputSchema = z.object({
+    subject: z.string().describe('The subject line for the email.'),
+    body: z.string().describe('The body content of the email.'),
+});
+
+const welcomeEmailPrompt = ai.definePrompt({
+    name: 'welcomeEmailPrompt',
+    input: { schema: WelcomeEmailInputSchema },
+    output: { schema: WelcomeEmailOutputSchema },
+    prompt: `
+        You are an assistant that writes welcoming and informative emails to new users of an application called "Score Vision".
+        Your tone should be friendly and professional.
+        
+        Generate a welcome email for a new user with the following details:
+        - Name: {{{name}}}
+        - Username: {{{username}}}
+        - Role: {{{role}}}
+
+        The email should:
+        1.  Have a clear and welcoming subject line.
+        2.  Greet the user by name.
+        3.  Confirm their account creation and mention their username.
+        4.  Briefly explain what they can do based on their assigned role. Keep it concise.
+            - "individual": Can view their own profile and information.
+            - "update": Can modify specific data records in the system.
+            - "inquiry": Has read-only access to browse system data.
+            - "admin": Can manage users, teams, and system settings.
+            - "super": Has full system-wide administrative powers.
+        5.  Provide the application URL for them to log in: {{{appUrl}}}
+        6.  End with a friendly closing from "The Score Vision Team".
+
+        Do not include their phone number in the email body.
+    `,
+});
+
+
 const sendWelcomeEmailFlow = ai.defineFlow(
   {
     name: 'sendWelcomeEmailFlow',
@@ -25,30 +62,22 @@ const sendWelcomeEmailFlow = ai.defineFlow(
     outputSchema: z.object({ success: z.boolean() }),
   },
   async (input) => {
-    const subject = 'Welcome to Score Vision!';
-    const body = `
-      Hello ${input.name},
+    
+    const { output } = await welcomeEmailPrompt(input);
 
-      Welcome to Score Vision! Your account has been created successfully.
-      
-      You can log in using the following credentials:
-      Username: ${input.username}
-      Phone Number: ${input.phoneNumber}
+    if (!output) {
+        console.error('AI failed to generate welcome email content.');
+        return { success: false };
+    }
 
-      Your assigned role is: ${input.role}
-
-      You can access the application at: ${input.appUrl}
-
-      Best regards,
-      The Score Vision Team
-    `;
+    const { subject, body } = output;
 
     // In a real application, you would integrate an email sending service here.
-    // For this example, we'll just log the email to the console.
+    // For this example, we'll just log the AI-generated email to the console.
     console.log('--- Sending Welcome Email ---');
-    console.log(`To: ${input.name} <email placeholder>`); // email is in `values` but not in schema
+    console.log(`To: ${input.name}`);
     console.log(`Subject: ${subject}`);
-    console.log(`Body: ${body}`);
+    console.log(`Body:\n${body}`);
     console.log('-----------------------------');
 
     return { success: true };
