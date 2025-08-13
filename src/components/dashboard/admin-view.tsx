@@ -91,13 +91,13 @@ const organizationFormSchema = z.object({
 });
 
 const teamFormSchema = z.object({
-  type: z.enum(['singles', 'mens_doubles', 'mixed_doubles']),
+  type: z.enum(['singles', 'mens_doubles', 'womens_doubles', 'mixed_doubles']),
   player1Name: z.string().min(2, "Player 1 name is required."),
   player2Name: z.string().optional(),
   genderP1: z.enum(['male', 'female']).optional(),
   organizationId: z.string({ required_error: "Organization is required." }),
 }).refine(data => {
-    if (data.type === 'mens_doubles' || data.type === 'mixed_doubles') {
+    if (data.type === 'mens_doubles' || data.type === 'mixed_doubles' || data.type === 'womens_doubles') {
         return !!data.player2Name && data.player2Name.length >= 2;
     }
     return true;
@@ -301,6 +301,7 @@ export default function AdminView() {
                                     <SelectContent>
                                         <SelectItem value="singles">Singles</SelectItem>
                                         <SelectItem value="mens_doubles">Men's Doubles</SelectItem>
+                                        <SelectItem value="womens_doubles">Women's Doubles</SelectItem>
                                         <SelectItem value="mixed_doubles">Mixed Doubles</SelectItem>
                                     </SelectContent>
                                 </Select><FormMessage />
@@ -313,7 +314,7 @@ export default function AdminView() {
                                 <FormMessage />
                             </FormItem>
                         )} />
-                        {(teamType === 'mens_doubles' || teamType === 'mixed_doubles') && (
+                        {(teamType === 'mens_doubles' || teamType === 'mixed_doubles' || teamType === 'womens_doubles') && (
                             <FormField control={teamForm.control} name="player2Name" render={({ field }) => (
                                 <FormItem>
                                     <FormLabel>Player 2 Name</FormLabel>
@@ -550,3 +551,5 @@ export default function AdminView() {
     </div>
   );
 }
+
+    

@@ -20,10 +20,14 @@ export const mockOrganizations: Organization[] = [
     { id: '1', name: 'Legends Club', location: 'Kuala Lumpur, Malaysia' },
     { id: '2', name: 'Indonesia National Team', location: 'Jakarta, Indonesia' },
     { id: '3', name: 'Spain National Team', location: 'Madrid, Spain' },
+    { id: '4', name: 'Japan National Team', location: 'Tokyo, Japan' },
 ];
 
 export const mockTeams: Team[] = [
     { id: '1', type: 'mens_doubles', player1Name: 'Lee Chong Wei', player2Name: 'Lin Dan', organizationId: '1', genderP1: 'male' },
     { id: '2', type: 'mixed_doubles', player1Name: 'Tontowi Ahmad', player2Name: 'Liliyana Natsir', organizationId: '2', genderP1: 'male' },
     { id: '3', type: 'singles', player1Name: 'Carolina Marín', organizationId: '3' },
+    { id: '4', type: 'womens_doubles', player1Name: 'Yuki Fukushima', player2Name: 'Sayaka Hirota', organizationId: '4' },
 ];
+
+    

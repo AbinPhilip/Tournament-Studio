@@ -18,7 +18,7 @@ export interface AppData {
   isFlagged: boolean;
 }
 
-export type TeamType = 'singles' | 'mens_doubles' | 'mixed_doubles';
+export type TeamType = 'singles' | 'mens_doubles' | 'womens_doubles' | 'mixed_doubles';
 export type Gender = 'male' | 'female';
 
 export interface Organization {
@@ -35,3 +35,5 @@ export interface Team {
     genderP1?: Gender;
     organizationId: string;
 }
+
+    
