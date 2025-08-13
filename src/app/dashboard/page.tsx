@@ -12,6 +12,7 @@ export default function DashboardPage() {
   const renderDashboardByRole = () => {
     switch (user?.role) {
       case 'admin':
+      case 'super':
         return <AdminView />;
       case 'individual':
         return <IndividualView />;

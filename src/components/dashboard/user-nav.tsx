@@ -14,7 +14,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { useRouter } from 'next/navigation';
-import { LogOut, User as UserIcon, Shield, UserCog, UserSearch } from 'lucide-react';
+import { LogOut, User as UserIcon, Shield, UserCog, UserSearch, ShieldAlert } from 'lucide-react';
 import type { UserRole } from '@/types';
 
 const RoleAvatar = ({ role, className }: { role: UserRole; className?: string }) => {
@@ -22,6 +22,8 @@ const RoleAvatar = ({ role, className }: { role: UserRole; className?: string })
   switch (role) {
     case 'admin':
       return <Shield {...iconProps} />;
+    case 'super':
+        return <ShieldAlert {...iconProps} />;
     case 'update':
       return <UserCog {...iconProps} />;
     case 'inquiry':

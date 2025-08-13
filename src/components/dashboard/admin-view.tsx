@@ -70,6 +70,7 @@ import { useToast } from '@/hooks/use-toast';
 function RoleBadge({ role }: { role: UserRole }) {
     const variant: BadgeProps["variant"] = {
         admin: "destructive",
+        super: "destructive",
         update: "default",
         inquiry: "secondary",
         individual: "outline"
@@ -82,7 +83,7 @@ const userFormSchema = z.object({
   username: z.string().min(1, { message: "Username is required." }),
   email: z.string().email({ message: "Please enter a valid email." }),
   phoneNumber: z.string().regex(/^\d{10}$/, { message: 'Please enter a valid 10-digit phone number.' }),
-  role: z.enum(['individual', 'update', 'admin', 'inquiry']),
+  role: z.enum(['individual', 'update', 'admin', 'inquiry', 'super']),
 });
 
 const organizationFormSchema = z.object({
@@ -449,6 +450,7 @@ export default function AdminView() {
                                         <SelectItem value="update">Update User</SelectItem>
                                         <SelectItem value="inquiry">Inquiry User</SelectItem>
                                         <SelectItem value="admin">Admin</SelectItem>
+                                        <SelectItem value="super">Super User</SelectItem>
                                     </SelectContent>
                                 </Select><FormMessage />
                             </FormItem>

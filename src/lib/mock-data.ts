@@ -5,6 +5,7 @@ export const mockUsers: User[] = [
   { id: '2', username: 'update_user', phoneNumber: '4445556666', role: 'update', name: 'Ben Carter', email: 'ben.carter@example.com' },
   { id: '3', username: 'admin_user', phoneNumber: '7778889999', role: 'admin', name: 'Casey Smith', email: 'casey.smith@example.com' },
   { id: '4', username: 'inquiry_user', phoneNumber: '1234567890', role: 'inquiry', name: 'Dana Ray', email: 'dana.ray@example.com' },
+  { id: '5', username: 'super_user', phoneNumber: '0000000000', role: 'super', name: 'Super Admin', email: 'super.admin@example.com' },
 ];
 
 export const mockAppData: AppData[] = [
