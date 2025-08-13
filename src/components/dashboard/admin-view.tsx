@@ -16,7 +16,7 @@ import { Badge, type BadgeProps } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Switch } from '@/components/ui/switch';
-import type { User, UserRole, Team, Organization, Tournament } from '@/types';
+import type { User, UserRole, Team, Organization } from '@/types';
 import { useAuth } from '@/hooks/use-auth';
 import { MoreHorizontal, Trash2, UserPlus, Users as TeamsIcon, Building, PlusCircle, Database, Upload, Trophy } from 'lucide-react';
 import {
@@ -70,7 +70,7 @@ import { collection, getDocs, addDoc, deleteDoc, doc, query, where } from 'fireb
 import Link from 'next/link';
 import { sendWelcomeEmail } from '@/ai/flows/send-welcome-email-flow';
 import Image from 'next/image';
-import TournamentAdmin from './tournament-admin';
+import { useRouter } from 'next/navigation';
 
 function RoleBadge({ role }: { role: UserRole }) {
     const variant: BadgeProps["variant"] = {
@@ -140,6 +140,7 @@ const teamFormSchema = z.object({
 
 export default function AdminView() {
   const { user } = useAuth();
+  const router = useRouter();
   const { toast } = useToast();
   const [users, setUsers] = useState<User[]>([]);
   const [teams, setTeams] = useState<Team[]>([]);
@@ -274,10 +275,9 @@ export default function AdminView() {
       </div>
 
       <Tabs defaultValue="teams">
-        <TabsList className="grid w-full grid-cols-4">
+        <TabsList className="grid w-full grid-cols-3">
           <TabsTrigger value="teams">Team & Org Management</TabsTrigger>
           <TabsTrigger value="users">User Management</TabsTrigger>
-          <TabsTrigger value="tournament"><Trophy className="mr-2 h-4 w-4" /> Tournament</TabsTrigger>
           <TabsTrigger value="settings">System Settings</TabsTrigger>
         </TabsList>
         <TabsContent value="teams">
@@ -634,11 +634,19 @@ export default function AdminView() {
                 </CardContent>
             </Card>
         </TabsContent>
-        <TabsContent value="tournament">
-            <TournamentAdmin />
-        </TabsContent>
         <TabsContent value="settings">
             <div className="grid gap-4 mt-4">
+                <Card>
+                    <CardHeader>
+                        <CardTitle>Tournament Management</CardTitle>
+                        <CardDescription>Configure the settings for the upcoming tournament.</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                        <Button onClick={() => router.push('/dashboard/tournament')}>
+                            <Trophy className="mr-2 h-4 w-4" /> Go to Tournament Page
+                        </Button>
+                    </CardContent>
+                </Card>
                 <Card>
                     <CardHeader>
                     <CardTitle>System Settings</CardTitle>
@@ -695,3 +703,5 @@ export default function AdminView() {
     </div>
   );
 }
+
+    
