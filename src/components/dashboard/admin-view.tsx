@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useEffect } from 'react';
@@ -235,10 +236,17 @@ export default function AdminView() {
 
   const handleAddUser = async (values: z.infer<typeof userFormSchema>) => {
     try {
-      const userExistsQuery = query(collection(db, 'users'), where('username', '==', values.username));
-      const userExistsSnap = await getDocs(userExistsQuery);
-      if (!userExistsSnap.empty) {
+      const usernameQuery = query(collection(db, 'users'), where('username', '==', values.username));
+      const emailQuery = query(collection(db, 'users'), where('email', '==', values.email));
+      
+      const [usernameSnap, emailSnap] = await Promise.all([getDocs(usernameQuery), getDocs(emailQuery)]);
+
+      if (!usernameSnap.empty) {
         toast({ title: 'Error', description: 'Username already exists.', variant: 'destructive' });
+        return;
+      }
+      if (!emailSnap.empty) {
+        toast({ title: 'Error', description: 'Email already exists.', variant: 'destructive' });
         return;
       }
 
@@ -283,6 +291,13 @@ export default function AdminView() {
 
   const handleAddOrg = async (values: z.infer<typeof organizationFormSchema>) => {
     try {
+        const q = query(collection(db, 'organizations'), where('name', '==', values.name));
+        const querySnapshot = await getDocs(q);
+        if (!querySnapshot.empty) {
+            toast({ title: 'Error', description: 'An organization with this name already exists.', variant: 'destructive' });
+            return;
+        }
+
         const newOrgDoc = await addDoc(collection(db, 'organizations'), values);
         const newOrg: Organization = { id: newOrgDoc.id, ...values };
         setOrganizations([...organizations, newOrg]);
@@ -340,6 +355,19 @@ export default function AdminView() {
           genderP2: values.type === 'mixed_doubles' ? values.genderP2 : undefined,
           organizationId: values.organizationId,
         };
+
+        const existingTeamQuery = query(
+            collection(db, 'teams'),
+            where('type', '==', teamData.type),
+            where('player1Name', '==', teamData.player1Name),
+            where('player2Name', '==', teamData.player2Name)
+        );
+        const querySnapshot = await getDocs(existingTeamQuery);
+        if (!querySnapshot.empty) {
+            toast({ title: 'Error', description: 'This exact team has already been registered.', variant: 'destructive' });
+            return;
+        }
+
         const newTeamDoc = await addDoc(collection(db, 'teams'), teamData);
         const newTeam = { id: newTeamDoc.id, ...teamData };
         setTeams([...teams, newTeam as Team]);
@@ -1068,3 +1096,5 @@ export default function AdminView() {
     </div>
   );
 }
+
+    

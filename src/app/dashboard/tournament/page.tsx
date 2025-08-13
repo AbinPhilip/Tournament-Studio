@@ -23,7 +23,7 @@ import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 import { useToast } from '@/hooks/use-toast';
 import { db } from '@/lib/firebase';
-import { collection, doc, getDocs, setDoc, updateDoc, Timestamp, DocumentReference, deleteDoc } from 'firebase/firestore';
+import { collection, doc, getDocs, setDoc, updateDoc, Timestamp, DocumentReference, deleteDoc, query } from 'firebase/firestore';
 import type { Tournament } from '@/types';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useRouter } from 'next/navigation';
@@ -114,6 +114,12 @@ export default function TournamentAdminPage() {
       if (tournamentDocRef) {
         await updateDoc(tournamentDocRef, dataToSave);
       } else {
+        const q = query(collection(db, 'tournaments'));
+        const querySnapshot = await getDocs(q);
+        if(!querySnapshot.empty) {
+            toast({ title: 'Error', description: 'A tournament is already configured. Please update the existing one.', variant: 'destructive'});
+            return;
+        }
         const newDocRef = doc(collection(db, 'tournaments'));
         await setDoc(newDocRef, dataToSave);
         setTournamentDocRef(newDocRef);
@@ -326,4 +332,5 @@ export default function TournamentAdminPage() {
     </>
   );
 }
+
     
