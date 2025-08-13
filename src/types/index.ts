@@ -42,13 +42,17 @@ export interface Team {
 }
 
 export type TournamentType = 'round-robin' | 'knockout';
+export type TournamentStatus = 'PENDING' | 'IN_PROGRESS' | 'COMPLETED';
 
 export interface Tournament {
     id:string;
     location: string;
+    date: Timestamp;
     numberOfCourts: number;
     courtNames: { name: string }[];
     tournamentType: TournamentType;
+    status: TournamentStatus;
+    startedAt?: Timestamp;
 }
 
 export type MatchStatus = 'PENDING' | 'SCHEDULED' | 'IN_PROGRESS' | 'COMPLETED';

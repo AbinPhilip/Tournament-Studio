@@ -6,9 +6,9 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
 import { db } from '@/lib/firebase';
-import { collection, getDocs, writeBatch, doc, query, deleteDoc } from 'firebase/firestore';
+import { collection, getDocs, writeBatch, doc, query, updateDoc } from 'firebase/firestore';
 import type { Tournament, Team, Match, TeamType } from '@/types';
-import { Loader2, CalendarPlus, Trash2, ArrowLeft } from 'lucide-react';
+import { Loader2, CalendarPlus, Trash2, ArrowLeft, PlayCircle } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { scheduleMatches } from '@/ai/flows/schedule-matches-flow';
 import { Timestamp } from 'firebase/firestore';
@@ -37,9 +37,7 @@ export default function SchedulerPage() {
                     return;
                 }
                 const tourneyDoc = tournamentSnap.docs[0];
-                // eslint-disable-next-line @typescript-eslint/no-unused-vars
-                const { date, ...tourneyData } = tourneyDoc.data();
-                setTournament({ id: tourneyDoc.id, ...tourneyData } as Tournament);
+                setTournament({ id: tourneyDoc.id, ...tourneyDoc.data() } as Tournament);
 
                 const teamsSnap = await getDocs(collection(db, 'teams'));
                 setTeams(teamsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Team)));
@@ -72,7 +70,17 @@ export default function SchedulerPage() {
 
         setIsGenerating(true);
         try {
-            const generatedMatches = await scheduleMatches({ teams, tournament });
+            // First, update the tournament status
+            const tournamentRef = doc(db, 'tournaments', tournament.id);
+            await updateDoc(tournamentRef, { status: 'IN_PROGRESS', startedAt: new Date() });
+            
+            // Now generate the matches
+            const tournamentWithDate = {
+                ...tournament,
+                date: tournament.date.toDate() // Ensure date is a JS Date object for the flow
+            };
+
+            const generatedMatches = await scheduleMatches({ teams, tournament: tournamentWithDate });
             
             if (!generatedMatches || generatedMatches.length === 0) {
                 toast({ title: 'Schedule Generation Failed', description: 'The AI could not generate a schedule. Please try again.', variant: 'destructive' });
@@ -101,8 +109,9 @@ export default function SchedulerPage() {
             
             newMatches.sort((a, b) => a.startTime.toMillis() - b.startTime.toMillis());
             setMatches(newMatches);
+            setTournament(prev => prev ? { ...prev, status: 'IN_PROGRESS' } : null);
 
-            toast({ title: 'Schedule Generated!', description: `${newMatches.length} matches have been scheduled.` });
+            toast({ title: 'Tournament Started & Schedule Generated!', description: `${newMatches.length} matches have been scheduled.` });
 
         } catch (error) {
             console.error(error);
@@ -122,8 +131,16 @@ export default function SchedulerPage() {
                 batch.delete(doc.ref);
             });
             await batch.commit();
+            
+            // Also reset tournament status
+            if (tournament) {
+                const tournamentRef = doc(db, 'tournaments', tournament.id);
+                await updateDoc(tournamentRef, { status: 'PENDING' });
+                setTournament(prev => prev ? { ...prev, status: 'PENDING' } : null);
+            }
+
             setMatches([]);
-            toast({ title: 'Schedule Cleared', description: 'All matches have been deleted.' });
+            toast({ title: 'Schedule Cleared', description: 'All matches have been deleted and tournament status is reset.' });
         } catch (error) {
             console.error("Error clearing schedule:", error);
             toast({ title: 'Error', description: 'Failed to clear schedule.', variant: 'destructive' });
@@ -172,13 +189,13 @@ export default function SchedulerPage() {
             </CardHeader>
             <CardContent className="space-y-6">
                 <div className="flex flex-wrap gap-4 p-4 border rounded-lg bg-muted/50">
-                    <Button onClick={handleGenerateSchedule} disabled={isGenerating || matches.length > 0}>
+                    <Button onClick={handleGenerateSchedule} disabled={isGenerating || matches.length > 0 || tournament?.status === 'IN_PROGRESS'}>
                         {isGenerating ? (
                             <Loader2 className="mr-2 animate-spin" />
                         ) : (
-                            <CalendarPlus className="mr-2" />
+                            <PlayCircle className="mr-2" />
                         )}
-                        Generate Schedule
+                        {tournament?.status === 'IN_PROGRESS' ? 'Tournament In Progress' : 'Start Tournament & Generate Schedule'}
                     </Button>
                      <AlertDialog>
                         <AlertDialogTrigger asChild>
@@ -191,7 +208,7 @@ export default function SchedulerPage() {
                             <AlertDialogHeader>
                                 <AlertDialogTitle>Are you sure?</AlertDialogTitle>
                                 <AlertDialogDescription>
-                                    This action cannot be undone. This will permanently delete all scheduled matches.
+                                    This action cannot be undone. This will permanently delete all scheduled matches and reset the tournament status.
                                 </AlertDialogDescription>
                             </AlertDialogHeader>
                             <AlertDialogFooter>
@@ -204,7 +221,12 @@ export default function SchedulerPage() {
                 
                 {matches.length === 0 ? (
                     <div className="text-center py-12">
-                        <p className="text-muted-foreground">No matches scheduled. Click "Generate Schedule" to begin.</p>
+                         <p className="text-lg font-semibold mb-2">
+                            {tournament?.status === 'PENDING' ? 'Tournament Not Started' : 'No Matches Scheduled'}
+                        </p>
+                        <p className="text-muted-foreground">
+                            {tournament?.status === 'PENDING' ? 'Click "Start Tournament" to begin.' : 'No matches have been generated yet.'}
+                        </p>
                     </div>
                 ) : (
                     <div className="space-y-8">
