@@ -1,18 +1,13 @@
+
 rules_version = '2';
+
 service cloud.firestore {
   match /databases/{database}/documents {
-    match /users/{userId} {
-      // Allow unauthenticated users to query the users collection to find their credentials.
-      allow list: if true;
-      // Allow users to read their own document after they are logged in.
-      allow read: if request.auth != null && request.auth.uid == userId;
-      // Allow authenticated users to update/create data.
-      allow write: if request.auth != null;
-    }
-
-    // Protect all other collections by default.
+    // Allow public read/write access to all collections.
+    // This is for initial setup and seeding.
+    // WARNING: You should secure these rules before deploying to production.
     match /{document=**} {
-      allow read, write: if request.auth != null;
+      allow read, write: if true;
     }
   }
 }
