@@ -350,10 +350,6 @@ export default function TournamentSettingsPage() {
             player1Name: values.player1Name,
             organizationId: values.organizationId,
         };
-
-        if (values.lotNumber || values.lotNumber === 0) {
-            teamData.lotNumber = values.lotNumber;
-        }
         
         if (values.photoUrl) teamData.photoUrl = values.photoUrl;
 
@@ -373,25 +369,26 @@ export default function TournamentSettingsPage() {
             teamData.genderP1 = values.genderP1;
         }
         
+        const dataToSave: any = { ...teamData };
+        if (values.lotNumber !== undefined && values.lotNumber !== null && !isNaN(values.lotNumber)) {
+            dataToSave.lotNumber = values.lotNumber;
+        }
+
         if (isEditing) {
             if (!teamToEdit) return;
             const teamRef = doc(db, 'teams', teamToEdit.id);
-            await updateDoc(teamRef, teamData as { [x: string]: any });
-            setTeams(teams.map(t => t.id === teamToEdit.id ? { ...teamToEdit, ...teamData } as Team : t));
+            await updateDoc(teamRef, dataToSave as { [x: string]: any });
+            setTeams(teams.map(t => t.id === teamToEdit.id ? { ...teamToEdit, ...dataToSave } as Team : t));
             setIsEditTeamOpen(false);
             setTeamToEdit(null);
             setIsSuccessModalOpen(true);
         } else {
-            const dataToSave: any = { ...teamData };
-            if (values.lotNumber !== undefined && values.lotNumber !== null && !isNaN(values.lotNumber)) {
-                dataToSave.lotNumber = values.lotNumber;
-            }
             const newTeamDoc = await addDoc(collection(db, 'teams'), dataToSave);
             const newTeam = { id: newTeamDoc.id, ...dataToSave };
             setTeams([...teams, newTeam as Team]);
             toast({
               title: 'Team Registered',
-              description: `Team "${teamData.player1Name}${teamData.player2Name ? ' & ' + teamData.player2Name : ''}" has been registered.`,
+              description: `Team "${dataToSave.player1Name}${dataToSave.player2Name ? ' & ' + dataToSave.player2Name : ''}" has been registered.`,
             });
             setIsAddTeamOpen(false);
         }
@@ -597,7 +594,7 @@ export default function TournamentSettingsPage() {
             <Button type="button" variant="outline" onClick={() => fileInputRef.current?.click()}>
               Upload
             </Button>
-            <Input type="file" ref={fileInputRef} onChange={handlePhotoChange} className="hidden" accept="image/png, image/jpeg, image/gif" />
+            <Input type="file" ref={fileInputRef} onChange={handlePhotoChange} className="hidden" accept="image/*" capture="environment" />
           </div>
           <FormMessage />
         </FormItem>
@@ -852,7 +849,8 @@ export default function TournamentSettingsPage() {
                                 className="hidden"
                                 ref={el => (inlineFileInputRefs.current[t.id] = el)}
                                 onChange={(e) => handleInlinePhotoChange(e, t.id)}
-                                accept="image/png, image/jpeg, image/gif"
+                                accept="image/*"
+                                capture="environment"
                             />
                         </div>
                     </TableCell>
@@ -1063,5 +1061,7 @@ export default function TournamentSettingsPage() {
     </div>
   );
 }
+
+    
 
     
