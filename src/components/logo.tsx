@@ -8,20 +8,17 @@ export function Logo() {
         viewBox="0 0 24 24"
         fill="none"
         stroke="currentColor"
-        strokeWidth="2"
+        strokeWidth="1.5"
         strokeLinecap="round"
         strokeLinejoin="round"
         className="h-6 w-6 text-primary"
       >
-        <path d="m6 18 4-4" />
-        <path d="m10 18 4-4" />
-        <path d="m14 18 4-4" />
-        <path d="m18 18 4-4" />
-        <path d="m18 6-4-4" />
-        <path d="m14 6-4-4" />
-        <path d="m10 6-4-4" />
-        <path d="m6 6-4-4" />
-        <path d="M12 10a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h0a2 2 0 0 0 2-2v-6a2 2 0 0 0-2-2Z" />
+        <path d="M6 18l6-6-6-6" />
+        <path d="M12 18l6-6-6-6" />
+        <path d="M15.5 15.5a2.12 2.12 0 0 0 3 0" />
+        <path d="M15.5 8.5a2.12 2.12 0 0 1 3 0" />
+        <path d="M4 14.5h7" />
+        <path d="M4 9.5h7" />
       </svg>
       <span className="text-lg font-semibold text-primary">Battledore</span>
     </div>
