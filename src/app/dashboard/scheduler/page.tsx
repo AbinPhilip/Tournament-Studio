@@ -36,7 +36,7 @@ export default function SchedulerPage() {
                     router.push('/dashboard/tournament');
                     return;
                 }
-                const tourneyData = tournamentSnap.docs[0].data() as Tournament;
+                const tourneyData = tournamentSnap.docs[0].data() as Omit<Tournament, 'date'>;
                 setTournament({ id: tournamentSnap.docs[0].id, ...tourneyData });
 
                 const teamsSnap = await getDocs(collection(db, 'teams'));
@@ -70,12 +70,7 @@ export default function SchedulerPage() {
 
         setIsGenerating(true);
         try {
-            // Ensure we pass the tournamentType to the flow
-            const tournamentWithDate = { 
-                ...tournament, 
-                date: tournament.date.toDate(),
-            };
-            const generatedMatches = await scheduleMatches({ teams, tournament: tournamentWithDate });
+            const generatedMatches = await scheduleMatches({ teams, tournament });
             
             if (!generatedMatches || generatedMatches.length === 0) {
                 toast({ title: 'Schedule Generation Failed', description: 'The AI could not generate a schedule. Please try again.', variant: 'destructive' });

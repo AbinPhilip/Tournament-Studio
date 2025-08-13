@@ -1,3 +1,4 @@
+
 import { Timestamp } from "firebase/firestore";
 
 export type UserRole = 'individual' | 'update' | 'admin' | 'inquiry' | 'super';
@@ -45,7 +46,6 @@ export type TournamentType = 'round-robin' | 'knockout';
 export interface Tournament {
     id:string;
     location: string;
-    date: Timestamp;
     numberOfCourts: number;
     courtNames: { name: string }[];
     tournamentType: TournamentType;

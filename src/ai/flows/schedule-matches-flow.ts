@@ -19,12 +19,13 @@ const TeamSchema = z.object({
     player1Name: z.string(),
     player2Name: z.string().optional(),
     organizationId: z.string(),
+    genderP1: z.enum(['male', 'female']).optional(),
+    genderP2: z.enum(['male', 'female']).optional(),
 });
 
 const TournamentSchema = z.object({
     id: z.string(),
     location: z.string(),
-    date: z.string(), // Dates are serialized as strings when passed to flows.
     numberOfCourts: z.number(),
     courtNames: z.array(z.object({ name: z.string() })),
     tournamentType: z.enum(['round-robin', 'knockout']),
@@ -63,7 +64,6 @@ const schedulePrompt = ai.definePrompt({
 
         Here is the tournament information:
         - Tournament Type: {{{tournament.tournamentType}}}
-        - Date: {{{tournament.date}}}
         - Location: {{{tournament.location}}}
         - Number of Courts: {{{tournament.numberOfCourts}}}
         - Court Names: {{#each tournament.courtNames}}{{this.name}}, {{/each}}
@@ -76,7 +76,7 @@ const schedulePrompt = ai.definePrompt({
         Constraints and rules:
         1.  Group teams by their 'type' (e.g., 'mens_doubles', 'singles'). The schedule must only contain matches between teams of the same type.
         2.  Assign matches to courts sequentially from the list of court names.
-        3.  Schedule matches starting from 9:00 AM on the tournament date.
+        3.  Schedule matches starting from 9:00 AM on the current day. If all courts are used, the next set of matches should be scheduled for the next hour (e.g., 10:00 AM).
         4.  Assume each match takes exactly 1 hour.
         5.  You can schedule multiple matches at the same time if there are enough courts. For example, with 4 courts, you can schedule 4 matches at 9:00 AM, then 4 more at 10:00 AM.
         6.  For each match, provide the IDs and names of both teams.
@@ -97,17 +97,7 @@ const scheduleMatchesFlow = ai.defineFlow(
     outputSchema: ScheduleMatchesOutputSchema,
   },
   async (input) => {
-    // When a Date object is passed to a flow, it is serialized as a string.
-    // We need to convert it back to a Date object before passing to the prompt.
-    const promptInput = {
-      ...input,
-      tournament: {
-        ...input.tournament,
-        date: new Date(input.tournament.date),
-      },
-    };
-
-    const { output } = await schedulePrompt(promptInput);
+    const { output } = await schedulePrompt(input);
     if (!output) {
       throw new Error('Failed to generate a schedule.');
     }
@@ -124,15 +114,8 @@ const scheduleMatchesFlow = ai.defineFlow(
 // Wrapper function to be called from the application
 export async function scheduleMatches(input: {
     teams: Team[],
-    tournament: Omit<Tournament, 'date'> & { date: Date }
+    tournament: Omit<Tournament, 'date'>
 }): Promise<(Omit<Match, 'id' | 'startTime'> & { startTime: Date })[]> {
-    const result = await scheduleMatchesFlow({
-        ...input,
-        tournament: {
-            ...input.tournament,
-            // Convert date to ISO string before sending to flow
-            date: input.tournament.date.toISOString(),
-        }
-    });
+    const result = await scheduleMatchesFlow(input);
     return result.matches;
 }

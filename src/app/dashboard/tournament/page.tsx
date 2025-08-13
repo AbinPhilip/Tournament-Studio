@@ -23,14 +23,11 @@ import {
     SelectValue,
 } from '@/components/ui/select';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Calendar } from '@/components/ui/calendar';
-import { CalendarIcon, Save, ArrowLeft, Trash2, CheckCircle } from 'lucide-react';
+import { Save, ArrowLeft, Trash2, CheckCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { format } from 'date-fns';
 import { useToast } from '@/hooks/use-toast';
 import { db } from '@/lib/firebase';
-import { collection, doc, getDocs, setDoc, updateDoc, Timestamp, DocumentReference, deleteDoc, query } from 'firebase/firestore';
+import { collection, doc, getDocs, setDoc, updateDoc, DocumentReference, deleteDoc, query } from 'firebase/firestore';
 import type { Tournament, TournamentType } from '@/types';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useRouter } from 'next/navigation';
@@ -47,7 +44,6 @@ import {
 
 const tournamentFormSchema = z.object({
   location: z.string().min(3, { message: 'Location must be at least 3 characters.' }),
-  date: z.date({ required_error: 'A date is required.' }),
   tournamentType: z.enum(['round-robin', 'knockout'], { required_error: 'Tournament type is required.' }),
   numberOfCourts: z.coerce.number().min(1, { message: 'There must be at least 1 court.' }).max(50, { message: "Cannot exceed 50 courts."}),
   courtNames: z.array(z.object({ name: z.string().min(1, {message: 'Court name cannot be empty.'}) })),
@@ -65,7 +61,6 @@ export default function TournamentAdminPage() {
     resolver: zodResolver(tournamentFormSchema),
     defaultValues: {
       location: '',
-      date: new Date(),
       tournamentType: 'round-robin',
       numberOfCourts: 4,
       courtNames: Array.from({ length: 4 }, () => ({ name: '' })),
@@ -99,7 +94,6 @@ export default function TournamentAdminPage() {
           setTournamentDocRef(tournamentDoc.ref);
           form.reset({
             ...data,
-            date: data.date.toDate(),
           });
         } else {
             setTournamentDocRef(null);
@@ -117,7 +111,6 @@ export default function TournamentAdminPage() {
     try {
       const dataToSave = {
         ...values,
-        date: Timestamp.fromDate(values.date),
       };
 
       if (tournamentDocRef) {
@@ -148,7 +141,6 @@ export default function TournamentAdminPage() {
         setTournamentDocRef(null);
         form.reset({
           location: '',
-          date: new Date(),
           tournamentType: 'round-robin',
           numberOfCourts: 4,
           courtNames: Array.from({ length: 4 }, (_, i) => ({ name: `Court ${i + 1}` })),
@@ -204,45 +196,6 @@ export default function TournamentAdminPage() {
                     <FormControl>
                         <Input placeholder="e.g. City Arena" {...field} />
                     </FormControl>
-                    <FormMessage />
-                    </FormItem>
-                )}
-                />
-                <FormField
-                control={form.control}
-                name="date"
-                render={({ field }) => (
-                    <FormItem className="flex flex-col">
-                    <FormLabel>Tournament Date</FormLabel>
-                    <Popover>
-                        <PopoverTrigger asChild>
-                        <FormControl>
-                            <Button
-                            variant="outline"
-                            className={cn(
-                                'w-full pl-3 text-left font-normal',
-                                !field.value && 'text-muted-foreground'
-                            )}
-                            >
-                            {field.value ? (
-                                format(field.value, 'PPP')
-                            ) : (
-                                <span>Pick a date</span>
-                            )}
-                            <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
-                            </Button>
-                        </FormControl>
-                        </PopoverTrigger>
-                        <PopoverContent className="w-auto p-0" align="start">
-                        <Calendar
-                            mode="single"
-                            selected={field.value}
-                            onSelect={field.onChange}
-                            disabled={(date) => date < new Date() || date < new Date('1900-01-01')}
-                            initialFocus
-                        />
-                        </PopoverContent>
-                    </Popover>
                     <FormMessage />
                     </FormItem>
                 )}
