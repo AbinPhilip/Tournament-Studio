@@ -47,12 +47,9 @@ export type TournamentStatus = 'PENDING' | 'IN_PROGRESS' | 'COMPLETED';
 export interface Tournament {
     id:string;
     location: string;
-    date: Date;
     numberOfCourts: number;
     courtNames: { name: string }[];
     tournamentType: TournamentType;
-    status: TournamentStatus;
-    startedAt?: Date;
 }
 
 export type MatchStatus = 'PENDING' | 'SCHEDULED' | 'IN_PROGRESS' | 'COMPLETED';

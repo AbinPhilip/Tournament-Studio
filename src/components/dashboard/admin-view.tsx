@@ -18,7 +18,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import type { User, UserRole, Team, Organization, Gender } from '@/types';
 import { useAuth } from '@/hooks/use-auth';
-import { MoreHorizontal, Trash2, UserPlus, Users as TeamsIcon, Building, Edit, CheckCircle, Calendar as CalendarIcon, Gavel, Trophy } from 'lucide-react';
+import { MoreHorizontal, Trash2, UserPlus, Users as TeamsIcon, Building, Edit, CheckCircle } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -67,7 +67,6 @@ import { useToast } from '@/hooks/use-toast';
 import { db } from '@/lib/firebase';
 import { collection, getDocs, addDoc, deleteDoc, doc, query, where, updateDoc } from 'firebase/firestore';
 import Image from 'next/image';
-import { useRouter } from 'next/navigation';
 
 function RoleBadge({ role }: { role: UserRole }) {
     const variant: BadgeProps["variant"] = {
@@ -97,8 +96,7 @@ const teamFormSchema = z.object({
   type: z.enum(['singles', 'mens_doubles', 'womens_doubles', 'mixed_doubles']),
   player1Name: z.string().min(2, "Player 1 name is required."),
   player2Name: z.string().optional(),
-  genderP1: z.enum(['male', 'female']).optional(),
-  genderP2: z.enum(['male', 'female']).optional(),
+  gender: z.enum(['male', 'female']).optional(),
   organizationId: z.string({ required_error: "Organization is required." }),
   photoUrl: z.string().optional(),
 }).refine(data => {
@@ -109,44 +107,11 @@ const teamFormSchema = z.object({
 }, {
     message: "Player 2 name is required for doubles.",
     path: ["player2Name"],
-}).refine(data => {
-    if (data.type === 'singles') {
-        return !!data.genderP1;
-    }
-    return true;
-}, {
-    message: "Player gender is required for Singles.",
-    path: ["genderP1"],
-}).refine(data => {
-    if (data.type === 'mixed_doubles') {
-        return !!data.genderP1;
-    }
-    return true;
-}, {
-    message: "Player 1 gender is required for Mixed Doubles.",
-    path: ["genderP1"],
-}).refine(data => {
-    if (data.type === 'mixed_doubles') {
-        return !!data.genderP2;
-    }
-    return true;
-}, {
-    message: "Player 2 gender is required for Mixed Doubles.",
-    path: ["genderP2"],
-}).refine(data => {
-    if (data.type === 'mixed_doubles') {
-        return data.genderP1 !== data.genderP2;
-    }
-    return true;
-}, {
-    message: "Players must have different genders for Mixed Doubles.",
-    path: ["genderP2"],
 });
 
 
 export default function AdminView() {
   const { user } = useAuth();
-  const router = useRouter();
   const { toast } = useToast();
   const [users, setUsers] = useState<User[]>([]);
   const [teams, setTeams] = useState<Team[]>([]);
@@ -204,8 +169,6 @@ export default function AdminView() {
     resolver: zodResolver(teamFormSchema),
     defaultValues: { type: 'singles', player1Name: '', player2Name: '', photoUrl: '' },
   });
-
-  const teamType = teamForm.watch('type');
 
   useEffect(() => {
     if (userToEdit) {
@@ -357,34 +320,10 @@ export default function AdminView() {
   const handleTeamSubmit = async (values: z.infer<typeof teamFormSchema>, isEditing: boolean) => {
     try {
         const teamData: Partial<Team> = {
-            type: values.type,
-            player1Name: values.player1Name,
-            organizationId: values.organizationId,
-            player2Name: values.player2Name || '',
-            photoUrl: values.photoUrl || ''
+            ...values,
+            player2Name: values.player2Name || undefined,
+            gender: values.gender || undefined
         };
-
-        if (values.type === 'mens_doubles') {
-            teamData.genderP1 = 'male';
-            teamData.genderP2 = 'male';
-        } else if (values.type === 'womens_doubles') {
-            teamData.genderP1 = 'female';
-            teamData.genderP2 = 'female';
-        } else if (values.type === 'mixed_doubles') {
-            teamData.genderP1 = values.genderP1;
-            teamData.genderP2 = values.genderP2;
-        } else if (values.type === 'singles') {
-            teamData.genderP1 = values.genderP1;
-            delete teamData.player2Name;
-            delete teamData.genderP2;
-        }
-
-        Object.keys(teamData).forEach(key => {
-            const typedKey = key as keyof typeof teamData;
-            if (teamData[typedKey] === undefined || teamData[typedKey] === '') {
-                delete teamData[typedKey];
-            }
-        });
         
         if (isEditing) {
             if (!teamToEdit) return;
@@ -459,55 +398,20 @@ export default function AdminView() {
                 </Select><FormMessage />
             </FormItem>
         )} />
-        <div className="grid grid-cols-2 gap-4">
-            <FormField control={teamForm.control} name="player1Name" render={({ field }) => (
-                <FormItem>
-                    <FormLabel>{teamType === 'singles' ? 'Player Name' : 'Player 1 Name'}</FormLabel>
-                    <FormControl><Input placeholder="John Doe" {...field} /></FormControl>
-                    <FormMessage />
-                </FormItem>
-            )} />
-             {(teamType === 'mixed_doubles' || teamType === 'singles') && (
-                <FormField control={teamForm.control} name="genderP1" render={({ field }) => (
-                    <FormItem>
-                        <FormLabel>Player Gender</FormLabel>
-                        <Select onValueChange={field.onChange} defaultValue={field.value}>
-                        <FormControl><SelectTrigger><SelectValue placeholder="Select gender" /></SelectTrigger></FormControl>
-                        <SelectContent>
-                            <SelectItem value="male">Male</SelectItem>
-                            <SelectItem value="female">Female</SelectItem>
-                        </SelectContent>
-                        </Select><FormMessage />
-                    </FormItem>
-                )} />
-            )}
-        </div>
-        
-        {(teamType === 'mens_doubles' || teamType === 'mixed_doubles' || teamType === 'womens_doubles') && (
-             <div className="grid grid-cols-2 gap-4">
-                <FormField control={teamForm.control} name="player2Name" render={({ field }) => (
-                    <FormItem>
-                        <FormLabel>Player 2 Name</FormLabel>
-                        <FormControl><Input placeholder="Partner's Name" {...field} /></FormControl>
-                        <FormMessage />
-                    </FormItem>
-                )} />
-                {teamType === 'mixed_doubles' && (
-                    <FormField control={teamForm.control} name="genderP2" render={({ field }) => (
-                        <FormItem>
-                            <FormLabel>Player 2 Gender</FormLabel>
-                            <Select onValueChange={field.onChange} defaultValue={field.value}>
-                            <FormControl><SelectTrigger><SelectValue placeholder="Select gender" /></SelectTrigger></FormControl>
-                            <SelectContent>
-                                <SelectItem value="male">Male</SelectItem>
-                                <SelectItem value="female">Female</SelectItem>
-                            </SelectContent>
-                            </Select><FormMessage />
-                        </FormItem>
-                    )} />
-                )}
-            </div>
-        )}
+        <FormField control={teamForm.control} name="player1Name" render={({ field }) => (
+            <FormItem>
+                <FormLabel>Player 1 Name</FormLabel>
+                <FormControl><Input placeholder="John Doe" {...field} /></FormControl>
+                <FormMessage />
+            </FormItem>
+        )} />
+        <FormField control={teamForm.control} name="player2Name" render={({ field }) => (
+            <FormItem>
+                <FormLabel>Player 2 Name (if doubles)</FormLabel>
+                <FormControl><Input placeholder="Partner's Name" {...field} /></FormControl>
+                <FormMessage />
+            </FormItem>
+        )} />
         
         <FormField control={teamForm.control} name="organizationId" render={({ field }) => (
             <FormItem>
@@ -524,7 +428,7 @@ export default function AdminView() {
         <FormItem>
           <FormLabel>Team Photo</FormLabel>
           <div className="flex items-center gap-4">
-            <div className="h-24 w-24 bg-muted rounded-md flex items-center justify-center overflow-hidden">
+            <div className="h-24 w-24 bg-muted rounded-full flex items-center justify-center overflow-hidden">
                 <Image 
                     data-ai-hint="badminton duo" 
                     src={photoPreview || "https://placehold.co/96x96.png"} 
@@ -552,27 +456,7 @@ export default function AdminView() {
     <div className="grid gap-8">
       <div>
         <h1 className="text-3xl font-bold mb-2">Administrator Dashboard</h1>
-        <p className="text-muted-foreground">Welcome, {user?.name}. Manage users, teams, and tournament settings.</p>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          <Card className="lg:col-span-3">
-              <CardHeader>
-                  <CardTitle>Tournament Actions</CardTitle>
-                  <CardDescription>Configure tournament settings, generate the match schedule, and manage scores.</CardDescription>
-              </CardHeader>
-              <CardContent className="flex flex-wrap gap-4">
-                  <Button onClick={() => router.push('/dashboard/tournament')}>
-                      <Trophy className="mr-2 h-4 w-4" /> Tournament Page
-                  </Button>
-                  <Button onClick={() => router.push('/dashboard/scheduler')}>
-                      <CalendarIcon className="mr-2 h-4 w-4" /> Scheduler
-                  </Button>
-                   <Button onClick={() => router.push('/dashboard/umpire')}>
-                      <Gavel className="mr-2 h-4 w-4" /> Umpire View
-                  </Button>
-              </CardContent>
-          </Card>
+        <p className="text-muted-foreground">Welcome, {user?.name}. Manage users, teams, and system settings.</p>
       </div>
       
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
@@ -589,7 +473,7 @@ export default function AdminView() {
                   Register Team
                 </Button>
               </DialogTrigger>
-              <DialogContent className="sm:max-w-[600px]">
+              <DialogContent className="sm:max-w-[425px]">
                 <DialogHeader>
                   <DialogTitle>Register New Team</DialogTitle>
                   <DialogDescription>Enter the details for the new team.</DialogDescription>
@@ -615,14 +499,14 @@ export default function AdminView() {
                     <TableCell>
                       <Image 
                         data-ai-hint="badminton players"
-                        src={t.photoUrl || 'https://placehold.co/80x80.png'} 
+                        src={t.photoUrl || 'https://placehold.co/40x40.png'} 
                         alt="Team photo" 
-                        width={80} 
-                        height={80} 
-                        className="rounded-md object-cover"
+                        width={40} 
+                        height={40} 
+                        className="rounded-full object-cover"
                       />
                     </TableCell>
-                    <TableCell className="font-medium capitalize">{t.type.replace(/_/g, ' ')}</TableCell>
+                    <TableCell className="font-medium capitalize">{t.type.replace('_', ' ')}</TableCell>
                     <TableCell>{t.player1Name}{t.player2Name ? ` & ${t.player2Name}`: ''}</TableCell>
                     <TableCell>{getOrgName(t.organizationId)}</TableCell>
                     <TableCell className="text-right">
@@ -924,7 +808,7 @@ export default function AdminView() {
 
       {/* Edit Team Dialog */}
       <Dialog open={isEditTeamOpen} onOpenChange={setIsEditTeamOpen}>
-          <DialogContent className="sm:max-w-[600px]">
+          <DialogContent className="sm:max-w-[425px]">
           <DialogHeader>
               <DialogTitle>Edit Team</DialogTitle>
               <DialogDescription>Update the team details.</DialogDescription>
