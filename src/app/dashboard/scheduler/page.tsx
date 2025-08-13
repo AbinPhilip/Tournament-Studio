@@ -7,11 +7,11 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
 import { db } from '@/lib/firebase';
-import { collection, getDocs, writeBatch, doc, query, updateDoc, Timestamp, where } from 'firebase/firestore';
+import { collection, getDocs, writeBatch, doc, query, updateDoc, Timestamp, deleteDoc } from 'firebase/firestore';
 import type { Tournament, Team, Match, TeamType } from '@/types';
-import { Loader2, Save, Trash2, GripVertical, Users } from 'lucide-react';
+import { Loader2, Save, Trash2, GripVertical } from 'lucide-react';
 import { DndContext, closestCenter, PointerSensor, useSensor, useSensors, DragOverlay, type DragStartEvent, type DragEndEvent, type DragOverEvent } from '@dnd-kit/core';
-import { SortableContext, useSortable, arrayMove, verticalListSortingStrategy } from '@dnd-kit/sortable';
+import { SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { Badge } from '@/components/ui/badge';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog"
@@ -54,15 +54,32 @@ const DraggableTeam = ({ team, isOverlay }: { team: Team, isOverlay?: boolean })
 };
 
 // Droppable Slot for a team in a match
-const DroppableSlot = ({ matchId, slot, team, onDrop, eventType }: { matchId: string, slot: 'team1' | 'team2', team: Team | null, onDrop: (teamId: string, matchId: string, slot: 'team1' | 'team2') => void, eventType: TeamType }) => {
-    const { setNodeRef, isOver } = useSortable({ id: `${matchId}-${slot}`, data: { type: 'slot', accepts: eventType } });
+const DroppableSlot = ({ id, team, onDrop, eventType, onRemove, children }: { id: string, team: Team | null, onDrop: (teamId: string, matchId: string, slot: 'team1' | 'team2') => void, eventType: TeamType | null, onRemove?: (teamId: string) => void, children?: React.ReactNode }) => {
+    const { setNodeRef, isOver } = useSortable({ id, data: { type: 'slot', accepts: eventType } });
+
+    const handleRemove = (e: React.MouseEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (team && onRemove) {
+            onRemove(team.id);
+        }
+    }
 
     return (
         <div
             ref={setNodeRef}
-            className={`h-20 p-2 border-2 border-dashed rounded-lg flex items-center justify-center text-muted-foreground ${isOver ? 'border-primary bg-primary/10' : 'border-border'}`}
+            className={`h-20 p-2 border-2 border-dashed rounded-lg flex items-center justify-center text-muted-foreground relative ${isOver ? 'border-primary bg-primary/10' : 'border-border'}`}
         >
-            {team ? <DraggableTeam team={team} /> : <span className="text-xs">Drop Team Here</span>}
+            {team ? (
+                 <div className="relative w-full">
+                    <DraggableTeam team={team} />
+                    {onRemove && (
+                         <button onClick={handleRemove} className="absolute top-0 right-0 p-1 bg-destructive/80 text-destructive-foreground rounded-full hover:bg-destructive leading-none">
+                            <Trash2 className="h-3 w-3" />
+                         </button>
+                    )}
+                </div>
+            ) : children}
         </div>
     );
 };
@@ -73,65 +90,70 @@ export default function SchedulerPage() {
     const [isLoading, setIsLoading] = useState(true);
     const [isSaving, setIsSaving] = useState(false);
     const [tournament, setTournament] = useState<(Omit<Tournament, 'date'> & { date: Date }) | null>(null);
-    const [teams, setTeams] = useState<Team[]>([]);
+    const [allTeams, setAllTeams] = useState<Team[]>([]);
     const [matches, setMatches] = useState<Match[]>([]);
     
     // DND states
     const [activeId, setActiveId] = useState<string | null>(null);
     const sensors = useSensors(useSensor(PointerSensor));
 
-    const activeTeam = useMemo(() => teams.find(t => t.id === activeId), [activeId, teams]);
+    const activeTeam = useMemo(() => allTeams.find(t => t.id === activeId), [activeId, allTeams]);
+
+    const fetchAllData = useCallback(async () => {
+        setIsLoading(true);
+        try {
+            const tournamentSnap = await getDocs(collection(db, 'tournaments'));
+            if (tournamentSnap.empty) {
+                toast({ title: 'No Tournament Found', description: 'Please create a tournament first.', variant: 'destructive' });
+                setIsLoading(false);
+                return;
+            }
+            const tourneyDoc = tournamentSnap.docs[0];
+            const tourneyData = tourneyDoc.data() as Omit<Tournament, 'id'|'date'> & { date: Timestamp };
+            setTournament({ 
+                id: tourneyDoc.id, 
+                ...tourneyData,
+                date: tourneyData.date.toDate() 
+            });
+
+            const teamsSnap = await getDocs(collection(db, 'teams'));
+            setAllTeams(teamsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Team)));
+
+            const matchesSnap = await getDocs(collection(db, 'matches'));
+            const matchesData = matchesSnap.docs.map(doc => {
+                const match = doc.data() as Omit<Match, 'id' | 'startTime'> & { startTime: Timestamp };
+                return { id: doc.id, ...match, startTime: match.startTime.toDate() }
+            }).sort((a, b) => a.startTime.getTime() - b.startTime.getTime());
+            setMatches(matchesData as Match[]);
+
+        } catch (error) {
+            console.error("Error fetching data:", error);
+            toast({ title: 'Error', description: 'Failed to fetch tournament data.', variant: 'destructive' });
+        } finally {
+            setIsLoading(false);
+        }
+    }, [toast]);
 
     useEffect(() => {
-        const fetchData = async () => {
-            setIsLoading(true);
-            try {
-                const tournamentSnap = await getDocs(collection(db, 'tournaments'));
-                if (tournamentSnap.empty) {
-                    toast({ title: 'No Tournament Found', description: 'Please create a tournament first.', variant: 'destructive' });
-                    return;
-                }
-                const tourneyDoc = tournamentSnap.docs[0];
-                const tourneyData = tourneyDoc.data() as Omit<Tournament, 'id'|'date'> & { date: Timestamp };
-                setTournament({ 
-                    id: tourneyDoc.id, 
-                    ...tourneyData,
-                    date: tourneyData.date.toDate() 
-                });
+        fetchAllData();
+    }, [fetchAllData]);
 
-                const teamsSnap = await getDocs(collection(db, 'teams'));
-                setTeams(teamsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Team)));
-
-                const matchesSnap = await getDocs(collection(db, 'matches'));
-                const matchesData = matchesSnap.docs.map(doc => {
-                    const match = doc.data() as Omit<Match, 'id' | 'startTime'> & { startTime: Timestamp };
-                    return { id: doc.id, ...match, startTime: match.startTime.toDate() }
-                }).sort((a, b) => a.startTime.getTime() - b.startTime.getTime());
-                setMatches(matchesData as Match[]);
-
-            } catch (error) {
-                console.error("Error fetching data:", error);
-                toast({ title: 'Error', description: 'Failed to fetch tournament data.', variant: 'destructive' });
-            } finally {
-                setIsLoading(false);
-            }
-        };
-        fetchData();
-    }, [toast]);
-    
+    const unscheduledTeams = useMemo(() => {
+        const scheduledTeamIds = new Set(matches.flatMap(m => [m.team1Id, m.team2Id].filter(Boolean)));
+        return allTeams.filter(t => !scheduledTeamIds.has(t.id));
+    }, [allTeams, matches]);
     
     const handleSaveSchedule = async () => {
         if (!tournament) return;
         
-        const matchesToSave = matches.filter(m => m.status === 'PENDING');
-        if (matchesToSave.length === 0) {
-            toast({ title: 'No new matches to save', variant: 'destructive' });
+        const validMatchesToSave = matches.filter(m => m.team1Id && m.team2Id && m.status === 'PENDING');
+        if (validMatchesToSave.length === 0) {
+            toast({ title: 'No new valid matches to save', description: 'Create a match by dropping two teams into a slot.', variant: 'destructive' });
             return;
         }
 
         setIsSaving(true);
         try {
-            // Check if tournament status needs to be updated
             if (tournament.status === 'PENDING') {
                 const tournamentRef = doc(db, 'tournaments', tournament.id);
                 await updateDoc(tournamentRef, { status: 'IN_PROGRESS', startedAt: new Date() });
@@ -139,25 +161,21 @@ export default function SchedulerPage() {
             }
             
             const batch = writeBatch(db);
-            matchesToSave.forEach(match => {
+            validMatchesToSave.forEach(match => {
                 const { id, ...matchData } = match;
-                // Convert dates back to Timestamps for Firestore
                 const dataToSave = {
                     ...matchData,
-                    startTime: Timestamp.fromDate(matchData.startTime as Date)
-                }
+                    startTime: Timestamp.fromDate(matchData.startTime as Date),
+                    status: 'SCHEDULED'
+                } as any;
+                
                 const matchRef = doc(db, 'matches', id);
                 batch.set(matchRef, dataToSave);
             });
 
             await batch.commit();
-
-            // Update local state to 'SCHEDULED'
-            setMatches(prev => prev.map(m => 
-                matchesToSave.find(ms => ms.id === m.id) ? { ...m, status: 'SCHEDULED' } : m
-            ));
-
-            toast({ title: 'Schedule Saved!', description: `${matchesToSave.length} matches have been saved successfully.` });
+            setMatches(prev => prev.map(m => validMatchesToSave.find(ms => ms.id === m.id) ? { ...m, status: 'SCHEDULED' } : m));
+            toast({ title: 'Schedule Saved!', description: `${validMatchesToSave.length} matches have been saved successfully.` });
         } catch (error) {
             console.error(error);
             toast({ title: 'Error Saving Schedule', description: 'An error occurred while saving.', variant: 'destructive' });
@@ -170,8 +188,7 @@ export default function SchedulerPage() {
         setIsLoading(true);
         try {
             const batch = writeBatch(db);
-            const matchesCollectionRef = collection(db, 'matches');
-            const querySnapshot = await getDocs(matchesCollectionRef);
+            const querySnapshot = await getDocs(collection(db, 'matches'));
             querySnapshot.forEach(doc => batch.delete(doc.ref));
             await batch.commit();
             
@@ -195,54 +212,61 @@ export default function SchedulerPage() {
         setActiveId(event.active.id as string);
     };
 
-    const handleDragOver = (event: DragOverEvent) => {
-        const { active, over } = event;
-        if (!over) return;
-    
-        const activeData = active.data.current;
-        const overData = over.data.current;
-    
-        if (activeData?.type === 'team' && overData?.type === 'slot') {
-            const team = activeData.team as Team;
-            if (team.type !== overData.accepts) {
-                 // Potentially show a visual indicator that it's not a valid drop target
-            }
-        }
-    };
-
     const handleDragEnd = (event: DragEndEvent) => {
         const { active, over } = event;
         setActiveId(null);
-
         if (!over) return;
-
-        const activeTeam = teams.find(t => t.id === active.id);
+        
+        const activeTeam = allTeams.find(t => t.id === active.id);
         if (!activeTeam) return;
 
         const overData = over.data.current;
         if (overData?.type !== 'slot') return;
         
-        // Check if event types match
-        if (activeTeam.type !== overData.accepts) {
-            toast({ title: 'Invalid Matchup', description: 'Teams must be from the same event type.', variant: 'destructive' });
-            return;
-        }
-
         const [matchId, slot] = (over.id as string).split('-');
-        
-        setMatches(prev => {
-            const newMatches = [...prev];
-            const matchIndex = newMatches.findIndex(m => m.id === matchId);
-            if (matchIndex === -1) return prev;
 
-            const match = newMatches[matchIndex];
+        setMatches(prevMatches => {
+            const newMatches = [...prevMatches];
+            let matchIndex = newMatches.findIndex(m => m.id === matchId);
             
-            // Prevent dropping on an occupied slot or dropping same team twice
-            if ((slot === 'team1' && match.team1Id) || (slot === 'team2' && match.team2Id) || match.team1Id === activeTeam.id || match.team2Id === activeTeam.id) {
-                 toast({ title: 'Slot Occupied', description: 'This slot is already taken or team is already in match.', variant: 'destructive' });
-                 return prev;
+            // Create a new match if one doesn't exist for this slot
+            if (matchIndex === -1) {
+                const [courtName, timeStr] = matchId.split('_');
+                const matchTime = new Date(tournament!.date);
+                const [hour, minute] = timeStr.split(':').map(Number);
+                matchTime.setHours(hour, minute, 0, 0);
+
+                const newMatch: Match = {
+                    id: matchId,
+                    team1Id: '', team2Id: '',
+                    team1Name: '', team2Name: '',
+                    eventType: activeTeam.type, // Set event type based on first team
+                    courtName: courtName,
+                    startTime: matchTime,
+                    status: 'PENDING',
+                    round: 1
+                };
+                newMatches.push(newMatch);
+                matchIndex = newMatches.length - 1;
             }
 
+            const match = newMatches[matchIndex];
+
+            // Validate drop
+            if (match.eventType !== activeTeam.type) {
+                toast({ title: 'Invalid Matchup', description: 'Teams must be from the same event type.', variant: 'destructive' });
+                return prevMatches;
+            }
+            if ((slot === 'team1' && match.team1Id) || (slot === 'team2' && match.team2Id)) {
+                toast({ title: 'Slot Occupied', description: 'This slot is already taken.', variant: 'destructive' });
+                return prevMatches;
+            }
+            if (match.team1Id === activeTeam.id || match.team2Id === activeTeam.id) {
+                toast({ title: 'Team Already in Match', description: 'This team is already in this match.', variant: 'destructive' });
+                return prevMatches;
+            }
+            
+            // Update match
             if (slot === 'team1') {
                 match.team1Id = activeTeam.id;
                 match.team1Name = activeTeam.player1Name + (activeTeam.player2Name ? ` & ${activeTeam.player2Name}` : '');
@@ -251,61 +275,40 @@ export default function SchedulerPage() {
                 match.team2Name = activeTeam.player1Name + (activeTeam.player2Name ? ` & ${activeTeam.player2Name}` : '');
             }
 
-            // Remove team from available list
-            setTeams(currentTeams => currentTeams.filter(t => t.id !== active.id));
-            
             return newMatches;
         });
-
     };
-    
-    const initializeSchedule = useCallback(() => {
-        if (!tournament) return;
-        const newMatches: Match[] = [];
-        const tournamentDate = tournament.date;
-        const startTime = 9; // 9 AM
-        const endTime = 20; // 8 PM
 
-        for (let i = startTime; i < endTime; i++) {
-            tournament.courtNames.forEach(court => {
-                const matchTime = new Date(tournamentDate);
-                matchTime.setHours(i, 0, 0, 0);
+    const handleRemoveTeamFromMatch = (teamIdToRemove: string, matchId: string) => {
+        setMatches(prevMatches => {
+            const newMatches = [...prevMatches];
+            const matchIndex = newMatches.findIndex(m => m.id === matchId);
+            if (matchIndex === -1) return prevMatches;
 
-                // Create a shell match for each event type. User will populate them.
-                const eventTypes: TeamType[] = ['singles', 'mens_doubles', 'womens_doubles', 'mixed_doubles'];
-                eventTypes.forEach(eventType => {
-                     newMatches.push({
-                        id: `${court.name}-${i}-${eventType}`, // A temporary, unique ID for the slot
-                        team1Id: '',
-                        team2Id: '',
-                        team1Name: '',
-                        team2Name: '',
-                        eventType: eventType,
-                        courtName: court.name,
-                        startTime: matchTime,
-                        status: 'PENDING',
-                        round: 1, // Assume first round for manual scheduling
-                    });
-                })
-            });
-        }
-        setMatches(newMatches);
+            const match = newMatches[matchIndex];
 
-    }, [tournament]);
+            if (match.status === 'SCHEDULED') {
+                toast({ title: 'Cannot Modify', description: 'This match is already saved. Clear the schedule to make changes.', variant: 'destructive'});
+                return prevMatches;
+            }
+            
+            if (match.team1Id === teamIdToRemove) {
+                match.team1Id = '';
+                match.team1Name = '';
+            } else if (match.team2Id === teamIdToRemove) {
+                match.team2Id = '';
+                match.team2Name = '';
+            }
 
-    useEffect(() => {
-        // If there are no existing matches from DB and we have tournament data, initialize the schedule grid
-        if (matches.length === 0 && tournament && teams.length > 0) {
-            initializeSchedule();
-        }
-    }, [matches.length, tournament, teams.length, initializeSchedule]);
+            // If match is now empty, remove it to clear the slot
+            if (!match.team1Id && !match.team2Id) {
+                return newMatches.filter(m => m.id !== matchId);
+            }
 
-    
-    const unscheduledTeams = useMemo(() => {
-        const scheduledTeamIds = new Set(matches.flatMap(m => [m.team1Id, m.team2Id]));
-        return teams.filter(t => !scheduledTeamIds.has(t.id));
-    }, [teams, matches]);
-    
+            return newMatches;
+        });
+    }
+
     const teamsByEvent = useMemo(() => {
         return unscheduledTeams.reduce((acc, team) => {
             if (!acc[team.type]) {
@@ -317,15 +320,30 @@ export default function SchedulerPage() {
     }, [unscheduledTeams]);
     
     const scheduleGrid = useMemo(() => {
-        const grid: Record<string, Record<string, Match[]>> = {}; // { time: { courtName: [matches] } }
+        const grid: Record<string, Record<string, Match | null>> = {}; // { time: { courtName: match } }
         if (!tournament) return grid;
 
+        const startTime = 9; // 9 AM
+        const endTime = 20; // 8 PM
+        const tournamentDate = tournament.date;
+
+        for (let i = startTime; i <= endTime; i++) {
+            const time = new Date(tournamentDate);
+            time.setHours(i, 0, 0, 0);
+            const timeString = time.toLocaleTimeString('en-US', { hour: 'numeric', minute:'2-digit', hour12: true });
+            grid[timeString] = {};
+            tournament.courtNames.forEach(court => {
+                grid[timeString][court.name] = null;
+            });
+        }
+        
         matches.forEach(match => {
-            const time = (match.startTime as Date).toLocaleTimeString('en-US', { hour: 'numeric', hour12: true });
-            if (!grid[time]) grid[time] = {};
-            if (!grid[time][match.courtName]) grid[time][match.courtName] = [];
-            grid[time][match.courtName].push(match);
+            const time = (match.startTime as Date).toLocaleTimeString('en-US', { hour: 'numeric', minute:'2-digit', hour12: true });
+            if (grid[time]) {
+                grid[time][match.courtName] = match;
+            }
         });
+
         return grid;
     }, [matches, tournament]);
     
@@ -335,9 +353,18 @@ export default function SchedulerPage() {
     if (isLoading) {
         return <div className="flex h-full w-full items-center justify-center"><Loader2 className="h-12 w-12 animate-spin text-primary" /></div>;
     }
+    
+    if (!tournament) {
+         return (
+            <div className="flex flex-col items-center justify-center h-full text-center">
+                <CardTitle>No Tournament Found</CardTitle>
+                <CardDescription>Please configure the tournament before using the scheduler.</CardDescription>
+            </div>
+        )
+    }
 
     return (
-        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragStart={handleDragStart} onDragEnd={handleDragEnd} onDragOver={handleDragOver}>
+        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
             <div className="flex flex-col h-full">
                 <CardHeader className="px-0">
                     <CardTitle>Match Scheduler</CardTitle>
@@ -354,7 +381,7 @@ export default function SchedulerPage() {
                         </CardHeader>
                         <CardContent className="flex-grow overflow-hidden">
                             <ScrollArea className="h-full">
-                                {Object.entries(teamsByEvent).map(([type, eventTeams]) => (
+                                {Object.keys(teamsByEvent).length > 0 ? Object.entries(teamsByEvent).map(([type, eventTeams]) => (
                                     eventTeams.length > 0 && (
                                         <div key={type} className="mb-4">
                                             <h3 className="font-semibold capitalize mb-2 p-2 rounded-md bg-muted">{type.replace(/_/g, ' ')}</h3>
@@ -363,7 +390,7 @@ export default function SchedulerPage() {
                                             </SortableContext>
                                         </div>
                                     )
-                                ))}
+                                )) : <p className="text-sm text-muted-foreground">No available teams to schedule.</p>}
                             </ScrollArea>
                         </CardContent>
                     </Card>
@@ -409,22 +436,27 @@ export default function SchedulerPage() {
                                     <React.Fragment key={time}>
                                         <div className="font-semibold text-right pr-2 sticky left-0 bg-background">{time}</div>
                                         {tournament?.courtNames.map(court => {
-                                            const matchesInSlot = scheduleGrid[time]?.[court.name] || [];
-                                            const match = matchesInSlot[0] || null; // Simplified: one match per slot for now
-                                            
-                                            if (!match) return <div key={court.name} className="border-b border-l p-1 min-h-[120px]"></div>;
+                                            const match = scheduleGrid[time]?.[court.name] || null;
+                                            const matchId = match?.id || `${court.name}_${new Date('1970/01/01 ' + time).getHours()}:${new Date('1970/01/01 ' + time).getMinutes()}`;
 
-                                            const team1 = match.team1Id ? teams.find(t => t.id === match.team1Id) || null : null;
-                                            const team2 = match.team2Id ? teams.find(t => t.id === match.team2Id) || null : null;
+                                            const team1 = match?.team1Id ? allTeams.find(t => t.id === match.team1Id) || null : null;
+                                            const team2 = match?.team2Id ? allTeams.find(t => t.id === match.team2Id) || null : null;
                                             
+                                            const handleRemoveTeam1 = (teamId: string) => handleRemoveTeamFromMatch(teamId, matchId);
+                                            const handleRemoveTeam2 = (teamId: string) => handleRemoveTeamFromMatch(teamId, matchId);
+
                                             return (
-                                                <div key={court.name} className="border-b border-l p-1 space-y-2">
-                                                    <Badge variant="outline" className="capitalize">{match.eventType.replace(/_/g, ' ')}</Badge>
+                                                <div key={court.name} className="border-b border-l p-1 space-y-2 min-h-[220px]">
+                                                     {match && <Badge variant={match.status === 'SCHEDULED' ? 'default' : 'secondary'} className="capitalize">{match.eventType.replace(/_/g, ' ')}</Badge>}
                                                     <div className="space-y-1">
-                                                        <SortableContext items={[`${match.id}-team1`, `${match.id}-team2`]}>
-                                                            <DroppableSlot matchId={match.id} slot="team1" team={team1} onDrop={() => {}} eventType={match.eventType} />
+                                                        <SortableContext items={[`${matchId}-team1`, `${matchId}-team2`]}>
+                                                             <DroppableSlot id={`${matchId}-team1`} team={team1} onDrop={() => {}} eventType={match?.eventType || null} onRemove={handleRemoveTeam1}>
+                                                                {!match && <span className="text-xs text-center">Drop Team 1 Here</span>}
+                                                             </DroppableSlot>
                                                             <div className="text-center text-sm font-bold">vs</div>
-                                                            <DroppableSlot matchId={match.id} slot="team2" team={team2} onDrop={() => {}} eventType={match.eventType} />
+                                                            <DroppableSlot id={`${matchId}-team2`} team={team2} onDrop={() => {}} eventType={match?.eventType || null} onRemove={handleRemoveTeam2}>
+                                                                {match && !team2 && <span className="text-xs text-center">Drop Team 2 Here</span>}
+                                                            </DroppableSlot>
                                                         </SortableContext>
                                                     </div>
                                                 </div>
