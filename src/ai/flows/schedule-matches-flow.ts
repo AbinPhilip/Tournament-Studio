@@ -24,7 +24,7 @@ const TeamSchema = z.object({
 const TournamentSchema = z.object({
     id: z.string(),
     location: z.string(),
-    date: z.string(), // Dates are serialized as strings
+    date: z.string(), // Dates are serialized as strings when passed to flows.
     numberOfCourts: z.number(),
     courtNames: z.array(z.object({ name: z.string() })),
     tournamentType: z.enum(['round-robin', 'knockout']),
@@ -126,6 +126,13 @@ export async function scheduleMatches(input: {
     teams: Team[],
     tournament: Omit<Tournament, 'date'> & { date: Date }
 }): Promise<(Omit<Match, 'id' | 'startTime'> & { startTime: Date })[]> {
-    const result = await scheduleMatchesFlow(input);
+    const result = await scheduleMatchesFlow({
+        ...input,
+        tournament: {
+            ...input.tournament,
+            // Convert date to ISO string before sending to flow
+            date: input.tournament.date.toISOString(),
+        }
+    });
     return result.matches;
 }
