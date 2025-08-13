@@ -70,7 +70,7 @@ const recordMatchResultFlow = ai.defineFlow(
     if (tournament.tournamentType === 'knockout' && completedMatch.round) {
         const matchesRef = collection(db, 'matches');
         
-        // Find other completed matches in the same round and event type to find a potential opponent
+        // Find other completed matches in the same round to find a potential opponent
         const q = query(
             matchesRef,
             where('eventType', '==', completedMatch.eventType),
@@ -83,24 +83,23 @@ const recordMatchResultFlow = ai.defineFlow(
 
         // Find a winner that isn't already scheduled for the next round
         let opponentWinnerId: string | null = null;
-        for(const doc of completedRoundMatchesSnap.docs) {
-             const potentialOpponentWinnerId = doc.data().winnerId;
+        for(const docSnap of completedRoundMatchesSnap.docs) {
+             const potentialOpponentWinnerId = docSnap.data().winnerId;
+             
+             // Check if this potential opponent is already scheduled in the next round
              const nextRoundOpponentQuery = query(
                 matchesRef,
                 where('round', '==', completedMatch.round + 1),
                 where('eventType', '==', completedMatch.eventType),
-                where('team1Id', '==', potentialOpponentWinnerId)
              );
-             const nextRoundOpponentQuery2 = query(
-                matchesRef,
-                where('round', '==', completedMatch.round + 1),
-                where('eventType', '==', completedMatch.eventType),
-                where('team2Id', '==', potentialOpponentWinnerId)
-             );
-
-             const [snap1, snap2] = await Promise.all([getDocs(nextRoundOpponentQuery), getDocs(nextRoundOpponentQuery2)]);
              
-             if(snap1.empty && snap2.empty) {
+             const nextRoundMatchesSnap = await getDocs(nextRoundOpponentQuery);
+             const isOpponentScheduled = nextRoundMatchesSnap.docs.some(matchDoc => {
+                const match = matchDoc.data();
+                return match.team1Id === potentialOpponentWinnerId || match.team2Id === potentialOpponentWinnerId;
+             });
+
+             if(!isOpponentScheduled) {
                 opponentWinnerId = potentialOpponentWinnerId;
                 break;
              }
@@ -139,7 +138,7 @@ const recordMatchResultFlow = ai.defineFlow(
             }
 
             if (availableCourt) {
-                const newMatchRef = doc(matchesRef);
+                const newMatchRef = doc(collection(db, 'matches'));
                 const newMatchData: Omit<Match, 'id'> = {
                     team1Id: input.winnerId,
                     team2Id: opponentWinnerId,
