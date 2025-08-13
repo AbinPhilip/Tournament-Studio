@@ -343,11 +343,15 @@ export default function TournamentSettingsPage() {
   
   const handleTeamSubmit = async (values: z.infer<typeof teamFormSchema>, isEditing: boolean) => {
     try {
-        const teamData: Partial<Team> = {};
-        teamData.type = values.type;
-        teamData.player1Name = values.player1Name;
-        teamData.organizationId = values.organizationId;
-        teamData.lotNumber = values.lotNumber;
+        const teamData: Partial<Omit<Team, 'id'>> = {
+            type: values.type,
+            player1Name: values.player1Name,
+            organizationId: values.organizationId,
+        };
+
+        if (values.lotNumber || values.lotNumber === 0) {
+            teamData.lotNumber = values.lotNumber;
+        }
         
         if (values.photoUrl) teamData.photoUrl = values.photoUrl;
 
