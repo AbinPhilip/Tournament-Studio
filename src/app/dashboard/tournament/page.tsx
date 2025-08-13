@@ -437,10 +437,11 @@ export default function TournamentSettingsPage() {
         existingMatchesQuery.forEach(doc => deleteBatch.delete(doc.ref));
         await deleteBatch.commit();
         
+        const { id, startedAt, ...restOfTournament } = tournament;
         const plainTournament = {
-            ...tournament,
-            date: format(tournament.date, 'yyyy-MM-dd')
-        }
+            ...restOfTournament,
+            date: format(tournament.date, 'yyyy-MM-dd'),
+        };
 
         const generatedMatches = await scheduleMatches({ teams, tournament: plainTournament });
         
