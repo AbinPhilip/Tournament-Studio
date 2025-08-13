@@ -69,7 +69,6 @@ import { useToast } from '@/hooks/use-toast';
 import { db } from '@/lib/firebase';
 import { collection, getDocs, addDoc, deleteDoc, doc, query, where, updateDoc } from 'firebase/firestore';
 import Link from 'next/link';
-import { sendWelcomeEmail } from '@/ai/flows/send-welcome-email-flow';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 
@@ -255,17 +254,6 @@ export default function AdminView() {
       setUsers([...users, newUser]);
       toast({ title: 'User Created', description: `User "${newUser.name}" has been added.` });
       
-      try {
-        await sendWelcomeEmail({
-          ...values,
-          appUrl: window.location.origin
-        });
-        toast({ title: 'Email Sent', description: `A welcome email has been sent to ${values.name}.` });
-      } catch (emailError) {
-        console.error("Failed to send welcome email:", emailError);
-        toast({ title: 'Email Failed', description: 'User was created, but the welcome email could not be sent.', variant: 'destructive' });
-      }
-
       setIsAddUserOpen(false);
       userForm.reset();
     } catch (error) {
