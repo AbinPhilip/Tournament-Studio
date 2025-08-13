@@ -118,7 +118,7 @@ const recordMatchResultFlow = ai.defineFlow(
             const opponentTeam = opponentTeamSnap.data();
 
             // Find an available court and time slot
-            let matchTime = completedMatch.startTime.toDate();
+            let matchTime = (completedMatch.startTime as Timestamp).toDate();
             let availableCourt: string | null = null;
             let attempts = 0;
             // Look for a slot in the next 48 hours

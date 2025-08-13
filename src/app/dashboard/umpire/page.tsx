@@ -17,7 +17,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
 import { db } from '@/lib/firebase';
-import { collection, getDocs, doc, writeBatch } from 'firebase/firestore';
+import { collection, getDocs, query, orderBy } from 'firebase/firestore';
 import type { Match, TeamType } from '@/types';
 import { Loader2, ArrowLeft, Pencil } from 'lucide-react';
 import { useRouter } from 'next/navigation';
@@ -52,9 +52,9 @@ export default function UmpirePage() {
     const fetchMatches = async () => {
         setIsLoading(true);
         try {
-            const matchesSnap = await getDocs(collection(db, 'matches'));
-            const matchesData = matchesSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Match))
-                .sort((a, b) => a.startTime.toMillis() - b.startTime.toMillis());
+            const matchesQuery = query(collection(db, 'matches'), orderBy('courtName'), orderBy('startTime'));
+            const matchesSnap = await getDocs(matchesQuery);
+            const matchesData = matchesSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Match));
             setMatches(matchesData);
         } catch (error) {
             console.error("Error fetching matches:", error);
@@ -66,7 +66,7 @@ export default function UmpirePage() {
     
     useEffect(() => {
         fetchMatches();
-    }, [toast]);
+    }, []);
     
     useEffect(() => {
         if (selectedMatch) {
@@ -109,18 +109,18 @@ export default function UmpirePage() {
         }
     };
 
-    const groupedMatches = useMemo(() => {
+    const groupedMatchesByCourt = useMemo(() => {
         return matches.reduce((acc, match) => {
-            const eventType = match.eventType;
-            if (!acc[eventType]) {
-                acc[eventType] = [];
+            const courtName = match.courtName;
+            if (!acc[courtName]) {
+                acc[courtName] = [];
             }
-            acc[eventType].push(match);
+            acc[courtName].push(match);
             return acc;
-        }, {} as Record<TeamType, Match[]>);
+        }, {} as Record<string, Match[]>);
     }, [matches]);
 
-    const eventOrder: TeamType[] = ['singles', 'mens_doubles', 'womens_doubles', 'mixed_doubles'];
+    const courtNames = useMemo(() => Object.keys(groupedMatchesByCourt).sort(), [groupedMatchesByCourt]);
 
 
     if (isLoading) {
@@ -138,7 +138,7 @@ export default function UmpirePage() {
                     <div>
                         <CardTitle>Umpire View</CardTitle>
                         <CardDescription>
-                            View matches and record scores.
+                            View matches by court and record scores.
                         </CardDescription>
                     </div>
                     <Button variant="outline" onClick={() => router.push('/dashboard')}>
@@ -154,15 +154,17 @@ export default function UmpirePage() {
                     </div>
                 ) : (
                     <div className="space-y-8">
-                        {eventOrder.map(eventType => groupedMatches[eventType] && (
-                            <div key={eventType}>
-                                <h3 className="text-xl font-bold mb-4 capitalize">{eventType.replace(/_/g, ' ')}</h3>
+                        {courtNames.map(courtName => (
+                            <div key={courtName}>
+                                <h3 className="text-xl font-bold mb-4 capitalize">
+                                    {courtName}
+                                </h3>
                                 <div className="border rounded-md">
                                 <Table>
                                     <TableHeader>
                                         <TableRow>
                                             <TableHead>Time</TableHead>
-                                            <TableHead>Court</TableHead>
+                                            <TableHead>Event</TableHead>
                                             <TableHead>Team 1</TableHead>
                                             <TableHead>Team 2</TableHead>
                                             <TableHead>Score</TableHead>
@@ -171,10 +173,10 @@ export default function UmpirePage() {
                                         </TableRow>
                                     </TableHeader>
                                     <TableBody>
-                                        {groupedMatches[eventType].map(match => (
+                                        {groupedMatchesByCourt[courtName].map(match => (
                                             <TableRow key={match.id}>
                                                 <TableCell className="font-medium">{format(match.startTime.toDate(), 'p')}</TableCell>
-                                                <TableCell>{match.courtName}</TableCell>
+                                                <TableCell className="capitalize">{match.eventType.replace(/_/g, ' ')}</TableCell>
                                                 <TableCell className={match.winnerId === match.team1Id ? 'font-bold' : ''}>{match.team1Name}</TableCell>
                                                 <TableCell className={match.winnerId === match.team2Id ? 'font-bold' : ''}>{match.team2Name}</TableCell>
                                                 <TableCell>{match.score || 'N/A'}</TableCell>
