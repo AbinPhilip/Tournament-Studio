@@ -19,7 +19,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Switch } from '@/components/ui/switch';
 import type { User, UserRole, Team, Organization } from '@/types';
 import { useAuth } from '@/hooks/use-auth';
-import { MoreHorizontal, Trash2, UserPlus, Users as TeamsIcon, Building, PlusCircle, Database, Upload, Trophy, Edit, CheckCircle } from 'lucide-react';
+import { MoreHorizontal, Trash2, UserPlus, Users as TeamsIcon, Building, PlusCircle, Database, Upload, Trophy, Edit, CheckCircle, Calendar as CalendarIcon } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -779,12 +779,15 @@ export default function AdminView() {
             <div className="grid gap-4 mt-4">
                 <Card>
                     <CardHeader>
-                        <CardTitle>Tournament Management</CardTitle>
-                        <CardDescription>Configure the settings for the upcoming tournament.</CardDescription>
+                        <CardTitle>Tournament & Schedule</CardTitle>
+                        <CardDescription>Configure tournament settings and generate the match schedule.</CardDescription>
                     </CardHeader>
-                    <CardContent>
+                    <CardContent className="flex flex-wrap gap-4">
                         <Button onClick={() => router.push('/dashboard/tournament')}>
                             <Trophy className="mr-2 h-4 w-4" /> Go to Tournament Page
+                        </Button>
+                        <Button onClick={() => router.push('/dashboard/scheduler')}>
+                            <CalendarIcon className="mr-2 h-4 w-4" /> Go to Scheduler
                         </Button>
                     </CardContent>
                 </Card>
@@ -1084,5 +1087,3 @@ export default function AdminView() {
     </div>
   );
 }
-
-    

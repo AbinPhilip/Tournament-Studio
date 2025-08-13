@@ -41,9 +41,25 @@ export interface Team {
 }
 
 export interface Tournament {
-    id: string;
+    id:string;
     location: string;
     date: Timestamp;
     numberOfCourts: number;
     courtNames: { name: string }[];
+}
+
+export type MatchStatus = 'PENDING' | 'SCHEDULED' | 'IN_PROGRESS' | 'COMPLETED';
+
+export interface Match {
+    id: string;
+    team1Id: string;
+    team2Id: string;
+    team1Name: string;
+    team2Name: string;
+    eventType: TeamType;
+    courtName: string;
+    startTime: Timestamp;
+    status: MatchStatus;
+    winnerId?: string;
+    score?: string;
 }
