@@ -19,8 +19,12 @@ export default function DashboardLayout({
   const router = useRouter();
   const pathname = usePathname();
 
+  // The seed page is publicly accessible and does not need authentication.
+  if (pathname === '/dashboard/seed-database') {
+    return <>{children}</>;
+  }
+
   useEffect(() => {
-    // This check is now a fallback. The main check is in `app/page.tsx`
     if (!loading) {
        if (!user) {
           router.replace('/login');

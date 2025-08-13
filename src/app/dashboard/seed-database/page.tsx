@@ -98,24 +98,26 @@ export default function SeedDatabasePage() {
   };
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Seed Database</CardTitle>
-        <CardDescription>
-          Populate your Firestore database with the initial mock data. This will allow you to
-          use the application with a predefined set of users, teams, and other information.
-          This action should only be performed once.
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="flex flex-col gap-4">
-        <Button onClick={handleSeed} disabled={isLoading}>
-          {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-          Seed Database
-        </Button>
-        <Button onClick={() => router.push('/login')} variant="outline">
-            Go to Login
-        </Button>
-      </CardContent>
-    </Card>
+    <div className="flex min-h-screen w-full flex-col items-center justify-center bg-background p-4">
+      <Card className="w-full max-w-2xl">
+        <CardHeader>
+            <CardTitle>Seed Database</CardTitle>
+            <CardDescription>
+            Populate your Firestore database with the initial mock data. This will allow you to
+            use the application with a predefined set of users, teams, and other information.
+            This action should only be performed once.
+            </CardDescription>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-4">
+            <Button onClick={handleSeed} disabled={isLoading}>
+            {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            Seed Database
+            </Button>
+            <Button onClick={() => router.push('/login')} variant="outline">
+                Go to Login
+            </Button>
+        </CardContent>
+      </Card>
+    </div>
   );
 }

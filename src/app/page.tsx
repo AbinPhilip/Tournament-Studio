@@ -20,7 +20,7 @@ export default function Home() {
         const snapshot = await getDocs(q);
         
         if (snapshot.empty) {
-          // If DB is empty, go straight to seeding, no auth check needed.
+          // If DB is empty, go straight to seeding. This page is now public.
           router.replace('/dashboard/seed-database');
           return;
         }
