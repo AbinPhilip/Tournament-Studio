@@ -18,7 +18,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Switch } from '@/components/ui/switch';
 import type { User, UserRole, Team, Organization } from '@/types';
 import { useAuth } from '@/hooks/use-auth';
-import { MoreHorizontal, Trash2, UserPlus, Users as TeamsIcon, Building, PlusCircle, Database, Upload, Trophy } from 'lucide-react';
+import { MoreHorizontal, Trash2, UserPlus, Users as TeamsIcon, Building, PlusCircle, Database, Upload, Trophy, Edit } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -66,7 +66,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
 import { db } from '@/lib/firebase';
-import { collection, getDocs, addDoc, deleteDoc, doc, query, where } from 'firebase/firestore';
+import { collection, getDocs, addDoc, deleteDoc, doc, query, where, updateDoc } from 'firebase/firestore';
 import Link from 'next/link';
 import { sendWelcomeEmail } from '@/ai/flows/send-welcome-email-flow';
 import Image from 'next/image';
@@ -146,10 +146,22 @@ export default function AdminView() {
   const [teams, setTeams] = useState<Team[]>([]);
   const [organizations, setOrganizations] = useState<Organization[]>([]);
   const [maintenanceMode, setMaintenanceMode] = useState(false);
+  
   const [userToDelete, setUserToDelete] = useState<User | null>(null);
+  const [userToEdit, setUserToEdit] = useState<User | null>(null);
+
+  const [orgToDelete, setOrgToDelete] = useState<Organization | null>(null);
+  const [orgToEdit, setOrgToEdit] = useState<Organization | null>(null);
+
+  const [teamToDelete, setTeamToDelete] = useState<Team | null>(null);
+  const [teamToEdit, setTeamToEdit] = useState<Team | null>(null);
+
   const [isAddUserOpen, setIsAddUserOpen] = useState(false);
   const [isAddTeamOpen, setIsAddTeamOpen] = useState(false);
   const [isAddOrgOpen, setIsAddOrgOpen] = useState(false);
+  const [isEditUserOpen, setIsEditUserOpen] = useState(false);
+  const [isEditOrgOpen, setIsEditOrgOpen] = useState(false);
+  const [isEditTeamOpen, setIsEditTeamOpen] = useState(false);
 
   const fetchData = async () => {
     const [usersSnap, teamsSnap, orgsSnap] = await Promise.all([
@@ -183,6 +195,28 @@ export default function AdminView() {
 
   const teamType = teamForm.watch('type');
 
+  useEffect(() => {
+    if (userToEdit) {
+      userForm.reset(userToEdit);
+      setIsEditUserOpen(true);
+    }
+  }, [userToEdit, userForm]);
+
+  useEffect(() => {
+    if (orgToEdit) {
+        orgForm.reset(orgToEdit);
+        setIsEditOrgOpen(true);
+    }
+  }, [orgToEdit, orgForm]);
+
+  useEffect(() => {
+    if (teamToEdit) {
+        teamForm.reset(teamToEdit);
+        setIsEditTeamOpen(true);
+    }
+  }, [teamToEdit, teamForm]);
+
+
   const handleDeleteUser = async () => {
     if(!userToDelete || userToDelete.id === user?.id) return;
     try {
@@ -209,7 +243,6 @@ export default function AdminView() {
       setUsers([...users, newUser]);
       toast({ title: 'User Created', description: `User "${newUser.name}" has been added.` });
       
-      // Send welcome email
       try {
         await sendWelcomeEmail({
           ...values,
@@ -228,6 +261,20 @@ export default function AdminView() {
     }
   };
 
+  const handleEditUser = async (values: z.infer<typeof userFormSchema>) => {
+    if (!userToEdit) return;
+    try {
+        const userRef = doc(db, 'users', userToEdit.id);
+        await updateDoc(userRef, values);
+        setUsers(users.map(u => u.id === userToEdit.id ? { ...u, ...values } : u));
+        toast({ title: 'User Updated', description: 'User details have been successfully updated.' });
+        setIsEditUserOpen(false);
+        setUserToEdit(null);
+    } catch (error) {
+        toast({ title: 'Error', description: 'Failed to update user.', variant: 'destructive' });
+    }
+  };
+
   const handleAddOrg = async (values: z.infer<typeof organizationFormSchema>) => {
     try {
         const newOrgDoc = await addDoc(collection(db, 'organizations'), values);
@@ -240,6 +287,40 @@ export default function AdminView() {
         toast({ title: 'Error', description: 'Failed to create organization.', variant: 'destructive' });
     }
   };
+  
+  const handleEditOrg = async (values: z.infer<typeof organizationFormSchema>) => {
+    if (!orgToEdit) return;
+    try {
+        const orgRef = doc(db, 'organizations', orgToEdit.id);
+        await updateDoc(orgRef, values);
+        setOrganizations(organizations.map(o => o.id === orgToEdit.id ? { ...o, ...values } : o));
+        toast({ title: 'Organization Updated', description: 'Organization details have been successfully updated.'});
+        setIsEditOrgOpen(false);
+        setOrgToEdit(null);
+    } catch (error) {
+        toast({ title: 'Error', description: 'Failed to update organization.', variant: 'destructive' });
+    }
+  };
+
+  const handleDeleteOrg = async () => {
+    if (!orgToDelete) return;
+
+    const isOrgInUse = teams.some(t => t.organizationId === orgToDelete.id);
+    if (isOrgInUse) {
+        toast({ title: 'Error', description: 'Cannot delete organization with active teams.', variant: 'destructive' });
+        setOrgToDelete(null);
+        return;
+    }
+
+    try {
+        await deleteDoc(doc(db, 'organizations', orgToDelete.id));
+        setOrganizations(organizations.filter(o => o.id !== orgToDelete.id));
+        toast({ title: 'Success', description: 'Organization has been deleted.' });
+    } catch (error) {
+        toast({ title: 'Error', description: 'Failed to delete organization.', variant: 'destructive' });
+    }
+    setOrgToDelete(null);
+  }
   
   const handleAddTeam = async (values: z.infer<typeof teamFormSchema>) => {
     try {
@@ -263,6 +344,40 @@ export default function AdminView() {
     } catch(error) {
         toast({ title: 'Error', description: 'Failed to register team.', variant: 'destructive' });
     }
+  };
+
+  const handleEditTeam = async (values: z.infer<typeof teamFormSchema>) => {
+    if (!teamToEdit) return;
+    try {
+        const teamRef = doc(db, 'teams', teamToEdit.id);
+        const teamData: Omit<Team, 'id' | 'photoUrl'> = {
+            type: values.type,
+            player1Name: values.player1Name,
+            player2Name: values.type !== 'singles' ? values.player2Name : undefined,
+            genderP1: values.type === 'mixed_doubles' ? values.genderP1 : undefined,
+            genderP2: values.type === 'mixed_doubles' ? values.genderP2 : undefined,
+            organizationId: values.organizationId,
+        };
+        await updateDoc(teamRef, teamData);
+        setTeams(teams.map(t => t.id === teamToEdit.id ? { ...teamToEdit, ...teamData } : t));
+        toast({ title: 'Team Updated', description: 'Team details have been successfully updated.'});
+        setIsEditTeamOpen(false);
+        setTeamToEdit(null);
+    } catch (error) {
+        toast({ title: 'Error', description: 'Failed to update team.', variant: 'destructive' });
+    }
+  };
+
+  const handleDeleteTeam = async () => {
+    if (!teamToDelete) return;
+    try {
+        await deleteDoc(doc(db, 'teams', teamToDelete.id));
+        setTeams(teams.filter(t => t.id !== teamToDelete.id));
+        toast({ title: 'Success', description: 'Team has been deleted.' });
+    } catch (error) {
+        toast({ title: 'Error', description: 'Failed to delete team.', variant: 'destructive' });
+    }
+    setTeamToDelete(null);
   };
   
   const getOrgName = (orgId: string) => organizations.find(o => o.id === orgId)?.name || 'N/A';
@@ -342,8 +457,8 @@ export default function AdminView() {
                                 <DropdownMenu>
                                 <DropdownMenuTrigger asChild><Button variant="ghost" className="h-8 w-8 p-0"><MoreHorizontal className="h-4 w-4" /></Button></DropdownMenuTrigger>
                                 <DropdownMenuContent align="end">
-                                    <DropdownMenuItem disabled>Edit</DropdownMenuItem>
-                                    <DropdownMenuItem className="text-destructive focus:text-destructive" disabled>Delete</DropdownMenuItem>
+                                    <DropdownMenuItem onSelect={() => setOrgToEdit(org)}><Edit className="mr-2 h-4 w-4" />Edit</DropdownMenuItem>
+                                    <DropdownMenuItem className="text-destructive focus:text-destructive" onSelect={() => setOrgToDelete(org)}><Trash2 className="mr-2 h-4 w-4" />Delete</DropdownMenuItem>
                                 </DropdownMenuContent>
                                 </DropdownMenu>
                             </TableCell>
@@ -504,8 +619,8 @@ export default function AdminView() {
                             <DropdownMenu>
                                 <DropdownMenuTrigger asChild><Button variant="ghost" className="h-8 w-8 p-0"><MoreHorizontal className="h-4 w-4" /></Button></DropdownMenuTrigger>
                                 <DropdownMenuContent align="end">
-                                    <DropdownMenuItem disabled>Edit</DropdownMenuItem>
-                                    <DropdownMenuItem className="text-destructive focus:text-destructive" disabled>Delete</DropdownMenuItem>
+                                    <DropdownMenuItem onSelect={() => setTeamToEdit(t)}><Edit className="mr-2 h-4 w-4" />Edit</DropdownMenuItem>
+                                    <DropdownMenuItem className="text-destructive focus:text-destructive" onSelect={() => setTeamToDelete(t)}><Trash2 className="mr-2 h-4 w-4" />Delete</DropdownMenuItem>
                                 </DropdownMenuContent>
                             </DropdownMenu>
                         </TableCell>
@@ -618,7 +733,7 @@ export default function AdminView() {
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
                                 <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                                <DropdownMenuItem disabled>Edit user</DropdownMenuItem>
+                                <DropdownMenuItem onSelect={() => setUserToEdit(u)} disabled={u.id === user?.id}><Edit className="mr-2 h-4 w-4" />Edit user</DropdownMenuItem>
                                 <DropdownMenuSeparator />
                                 <DropdownMenuItem className="text-destructive focus:text-destructive focus:bg-destructive/10" onSelect={() => setUserToDelete(u)} disabled={u.id === user?.id}>
                                 <Trash2 className="mr-2 h-4 w-4" />
@@ -683,6 +798,192 @@ export default function AdminView() {
         </TabsContent>
       </Tabs>
       
+      {/* Edit User Dialog */}
+      <Dialog open={isEditUserOpen} onOpenChange={setIsEditUserOpen}>
+        <DialogContent>
+            <DialogHeader>
+                <DialogTitle>Edit User: {userToEdit?.name}</DialogTitle>
+                <DialogDescription>Update the user's details below.</DialogDescription>
+            </DialogHeader>
+            <Form {...userForm}>
+                <form onSubmit={userForm.handleSubmit(handleEditUser)} className="space-y-4">
+                <FormField control={userForm.control} name="name" render={({ field }) => (
+                    <FormItem>
+                        <FormLabel>Full Name</FormLabel>
+                        <FormControl><Input placeholder="John Doe" {...field} /></FormControl>
+                        <FormMessage />
+                    </FormItem>
+                )} />
+                <FormField control={userForm.control} name="username" render={({ field }) => (
+                    <FormItem>
+                        <FormLabel>Username</FormLabel>
+                        <FormControl><Input placeholder="johndoe" {...field} /></FormControl>
+                        <FormMessage />
+                    </FormItem>
+                )} />
+                <FormField control={userForm.control} name="email" render={({ field }) => (
+                    <FormItem>
+                        <FormLabel>Email</FormLabel>
+                        <FormControl><Input type="email" placeholder="john.doe@example.com" {...field} /></FormControl>
+                        <FormMessage />
+                    </FormItem>
+                )} />
+                <FormField control={userForm.control} name="phoneNumber" render={({ field }) => (
+                    <FormItem>
+                        <FormLabel>Phone Number</FormLabel>
+                        <FormControl><Input type="tel" placeholder="1234567890" {...field} /></FormControl>
+                        <FormMessage />
+                    </FormItem>
+                )} />
+                <FormField control={userForm.control} name="role" render={({ field }) => (
+                    <FormItem>
+                        <FormLabel>Role</FormLabel>
+                        <Select onValueChange={field.onChange} defaultValue={field.value}>
+                            <FormControl><SelectTrigger><SelectValue placeholder="Select a role" /></SelectTrigger></FormControl>
+                            <SelectContent>
+                                <SelectItem value="individual">Individual</SelectItem>
+                                <SelectItem value="update">Update User</SelectItem>
+                                <SelectItem value="inquiry">Inquiry User</SelectItem>
+                                <SelectItem value="admin">Admin</SelectItem>
+                                <SelectItem value="super">Super User</SelectItem>
+                            </SelectContent>
+                        </Select><FormMessage />
+                    </FormItem>
+                )} />
+                <DialogFooter>
+                    <Button type="button" variant="secondary" onClick={() => setIsEditUserOpen(false)}>Cancel</Button>
+                    <Button type="submit">Save Changes</Button>
+                </DialogFooter>
+                </form>
+            </Form>
+        </DialogContent>
+      </Dialog>
+      
+      {/* Edit Organization Dialog */}
+      <Dialog open={isEditOrgOpen} onOpenChange={setIsEditOrgOpen}>
+          <DialogContent>
+          <DialogHeader>
+              <DialogTitle>Edit Organization: {orgToEdit?.name}</DialogTitle>
+          </DialogHeader>
+          <Form {...orgForm}>
+              <form onSubmit={orgForm.handleSubmit(handleEditOrg)} className="space-y-4">
+              <FormField control={orgForm.control} name="name" render={({ field }) => (
+                  <FormItem>
+                      <FormLabel>Organization Name</FormLabel>
+                      <FormControl><Input placeholder="e.g. Premier Badminton Club" {...field} /></FormControl>
+                      <FormMessage />
+                  </FormItem>
+              )} />
+              <FormField control={orgForm.control} name="location" render={({ field }) => (
+                  <FormItem>
+                      <FormLabel>Location</FormLabel>
+                      <FormControl><Input placeholder="e.g. New York, USA" {...field} /></FormControl>
+                      <FormMessage />
+                  </FormItem>
+              )} />
+              <DialogFooter>
+                  <Button type="button" variant="secondary" onClick={() => setIsEditOrgOpen(false)}>Cancel</Button>
+                  <Button type="submit">Save Changes</Button>
+              </DialogFooter>
+              </form>
+          </Form>
+          </DialogContent>
+      </Dialog>
+
+      {/* Edit Team Dialog */}
+      <Dialog open={isEditTeamOpen} onOpenChange={setIsEditTeamOpen}>
+          <DialogContent className="sm:max-w-[600px]">
+          <DialogHeader>
+              <DialogTitle>Edit Team</DialogTitle>
+              <DialogDescription>Update the team details.</DialogDescription>
+          </DialogHeader>
+          <Form {...teamForm}>
+              <form onSubmit={teamForm.handleSubmit(handleEditTeam)} className="space-y-4">
+              <FormField control={teamForm.control} name="type" render={({ field }) => (
+                  <FormItem>
+                      <FormLabel>Event Type</FormLabel>
+                      <Select onValueChange={field.onChange} defaultValue={field.value}>
+                          <FormControl><SelectTrigger><SelectValue placeholder="Select an event type" /></SelectTrigger></FormControl>
+                          <SelectContent>
+                              <SelectItem value="singles">Singles</SelectItem>
+                              <SelectItem value="mens_doubles">Men's Doubles</SelectItem>
+                              <SelectItem value="womens_doubles">Women's Doubles</SelectItem>
+                              <SelectItem value="mixed_doubles">Mixed Doubles</SelectItem>
+                          </SelectContent>
+                      </Select><FormMessage />
+                  </FormItem>
+              )} />
+              <div className="grid grid-cols-2 gap-4">
+                  <FormField control={teamForm.control} name="player1Name" render={({ field }) => (
+                      <FormItem>
+                          <FormLabel>{teamType === 'singles' ? 'Player Name' : 'Player 1 Name'}</FormLabel>
+                          <FormControl><Input placeholder="John Doe" {...field} /></FormControl>
+                          <FormMessage />
+                      </FormItem>
+                  )} />
+                    {teamType === 'mixed_doubles' && (
+                      <FormField control={teamForm.control} name="genderP1" render={({ field }) => (
+                          <FormItem>
+                              <FormLabel>Player 1 Gender</FormLabel>
+                              <Select onValueChange={field.onChange} defaultValue={field.value}>
+                              <FormControl><SelectTrigger><SelectValue placeholder="Select gender" /></SelectTrigger></FormControl>
+                              <SelectContent>
+                                  <SelectItem value="male">Male</SelectItem>
+                                  <SelectItem value="female">Female</SelectItem>
+                              </SelectContent>
+                              </Select><FormMessage />
+                          </FormItem>
+                      )} />
+                  )}
+              </div>
+              
+              {(teamType === 'mens_doubles' || teamType === 'mixed_doubles' || teamType === 'womens_doubles') && (
+                    <div className="grid grid-cols-2 gap-4">
+                      <FormField control={teamForm.control} name="player2Name" render={({ field }) => (
+                          <FormItem>
+                              <FormLabel>Player 2 Name</FormLabel>
+                              <FormControl><Input placeholder="Partner's Name" {...field} /></FormControl>
+                              <FormMessage />
+                          </FormItem>
+                      )} />
+                      {teamType === 'mixed_doubles' && (
+                          <FormField control={teamForm.control} name="genderP2" render={({ field }) => (
+                              <FormItem>
+                                  <FormLabel>Player 2 Gender</FormLabel>
+                                  <Select onValueChange={field.onChange} defaultValue={field.value}>
+                                  <FormControl><SelectTrigger><SelectValue placeholder="Select gender" /></SelectTrigger></FormControl>
+                                  <SelectContent>
+                                      <SelectItem value="male">Male</SelectItem>
+                                      <SelectItem value="female">Female</SelectItem>
+                                  </SelectContent>
+                                  </Select><FormMessage />
+                              </FormItem>
+                          )} />
+                      )}
+                  </div>
+              )}
+              
+              <FormField control={teamForm.control} name="organizationId" render={({ field }) => (
+                  <FormItem>
+                      <FormLabel>Organization</FormLabel>
+                      <Select onValueChange={field.onChange} defaultValue={field.value}>
+                          <FormControl><SelectTrigger><SelectValue placeholder="Select an organization" /></SelectTrigger></FormControl>
+                          <SelectContent>
+                              {organizations.map(org => <SelectItem key={org.id} value={org.id}>{org.name}</SelectItem>)}
+                          </SelectContent>
+                      </Select><FormMessage />
+                  </FormItem>
+              )} />
+              <DialogFooter>
+                  <Button type="button" variant="secondary" onClick={() => setIsEditTeamOpen(false)}>Cancel</Button>
+                  <Button type="submit">Save Changes</Button>
+              </DialogFooter>
+              </form>
+          </Form>
+          </DialogContent>
+      </Dialog>
+      
+      {/* Delete User Alert */}
       <AlertDialog open={!!userToDelete} onOpenChange={(open) => !open && setUserToDelete(null)}>
         <AlertDialogContent>
             <AlertDialogHeader>
@@ -695,6 +996,42 @@ export default function AdminView() {
                 <AlertDialogCancel>Cancel</AlertDialogCancel>
                 <AlertDialogAction onClick={handleDeleteUser} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
                   Delete User
+                </AlertDialogAction>
+            </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Delete Org Alert */}
+      <AlertDialog open={!!orgToDelete} onOpenChange={(open) => !open && setOrgToDelete(null)}>
+        <AlertDialogContent>
+            <AlertDialogHeader>
+                <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  This action cannot be undone. This will permanently delete the organization <span className="font-semibold">{orgToDelete?.name}</span>.
+                </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogAction onClick={handleDeleteOrg} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                  Delete Organization
+                </AlertDialogAction>
+            </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Delete Team Alert */}
+      <AlertDialog open={!!teamToDelete} onOpenChange={(open) => !open && setTeamToDelete(null)}>
+        <AlertDialogContent>
+            <AlertDialogHeader>
+                <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  This action cannot be undone. This will permanently delete the team: <span className="font-semibold">{teamToDelete?.player1Name}{teamToDelete?.player2Name ? ` & ${teamToDelete.player2Name}` : ''}</span>.
+                </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogAction onClick={handleDeleteTeam} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                  Delete Team
                 </AlertDialogAction>
             </AlertDialogFooter>
         </AlertDialogContent>

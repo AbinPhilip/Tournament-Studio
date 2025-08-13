@@ -18,15 +18,25 @@ import {
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
-import { CalendarIcon, Save, ArrowLeft } from 'lucide-react';
+import { CalendarIcon, Save, ArrowLeft, Trash2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 import { useToast } from '@/hooks/use-toast';
 import { db } from '@/lib/firebase';
-import { collection, doc, getDocs, setDoc, updateDoc, Timestamp, DocumentReference } from 'firebase/firestore';
+import { collection, doc, getDocs, setDoc, updateDoc, Timestamp, DocumentReference, deleteDoc } from 'firebase/firestore';
 import type { Tournament } from '@/types';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useRouter } from 'next/navigation';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 
 const tournamentFormSchema = z.object({
   location: z.string().min(3, { message: 'Location must be at least 3 characters.' }),
@@ -40,6 +50,7 @@ export default function TournamentAdminPage() {
   const router = useRouter();
   const [tournamentDocRef, setTournamentDocRef] = useState<DocumentReference | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
 
   const form = useForm<z.infer<typeof tournamentFormSchema>>({
     resolver: zodResolver(tournamentFormSchema),
@@ -80,6 +91,8 @@ export default function TournamentAdminPage() {
             ...data,
             date: data.date.toDate(),
           });
+        } else {
+            setTournamentDocRef(null);
         }
       } catch (error) {
         toast({ title: 'Error', description: 'Failed to fetch tournament data.', variant: 'destructive' });
@@ -111,6 +124,26 @@ export default function TournamentAdminPage() {
     }
   };
   
+  const handleDeleteTournament = async () => {
+    if (!tournamentDocRef) return;
+    try {
+        await deleteDoc(tournamentDocRef);
+        toast({ title: 'Success', description: 'Tournament has been deleted.' });
+        setTournamentDocRef(null);
+        form.reset({
+          location: '',
+          date: new Date(),
+          numberOfCourts: 4,
+          courtNames: Array.from({ length: 4 }, (_, i) => ({ name: `Court ${i + 1}` })),
+        });
+        router.push('/dashboard');
+    } catch (error) {
+        toast({ title: 'Error', description: 'Failed to delete tournament.', variant: 'destructive' });
+    } finally {
+        setIsDeleteDialogOpen(false);
+    }
+  };
+
   if (isLoading) {
     return (
         <Card>
@@ -133,6 +166,7 @@ export default function TournamentAdminPage() {
   }
 
   return (
+    <>
     <Card>
       <CardHeader>
         <CardTitle>Tournament Administration</CardTitle>
@@ -233,20 +267,44 @@ export default function TournamentAdminPage() {
               </div>
             </div>
 
-            <div className="flex gap-4">
+            <div className="flex gap-4 flex-wrap">
                 <Button type="submit">
                     <Save className="mr-2 h-4 w-4" />
-                    Save Tournament Settings
+                    {tournamentDocRef ? 'Update Tournament' : 'Create Tournament'}
                 </Button>
                  <Button type="button" variant="outline" onClick={() => router.push('/dashboard')}>
                     <ArrowLeft className="mr-2 h-4 w-4" />
                     Back to Dashboard
                 </Button>
+                {tournamentDocRef && (
+                  <Button type="button" variant="destructive" onClick={() => setIsDeleteDialogOpen(true)}>
+                      <Trash2 className="mr-2 h-4 w-4" />
+                      Delete Tournament
+                  </Button>
+                )}
             </div>
           </form>
         </Form>
       </CardContent>
     </Card>
+
+     <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+        <AlertDialogContent>
+            <AlertDialogHeader>
+                <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  This action cannot be undone. This will permanently delete the tournament data.
+                </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogAction onClick={handleDeleteTournament} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                  Delete
+                </AlertDialogAction>
+            </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
   );
 }
     
