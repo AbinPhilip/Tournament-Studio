@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
 import { db } from '@/lib/firebase';
-import { collection, addDoc, getDocs, writeBatch, doc, DocumentReference, collectionGroup, query, WriteBatch, where } from 'firebase/firestore';
+import { collection, addDoc, getDocs, writeBatch, doc, DocumentReference, query, limit } from 'firebase/firestore';
 import { mockUsers, mockAppData, mockOrganizations, mockTeams } from '@/lib/mock-data';
 import type { Organization, Team } from '@/types';
 import { Loader2 } from 'lucide-react';
@@ -21,7 +21,7 @@ export default function SeedDatabasePage() {
     setIsLoading(true);
     try {
         // 1. Check if any data exists to prevent re-seeding
-        const usersQuery = query(collection(db, 'users'));
+        const usersQuery = query(collection(db, 'users'), limit(1));
         const snapshot = await getDocs(usersQuery);
         if (!snapshot.empty) {
             toast({
@@ -53,6 +53,7 @@ export default function SeedDatabasePage() {
             const orgId = orgNameIdMap[team.organizationName];
             if (orgId) {
                 const docRef = doc(teamsCollectionRef);
+                // eslint-disable-next-line @typescript-eslint/no-unused-vars
                 const { organizationName, ...teamData } = team;
                 batch.set(docRef, { ...teamData, organizationId: orgId });
             } else {
