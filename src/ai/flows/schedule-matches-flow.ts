@@ -24,7 +24,7 @@ const TeamSchema = z.object({
 const TournamentSchema = z.object({
     id: z.string(),
     location: z.string(),
-    date: z.string().datetime(),
+    date: z.date(),
     numberOfCourts: z.number(),
     courtNames: z.array(z.object({ name: z.string() })),
     tournamentType: z.enum(['round-robin', 'knockout']),
@@ -97,7 +97,17 @@ const scheduleMatchesFlow = ai.defineFlow(
     outputSchema: ScheduleMatchesOutputSchema,
   },
   async (input) => {
-    const { output } = await schedulePrompt(input);
+    // When a Date object is passed to a flow, it is serialized as a string.
+    // We need to convert it back to a Date object before passing to the prompt.
+    const promptInput = {
+      ...input,
+      tournament: {
+        ...input.tournament,
+        date: new Date(input.tournament.date),
+      },
+    };
+
+    const { output } = await schedulePrompt(promptInput);
     if (!output) {
       throw new Error('Failed to generate a schedule.');
     }
