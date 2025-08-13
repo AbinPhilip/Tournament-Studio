@@ -6,6 +6,9 @@ import { useRouter, usePathname } from 'next/navigation';
 import { useEffect } from 'react';
 import { DashboardHeader } from '@/components/dashboard/header';
 import { Loader2 } from 'lucide-react';
+import { db } from '@/lib/firebase';
+import { collection, getDocs, query, limit } from 'firebase/firestore';
+
 
 export default function DashboardLayout({
   children,
@@ -14,10 +17,14 @@ export default function DashboardLayout({
 }) {
   const { user, loading } = useAuth();
   const router = useRouter();
+  const pathname = usePathname();
 
   useEffect(() => {
-    if (!loading && !user) {
-      router.replace('/login');
+    // This check is now a fallback. The main check is in `app/page.tsx`
+    if (!loading) {
+       if (!user) {
+          router.replace('/login');
+       }
     }
   }, [user, loading, router]);
 
