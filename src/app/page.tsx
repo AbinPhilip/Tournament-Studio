@@ -3,7 +3,7 @@
 
 import { useAuth } from '@/hooks/use-auth';
 import { useRouter } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import { Loader2 } from 'lucide-react';
 import { db } from '@/lib/firebase';
 import { collection, getDocs, query, limit } from 'firebase/firestore';
@@ -26,12 +26,13 @@ export default function Home() {
         }
       } catch (error) {
         console.error("Failed to check database:", error);
-        // Fallback to login on error
+        // Fallback to login on error, but in a real app might show an error page.
         router.replace('/login');
         return;
       }
 
       // This part only runs if the database is NOT empty.
+      // We wait until the auth state is resolved before redirecting.
       if (!authLoading) {
         if (user) {
           router.replace('/dashboard');
