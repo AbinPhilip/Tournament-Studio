@@ -4,15 +4,15 @@
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { cn } from "@/lib/utils"
-import { LayoutDashboard, ListOrdered, Shield, Cog, Settings } from "lucide-react"
+import { LayoutDashboard, ListOrdered, Shield, Cog, Settings, Database } from "lucide-react"
 
 export function MainNav() {
   const pathname = usePathname()
   const navItems = [
     { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+    { href: "/dashboard/tournament", label: "Tournament Settings", icon: Cog },
     { href: "/dashboard/scheduler", label: "Scheduler", icon: ListOrdered },
     { href: "/dashboard/umpire", label: "Umpire View", icon: Shield },
-    { href: "/dashboard/tournament", label: "Tournament Settings", icon: Cog },
     { href: "/dashboard/settings", label: "System Settings", icon: Settings },
   ]
   return (

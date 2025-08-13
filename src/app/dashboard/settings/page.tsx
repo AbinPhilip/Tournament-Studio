@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useState, useEffect, useRef } from 'react';
+import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -16,9 +16,9 @@ import {
 import { Badge, type BadgeProps } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import type { User, UserRole, Team, Organization, Gender } from '@/types';
+import type { User, UserRole } from '@/types';
 import { useAuth } from '@/hooks/use-auth';
-import { MoreHorizontal, Trash2, UserPlus, Users as TeamsIcon, Building, Edit, CheckCircle, ArrowLeft } from 'lucide-react';
+import { MoreHorizontal, Trash2, UserPlus, Edit, CheckCircle, ArrowLeft, Database, Loader2 } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -65,9 +65,9 @@ import {
 } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import { db } from '@/lib/firebase';
-import { collection, getDocs, addDoc, deleteDoc, doc, query, where, updateDoc } from 'firebase/firestore';
-import Image from 'next/image';
+import { collection, getDocs, addDoc, deleteDoc, doc, query, where, updateDoc, writeBatch } from 'firebase/firestore';
 import { useRouter } from 'next/navigation';
+import { mockUsers, mockAppData, mockOrganizations, mockTeams } from '@/lib/mock-data';
 
 function RoleBadge({ role }: { role: UserRole }) {
     const variant: BadgeProps["variant"] = {
@@ -88,140 +88,47 @@ const userFormSchema = z.object({
   role: z.enum(['individual', 'update', 'admin', 'inquiry', 'super']),
 });
 
-const organizationFormSchema = z.object({
-    name: z.string().min(2, { message: "Organization name must be at least 2 characters." }),
-    location: z.string().min(2, { message: "Location is required." }),
-});
-
-const teamFormSchema = z.object({
-  type: z.enum(['singles', 'mens_doubles', 'womens_doubles', 'mixed_doubles']),
-  player1Name: z.string().min(2, "Player 1 name is required."),
-  player2Name: z.string().optional(),
-  genderP1: z.enum(['male', 'female']).optional(),
-  genderP2: z.enum(['male', 'female']).optional(),
-  organizationId: z.string({ required_error: "Organization is required." }),
-  photoUrl: z.string().optional(),
-}).refine(data => {
-    if (data.type === 'mens_doubles' || data.type === 'womens_doubles' || data.type === 'mixed_doubles') {
-        return !!data.player2Name && data.player2Name.length >= 2;
-    }
-    return true;
-}, {
-    message: "Player 2 name is required for doubles.",
-    path: ["player2Name"],
-}).refine(data => {
-    if (data.type === 'singles' || data.type === 'mixed_doubles') {
-        return !!data.genderP1;
-    }
-    return true;
-}, {
-    message: "Gender for Player 1 is required.",
-    path: ['genderP1']
-}).refine(data => {
-    if (data.type === 'mixed_doubles') {
-        return !!data.genderP2;
-    }
-    return true;
-}, {
-    message: "Gender for Player 2 is required for mixed doubles.",
-    path: ['genderP2']
-});
-
-
 export default function SettingsPage() {
   const { user } = useAuth();
   const { toast } = useToast();
   const router = useRouter();
   const [users, setUsers] = useState<User[]>([]);
-  const [teams, setTeams] = useState<Team[]>([]);
-  const [organizations, setOrganizations] = useState<Organization[]>([]);
   
   const [userToDelete, setUserToDelete] = useState<User | null>(null);
   const [userToEdit, setUserToEdit] = useState<User | null>(null);
 
-  const [orgToDelete, setOrgToDelete] = useState<Organization | null>(null);
-  const [orgToEdit, setOrgToEdit] = useState<Organization | null>(null);
-
-  const [teamToDelete, setTeamToDelete] = useState<Team | null>(null);
-  const [teamToEdit, setTeamToEdit] = useState<Team | null>(null);
-
   const [isAddUserOpen, setIsAddUserOpen] = useState(false);
-  const [isAddTeamOpen, setIsAddTeamOpen] = useState(false);
-  const [isAddOrgOpen, setIsAddOrgOpen] = useState(false);
   const [isEditUserOpen, setIsEditUserOpen] = useState(false);
-  const [isEditOrgOpen, setIsEditOrgOpen] = useState(false);
-  const [isEditTeamOpen, setIsEditTeamOpen] = useState(false);
 
   const [isSuccessModalOpen, setIsSuccessModalOpen] = useState(false);
   const [successModalTitle, setSuccessModalTitle] = useState('');
   const [successModalMessage, setSuccessModalMessage] = useState('');
+  
+  const [isSeeding, setIsSeeding] = useState(false);
+  const [isSeedAlertOpen, setIsSeedAlertOpen] = useState(false);
 
-  const [photoPreview, setPhotoPreview] = useState<string | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const fetchData = async () => {
-    const [usersSnap, teamsSnap, orgsSnap] = await Promise.all([
-        getDocs(collection(db, 'users')),
-        getDocs(collection(db, 'teams')),
-        getDocs(collection(db, 'organizations')),
-    ]);
-    setUsers(usersSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as User)));
-    setTeams(teamsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Team)));
-    setOrganizations(orgsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Organization)));
-  };
-
-  useEffect(() => {
-    fetchData();
-  }, []);
+  useState(() => {
+    const fetchUsers = async () => {
+        const usersSnap = await getDocs(collection(db, 'users'));
+        setUsers(usersSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as User)));
+    };
+    fetchUsers();
+  });
 
   const userForm = useForm<z.infer<typeof userFormSchema>>({
     resolver: zodResolver(userFormSchema),
     defaultValues: { name: '', username: '', email: '', phoneNumber: '', role: 'individual' },
   });
 
-  const orgForm = useForm<z.infer<typeof organizationFormSchema>>({
-    resolver: zodResolver(organizationFormSchema),
-    defaultValues: { name: '', location: '' },
-  });
 
-  const teamForm = useForm<z.infer<typeof teamFormSchema>>({
-    resolver: zodResolver(teamFormSchema),
-    defaultValues: { type: 'singles', player1Name: '', player2Name: '', photoUrl: '' },
-  });
-
-  useEffect(() => {
+  useState(() => {
     if (userToEdit) {
       userForm.reset(userToEdit);
       setIsEditUserOpen(true);
     }
-  }, [userToEdit, userForm]);
-
-  useEffect(() => {
-    if (orgToEdit) {
-        orgForm.reset(orgToEdit);
-        setIsEditOrgOpen(true);
-    }
-  }, [orgToEdit, orgForm]);
-
-  useEffect(() => {
-    if (teamToEdit) {
-        teamForm.reset(teamToEdit);
-        setPhotoPreview(teamToEdit.photoUrl || null);
-        setIsEditTeamOpen(true);
-    }
-  }, [teamToEdit, teamForm]);
+  });
   
-  useEffect(() => {
-    if (!isAddTeamOpen && !isEditTeamOpen) {
-        setPhotoPreview(null);
-        teamForm.reset();
-        if (fileInputRef.current) {
-            fileInputRef.current.value = '';
-        }
-    }
-  }, [isAddTeamOpen, isEditTeamOpen, teamForm]);
-
-
   const handleDeleteUser = async () => {
     if(!userToDelete || userToDelete.id === user?.id) return;
     try {
@@ -279,254 +186,82 @@ export default function SettingsPage() {
         toast({ title: 'Error', description: 'Failed to update user.', variant: 'destructive' });
     }
   };
-
-  const handleAddOrg = async (values: z.infer<typeof organizationFormSchema>) => {
-    try {
-        const q = query(collection(db, 'organizations'), where('name', '==', values.name));
-        const querySnapshot = await getDocs(q);
-        if (!querySnapshot.empty) {
-            toast({ title: 'Error', description: 'An organization with this name already exists.', variant: 'destructive' });
-            return;
-        }
-
-        const newOrgDoc = await addDoc(collection(db, 'organizations'), values);
-        const newOrg: Organization = { id: newOrgDoc.id, ...values };
-        setOrganizations([...organizations, newOrg]);
-        toast({ title: 'Organization Created', description: `Organization "${newOrg.name}" has been added.` });
-        setIsAddOrgOpen(false);
-        orgForm.reset();
-    } catch(error) {
-        toast({ title: 'Error', description: 'Failed to create organization.', variant: 'destructive' });
-    }
-  };
   
-  const handleEditOrg = async (values: z.infer<typeof organizationFormSchema>) => {
-    if (!orgToEdit) return;
+  const handleSeed = async () => {
+    setIsSeeding(true);
+    setIsSeedAlertOpen(false);
     try {
-        const orgRef = doc(db, 'organizations', orgToEdit.id);
-        await updateDoc(orgRef, values);
-        setOrganizations(organizations.map(o => o.id === orgToEdit.id ? { ...o, ...values } : o));
-        setIsEditOrgOpen(false);
-        setOrgToEdit(null);
-        setSuccessModalTitle('Organization Updated');
-        setSuccessModalMessage('Organization details have been successfully updated.');
-        setIsSuccessModalOpen(true);
-    } catch (error) {
-        toast({ title: 'Error', description: 'Failed to update organization.', variant: 'destructive' });
-    }
-  };
+        const batch = writeBatch(db);
 
-  const handleDeleteOrg = async () => {
-    if (!orgToDelete) return;
-
-    const isOrgInUse = teams.some(t => t.organizationId === orgToDelete.id);
-    if (isOrgInUse) {
-        toast({ title: 'Error', description: 'Cannot delete organization with active teams.', variant: 'destructive' });
-        setOrgToDelete(null);
-        return;
-    }
-
-    try {
-        await deleteDoc(doc(db, 'organizations', orgToDelete.id));
-        setOrganizations(organizations.filter(o => o.id !== orgToDelete.id));
-        toast({ title: 'Success', description: 'Organization has been deleted.' });
-    } catch (error) {
-        toast({ title: 'Error', description: 'Failed to delete organization.', variant: 'destructive' });
-    }
-    setOrgToDelete(null);
-  }
-  
-  const handleTeamSubmit = async (values: z.infer<typeof teamFormSchema>, isEditing: boolean) => {
-    try {
-        const teamData: Partial<Team> = {};
-        teamData.type = values.type;
-        teamData.player1Name = values.player1Name;
-        teamData.organizationId = values.organizationId;
-        
-        if (values.photoUrl) teamData.photoUrl = values.photoUrl;
-
-        if (values.type === 'mens_doubles') {
-            teamData.player2Name = values.player2Name;
-            teamData.genderP1 = 'male';
-            teamData.genderP2 = 'male';
-        } else if (values.type === 'womens_doubles') {
-            teamData.player2Name = values.player2Name;
-            teamData.genderP1 = 'female';
-            teamData.genderP2 = 'female';
-        } else if (values.type === 'mixed_doubles') {
-            teamData.player2Name = values.player2Name;
-            teamData.genderP1 = values.genderP1;
-            teamData.genderP2 = values.genderP2;
-        } else if (values.type === 'singles') {
-            teamData.genderP1 = values.genderP1;
-        }
-        
-        if (isEditing) {
-            if (!teamToEdit) return;
-            const teamRef = doc(db, 'teams', teamToEdit.id);
-            await updateDoc(teamRef, teamData as { [x: string]: any });
-            setTeams(teams.map(t => t.id === teamToEdit.id ? { ...teamToEdit, ...teamData } as Team : t));
-            setIsEditTeamOpen(false);
-            setTeamToEdit(null);
-            setSuccessModalTitle('Team Updated');
-            setSuccessModalMessage('Team details have been successfully updated.');
-            setIsSuccessModalOpen(true);
-        } else {
-            const newTeamDoc = await addDoc(collection(db, 'teams'), teamData);
-            const newTeam = { id: newTeamDoc.id, ...teamData };
-            setTeams([...teams, newTeam as Team]);
-            toast({
-              title: 'Team Registered',
-              description: `Team "${teamData.player1Name}${teamData.player2Name ? ' & ' + teamData.player2Name : ''}" has been registered.`,
+        const collectionsToClear = ['users', 'organizations', 'teams', 'appData', 'matches', 'tournaments'];
+        for (const coll of collectionsToClear) {
+            const querySnapshot = await getDocs(collection(db, coll));
+            querySnapshot.forEach(doc => {
+                batch.delete(doc.ref);
             });
-            setIsAddTeamOpen(false);
         }
-        teamForm.reset();
-        setPhotoPreview(null);
-    } catch(error) {
-        console.error(error);
-        toast({ title: 'Error', description: `Failed to ${isEditing ? 'update' : 'register'} team.`, variant: 'destructive' });
-    }
-  };
+        await batch.commit();
 
+        const seedBatch = writeBatch(db);
 
-  const handleDeleteTeam = async () => {
-    if (!teamToDelete) return;
-    try {
-        await deleteDoc(doc(db, 'teams', teamToDelete.id));
-        setTeams(teams.filter(t => t.id !== teamToDelete.id));
-        toast({ title: 'Success', description: 'Team has been deleted.' });
-    } catch (error) {
-        toast({ title: 'Error', description: 'Failed to delete team.', variant: 'destructive' });
-    }
-    setTeamToDelete(null);
-  };
-  
-  const getOrgName = (orgId: string) => organizations.find(o => o.id === orgId)?.name || 'N/A';
-  
-  const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-        const reader = new FileReader();
-        reader.onloadend = () => {
-            const dataUrl = reader.result as string;
-            setPhotoPreview(dataUrl);
-            teamForm.setValue('photoUrl', dataUrl);
-        };
-        reader.readAsDataURL(file);
-    }
-  };
+        const orgsCollectionRef = collection(db, 'organizations');
+        const orgNameIdMap: { [key: string]: string } = {};
 
-  const TeamFormContent = ({ isEditing }: { isEditing: boolean }) => {
-    const teamType = teamForm.watch('type');
-    return (
-    <Form {...teamForm}>
-        <form onSubmit={teamForm.handleSubmit((values) => handleTeamSubmit(values, isEditing))} className="space-y-4">
-        <FormField control={teamForm.control} name="type" render={({ field }) => (
-            <FormItem>
-                <FormLabel>Event Type</FormLabel>
-                <Select onValueChange={field.onChange} defaultValue={field.value}>
-                    <FormControl><SelectTrigger><SelectValue placeholder="Select an event type" /></SelectTrigger></FormControl>
-                    <SelectContent>
-                        <SelectItem value="singles">Singles</SelectItem>
-                        <SelectItem value="mens_doubles">Men's Doubles</SelectItem>
-                        <SelectItem value="womens_doubles">Women's Doubles</SelectItem>
-                        <SelectItem value="mixed_doubles">Mixed Doubles</SelectItem>
-                    </SelectContent>
-                </Select><FormMessage />
-            </FormItem>
-        )} />
-        <FormField control={teamForm.control} name="player1Name" render={({ field }) => (
-            <FormItem>
-                <FormLabel>Player 1 Name</FormLabel>
-                <FormControl><Input placeholder="John Doe" {...field} /></FormControl>
-                <FormMessage />
-            </FormItem>
-        )} />
-        {(teamType === 'singles' || teamType === 'mixed_doubles') && (
-            <FormField control={teamForm.control} name="genderP1" render={({ field }) => (
-                <FormItem>
-                <FormLabel>Player 1 Gender</FormLabel>
-                 <Select onValueChange={field.onChange} defaultValue={field.value}>
-                    <FormControl><SelectTrigger><SelectValue placeholder="Select gender" /></SelectTrigger></FormControl>
-                    <SelectContent>
-                        <SelectItem value="male">Male</SelectItem>
-                        <SelectItem value="female">Female</SelectItem>
-                    </SelectContent>
-                </Select><FormMessage />
-            </FormItem>
-            )} />
-        )}
-        {(teamType === 'mens_doubles' || teamType === 'womens_doubles' || teamType === 'mixed_doubles') && (
-            <FormField control={teamForm.control} name="player2Name" render={({ field }) => (
-                <FormItem>
-                    <FormLabel>Player 2 Name</FormLabel>
-                    <FormControl><Input placeholder="Partner's Name" {...field} /></FormControl>
-                    <FormMessage />
-                </FormItem>
-            )} />
-        )}
-         {teamType === 'mixed_doubles' && (
-            <FormField control={teamForm.control} name="genderP2" render={({ field }) => (
-                <FormItem>
-                <FormLabel>Player 2 Gender</FormLabel>
-                 <Select onValueChange={field.onChange} defaultValue={field.value}>
-                    <FormControl><SelectTrigger><SelectValue placeholder="Select gender" /></SelectTrigger></FormControl>
-                    <SelectContent>
-                        <SelectItem value="male">Male</SelectItem>
-                        <SelectItem value="female">Female</SelectItem>
-                    </SelectContent>
-                </Select><FormMessage />
-            </FormItem>
-            )} />
-        )}
+        for (const org of mockOrganizations) {
+          const docRef = doc(orgsCollectionRef);
+          seedBatch.set(docRef, org);
+          orgNameIdMap[org.name] = docRef.id;
+        }
         
-        <FormField control={teamForm.control} name="organizationId" render={({ field }) => (
-            <FormItem>
-                <FormLabel>Organization</FormLabel>
-                <Select onValueChange={field.onChange} defaultValue={field.value}>
-                    <FormControl><SelectTrigger><SelectValue placeholder="Select an organization" /></SelectTrigger></FormControl>
-                    <SelectContent>
-                        {organizations.map(org => <SelectItem key={org.id} value={org.id}>{org.name}</SelectItem>)}
-                    </SelectContent>
-                </Select><FormMessage />
-            </FormItem>
-        )} />
+        const teamsCollectionRef = collection(db, 'teams');
+        mockTeams.forEach(team => {
+            const orgId = orgNameIdMap[team.organizationName];
+            if (orgId) {
+                const docRef = doc(teamsCollectionRef);
+                const { organizationName, ...teamData } = team;
+                seedBatch.set(docRef, { ...teamData, organizationId: orgId });
+            }
+        });
 
-        <FormItem>
-          <FormLabel>Team Photo</FormLabel>
-          <div className="flex items-center gap-4">
-            <div className="h-20 w-20 bg-muted rounded-md flex items-center justify-center overflow-hidden">
-                <Image 
-                    data-ai-hint="badminton duo" 
-                    src={photoPreview || "https://placehold.co/80x80.png"} 
-                    width={80} height={80} 
-                    alt="Team photo" 
-                    className="object-cover h-full w-full"
-                />
-            </div>
-            <Button type="button" variant="outline" onClick={() => fileInputRef.current?.click()}>
-              Upload
-            </Button>
-            <Input type="file" ref={fileInputRef} onChange={handlePhotoChange} className="hidden" accept="image/png, image/jpeg, image/gif" />
-          </div>
-          <FormMessage />
-        </FormItem>
-        <DialogFooter>
-            <DialogClose asChild><Button type="button" variant="secondary">Cancel</Button></DialogClose>
-            <Button type="submit">{isEditing ? 'Save Changes' : 'Register Team'}</Button>
-        </DialogFooter>
-        </form>
-    </Form>
-  )
-  }
+        const usersCollectionRef = collection(db, 'users');
+        mockUsers.forEach(user => {
+            const docRef = doc(usersCollectionRef);
+            seedBatch.set(docRef, user);
+        });
+
+        const appDataCollectionRef = collection(db, 'appData');
+        mockAppData.forEach(data => {
+            const docRef = doc(appDataCollectionRef);
+            seedBatch.set(docRef, data);
+        });
+
+        await seedBatch.commit();
+
+        toast({
+            title: 'Database Reset!',
+            description: 'Your database has been cleared and re-seeded with mock data.',
+        });
+        setUsers(mockUsers.map(u => ({id: '', ...u}))); // Refresh local state
+
+    } catch (error) {
+        console.error("Seeding failed:", error);
+        toast({
+            title: 'Seeding Failed',
+            description: 'An error occurred. Check console for details.',
+            variant: 'destructive',
+        });
+    } finally {
+        setIsSeeding(false);
+    }
+  };
+
 
   return (
     <div className="grid gap-8 p-4 md:p-8">
         <div className="flex justify-between items-start">
             <div>
                 <h1 className="text-3xl font-bold mb-2">System Settings</h1>
-                <p className="text-muted-foreground">Manage users, teams, organizations, and other system data.</p>
+                <p className="text-muted-foreground">Manage users and database operations.</p>
             </div>
             <Button variant="outline" onClick={() => router.push('/dashboard')}>
                 <ArrowLeft className="mr-2" />
@@ -534,145 +269,6 @@ export default function SettingsPage() {
             </Button>
         </div>
       
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between">
-            <div>
-              <CardTitle>Team Management</CardTitle>
-              <CardDescription>Register and manage badminton teams.</CardDescription>
-            </div>
-            <Dialog open={isAddTeamOpen} onOpenChange={setIsAddTeamOpen}>
-              <DialogTrigger asChild>
-                <Button>
-                  <TeamsIcon className="mr-2 h-4 w-4" />
-                  Register Team
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="sm:max-w-[425px]">
-                <DialogHeader>
-                  <DialogTitle>Register New Team</DialogTitle>
-                  <DialogDescription>Enter the details for the new team.</DialogDescription>
-                </DialogHeader>
-                <TeamFormContent isEditing={false} />
-              </DialogContent>
-            </Dialog>
-          </CardHeader>
-          <CardContent>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Photo</TableHead>
-                  <TableHead>Event</TableHead>
-                  <TableHead>Players</TableHead>
-                  <TableHead>Organization</TableHead>
-                  <TableHead><span className="sr-only">Actions</span></TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {teams.map((t) => (
-                  <TableRow key={t.id}>
-                    <TableCell>
-                      <Image 
-                        data-ai-hint="badminton players"
-                        src={t.photoUrl || 'https://placehold.co/80x80.png'} 
-                        alt="Team photo" 
-                        width={80} 
-                        height={80} 
-                        className="rounded-md object-cover"
-                      />
-                    </TableCell>
-                    <TableCell className="font-medium capitalize">{t.type.replace('_', ' ')}</TableCell>
-                    <TableCell>{t.player1Name}{t.player2Name ? ` & ${t.player2Name}`: ''}</TableCell>
-                    <TableCell>{getOrgName(t.organizationId)}</TableCell>
-                    <TableCell className="text-right">
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild><Button variant="ghost" className="h-8 w-8 p-0"><MoreHorizontal className="h-4 w-4" /></Button></DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuItem onSelect={() => setTeamToEdit(t)}><Edit className="mr-2 h-4 w-4" />Edit</DropdownMenuItem>
-                          <DropdownMenuItem className="text-destructive focus:text-destructive" onSelect={() => setTeamToDelete(t)}><Trash2 className="mr-2 h-4 w-4" />Delete</DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
-        
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between">
-            <div>
-              <CardTitle>Organization Management</CardTitle>
-              <CardDescription>Create and manage organizations.</CardDescription>
-            </div>
-            <Dialog open={isAddOrgOpen} onOpenChange={setIsAddOrgOpen}>
-              <DialogTrigger asChild>
-                <Button>
-                  <Building className="mr-2 h-4 w-4" />
-                  Create Organization
-                </Button>
-              </DialogTrigger>
-              <DialogContent>
-                <DialogHeader>
-                  <DialogTitle>Create New Organization</DialogTitle>
-                </DialogHeader>
-                <Form {...orgForm}>
-                  <form onSubmit={orgForm.handleSubmit(handleAddOrg)} className="space-y-4">
-                    <FormField control={orgForm.control} name="name" render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Organization Name</FormLabel>
-                        <FormControl><Input placeholder="e.g. Premier Badminton Club" {...field} /></FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )} />
-                    <FormField control={orgForm.control} name="location" render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Location</FormLabel>
-                        <FormControl><Input placeholder="e.g. New York, USA" {...field} /></FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )} />
-                    <DialogFooter>
-                      <DialogClose asChild><Button type="button" variant="secondary">Cancel</Button></DialogClose>
-                      <Button type="submit">Create Organization</Button>
-                    </DialogFooter>
-                  </form>
-                </Form>
-              </DialogContent>
-            </Dialog>
-          </CardHeader>
-          <CardContent>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Organization</TableHead>
-                  <TableHead>Location</TableHead>
-                  <TableHead><span className="sr-only">Actions</span></TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {organizations.map((org) => (
-                  <TableRow key={org.id}>
-                    <TableCell className="font-medium">{org.name}</TableCell>
-                    <TableCell>{org.location}</TableCell>
-                    <TableCell className="text-right">
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild><Button variant="ghost" className="h-8 w-8 p-0"><MoreHorizontal className="h-4 w-4" /></Button></DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuItem onSelect={() => setOrgToEdit(org)}><Edit className="mr-2 h-4 w-4" />Edit</DropdownMenuItem>
-                          <DropdownMenuItem className="text-destructive focus:text-destructive" onSelect={() => setOrgToDelete(org)}><Trash2 className="mr-2 h-4 w-4" />Delete</DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
-      </div>
-
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
           <div>
@@ -789,6 +385,39 @@ export default function SettingsPage() {
         </CardContent>
       </Card>
       
+        <Card>
+          <CardHeader>
+            <CardTitle>Database Management</CardTitle>
+            <CardDescription>
+              Clear all current data and re-seed your Firestore database with mock data.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <AlertDialog open={isSeedAlertOpen} onOpenChange={setIsSeedAlertOpen}>
+                <AlertDialogTrigger asChild>
+                    <Button variant="destructive" disabled={isSeeding}>
+                      {isSeeding ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Database className="mr-2 h-4 w-4" />}
+                      Clear and Reseed Database
+                    </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            This will permanently delete ALL data in your database, including users, teams, and matches, before repopulating it with mock data. This action cannot be undone.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                        <AlertDialogAction onClick={handleSeed} className="bg-destructive hover:bg-destructive/90">
+                            Yes, delete and reseed
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
+          </CardContent>
+        </Card>
+
       {/* Edit User Dialog */}
       <Dialog open={isEditUserOpen} onOpenChange={setIsEditUserOpen}>
         <DialogContent>
@@ -850,48 +479,6 @@ export default function SettingsPage() {
         </DialogContent>
       </Dialog>
       
-      {/* Edit Organization Dialog */}
-      <Dialog open={isEditOrgOpen} onOpenChange={setIsEditOrgOpen}>
-          <DialogContent>
-          <DialogHeader>
-              <DialogTitle>Edit Organization: {orgToEdit?.name}</DialogTitle>
-          </DialogHeader>
-          <Form {...orgForm}>
-              <form onSubmit={orgForm.handleSubmit(handleEditOrg)} className="space-y-4">
-              <FormField control={orgForm.control} name="name" render={({ field }) => (
-                  <FormItem>
-                      <FormLabel>Organization Name</FormLabel>
-                      <FormControl><Input placeholder="e.g. Premier Badminton Club" {...field} /></FormControl>
-                      <FormMessage />
-                  </FormItem>
-              )} />
-              <FormField control={orgForm.control} name="location" render={({ field }) => (
-                  <FormItem>
-                      <FormLabel>Location</FormLabel>
-                      <FormControl><Input placeholder="e.g. New York, USA" {...field} /></FormControl>
-                      <FormMessage />
-                  </FormItem>
-              )} />
-              <DialogFooter>
-                  <Button type="button" variant="secondary" onClick={() => setIsEditOrgOpen(false)}>Cancel</Button>
-                  <Button type="submit">Save Changes</Button>
-              </DialogFooter>
-              </form>
-          </Form>
-          </DialogContent>
-      </Dialog>
-
-      {/* Edit Team Dialog */}
-      <Dialog open={isEditTeamOpen} onOpenChange={setIsEditTeamOpen}>
-          <DialogContent className="sm:max-w-[425px]">
-          <DialogHeader>
-              <DialogTitle>Edit Team</DialogTitle>
-              <DialogDescription>Update the team details.</DialogDescription>
-          </DialogHeader>
-          <TeamFormContent isEditing={true} />
-          </DialogContent>
-      </Dialog>
-      
       {/* Delete User Alert */}
       <AlertDialog open={!!userToDelete} onOpenChange={(open) => !open && setUserToDelete(null)}>
         <AlertDialogContent>
@@ -905,42 +492,6 @@ export default function SettingsPage() {
                 <AlertDialogCancel>Cancel</AlertDialogCancel>
                 <AlertDialogAction onClick={handleDeleteUser} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
                   Delete User
-                </AlertDialogAction>
-            </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-
-      {/* Delete Org Alert */}
-      <AlertDialog open={!!orgToDelete} onOpenChange={(open) => !open && setOrgToDelete(null)}>
-        <AlertDialogContent>
-            <AlertDialogHeader>
-                <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
-                <AlertDialogDescription>
-                  This action cannot be undone. This will permanently delete the organization <span className="font-semibold">{orgToDelete?.name}</span>.
-                </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-                <AlertDialogCancel>Cancel</AlertDialogCancel>
-                <AlertDialogAction onClick={handleDeleteOrg} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
-                  Delete Organization
-                </AlertDialogAction>
-            </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-
-      {/* Delete Team Alert */}
-      <AlertDialog open={!!teamToDelete} onOpenChange={(open) => !open && setTeamToDelete(null)}>
-        <AlertDialogContent>
-            <AlertDialogHeader>
-                <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
-                <AlertDialogDescription>
-                  This action cannot be undone. This will permanently delete the team: <span className="font-semibold">{teamToDelete?.player1Name}{teamToDelete?.player2Name ? ` & ${teamToDelete.player2Name}` : ''}</span>.
-                </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-                <AlertDialogCancel>Cancel</AlertDialogCancel>
-                <AlertDialogAction onClick={handleDeleteTeam} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
-                  Delete Team
                 </AlertDialogAction>
             </AlertDialogFooter>
         </AlertDialogContent>
