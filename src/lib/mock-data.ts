@@ -1,4 +1,4 @@
-import type { User, AppData } from '@/types';
+import type { User, AppData, Team } from '@/types';
 
 export const mockUsers: User[] = [
   { id: '1', username: 'individual_user', phoneNumber: '1112223333', role: 'individual', name: 'Alex Doe', email: 'alex.doe@example.com' },
@@ -14,4 +14,10 @@ export const mockAppData: AppData[] = [
     { id: 4, name: 'Q4 Marketing Spend', value: '15000', lastUpdated: '2023-10-24T09:15:00Z', updatedBy: 'Ben Carter', isFlagged: true },
     { id: 5, name: 'Support Ticket Volume', value: '253', lastUpdated: '2023-10-26T16:45:00Z', updatedBy: 'System', isFlagged: false },
     { id: 6, name: 'Active Users', value: '1250', lastUpdated: '2023-10-26T18:00:00Z', updatedBy: 'System', isFlagged: false },
+];
+
+export const mockTeams: Team[] = [
+    { id: '1', type: 'mens_doubles', player1Name: 'Lee Chong Wei', player2Name: 'Lin Dan', organization: 'Legends Club', genderP1: 'male' },
+    { id: '2', type: 'mixed_doubles', player1Name: 'Tontowi Ahmad', player2Name: 'Liliyana Natsir', organization: 'Indonesia National Team', genderP1: 'male' },
+    { id: '3', type: 'singles', player1Name: 'Carolina Marín', organization: 'Spain National Team' },
 ];
