@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
 import { db } from '@/lib/firebase';
-import { collection, addDoc, getDocs, writeBatch } from 'firebase/firestore';
+import { collection, addDoc, getDocs, writeBatch, doc } from 'firebase/firestore';
 import { mockUsers, mockAppData, mockOrganizations, mockTeams } from '@/lib/mock-data';
 import { Loader2 } from 'lucide-react';
 import type { Organization, Team } from '@/types';
@@ -24,7 +24,7 @@ export default function SeedDatabasePage() {
 
     const batch = writeBatch(db);
     data.forEach((item) => {
-        const docRef = collectionRef.doc();
+        const docRef = doc(collectionRef);
         batch.set(docRef, item);
     });
     await batch.commit();
@@ -65,7 +65,7 @@ export default function SeedDatabasePage() {
 
     const batch = writeBatch(db);
     teamsToSeed.forEach((item) => {
-        const docRef = teamsCollectionRef.doc();
+        const docRef = doc(teamsCollectionRef);
         batch.set(docRef, item);
     });
     await batch.commit();
