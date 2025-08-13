@@ -39,6 +39,7 @@ export interface Team {
     genderP2?: Gender;
     organizationId: string;
     photoUrl?: string;
+    lotNumber?: number;
 }
 
 export type TournamentType = 'round-robin' | 'knockout';
@@ -50,6 +51,9 @@ export interface Tournament {
     numberOfCourts: number;
     courtNames: { name: string }[];
     tournamentType: TournamentType;
+    date: Date | Timestamp;
+    status?: TournamentStatus;
+    startedAt?: Date | Timestamp;
 }
 
 export type MatchStatus = 'PENDING' | 'SCHEDULED' | 'IN_PROGRESS' | 'COMPLETED';

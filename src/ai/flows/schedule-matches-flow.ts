@@ -22,6 +22,7 @@ const TeamSchema = z.object({
     genderP1: z.enum(['male', 'female']).optional(),
     genderP2: z.enum(['male', 'female']).optional(),
     photoUrl: z.string().optional(),
+    lotNumber: z.number().optional(),
 });
 
 const TournamentSchema = z.object({
@@ -30,9 +31,9 @@ const TournamentSchema = z.object({
     numberOfCourts: z.number(),
     courtNames: z.array(z.object({ name: z.string() })),
     tournamentType: z.enum(['round-robin', 'knockout']),
-    date: z.date({ coerce: true }),
+    date: z.string({ coerce: true }),
     status: z.enum(['PENDING', 'IN_PROGRESS', 'COMPLETED']).optional(),
-    startedAt: z.date({ coerce: true }).optional(),
+    startedAt: z.string({ coerce: true }).optional(),
 });
 
 const ScheduleMatchesInputSchema = z.object({
@@ -74,7 +75,7 @@ const schedulePrompt = ai.definePrompt({
 
         Here is the list of teams, grouped by event type:
         {{#each teams}}
-        - Team ID: {{this.id}}, Players: {{this.player1Name}}{{#if this.player2Name}} & {{this.player2Name}}{{/if}}, Event: {{this.type}}
+        - Team ID: {{this.id}}, Players: {{this.player1Name}}{{#if this.player2Name}} & {{this.player2Name}}{{/if}}, Event: {{this.type}}, Lot Number: {{this.lotNumber}}
         {{/each}}
 
         Constraints and rules:
@@ -88,7 +89,7 @@ const schedulePrompt = ai.definePrompt({
 
         Scheduling Logic by Tournament Type:
         - If 'tournamentType' is 'round-robin': Generate a full round-robin schedule. This means every team in an event type must play every other team in the same event type exactly once.
-        - If 'tournamentType' is 'knockout': Generate ONLY the first round of a single-elimination knockout bracket. Randomly pair the teams. If there is an odd number of teams in an event type, one team gets a "bye" and automatically advances to the next round (do not generate a match for the team with the bye). For all generated matches, set the 'round' field to 1.
+        - If 'tournamentType' is 'knockout': Generate ONLY the first round of a single-elimination knockout bracket. Pair the teams based on their assigned lotNumber (e.g., Lot 1 vs Lot 2, Lot 3 vs Lot 4). If there is an odd number of teams in an event type, the team with the highest lot number gets a "bye" and automatically advances to the next round (do not generate a match for the team with the bye). For all generated matches, set the 'round' field to 1.
 
         Generate the list of matches in the required JSON format.
     `,
@@ -101,7 +102,16 @@ const scheduleMatchesFlow = ai.defineFlow(
     outputSchema: ScheduleMatchesOutputSchema,
   },
   async (input) => {
-    const { output } = await schedulePrompt(input);
+    
+    const flowInput = {
+        ...input,
+        tournament: {
+            ...input.tournament,
+            date: new Date(input.tournament.date),
+        }
+    }
+
+    const { output } = await schedulePrompt(flowInput);
     if (!output) {
       throw new Error('Failed to generate a schedule.');
     }
@@ -118,7 +128,7 @@ const scheduleMatchesFlow = ai.defineFlow(
 // Wrapper function to be called from the application
 export async function scheduleMatches(input: {
     teams: Team[],
-    tournament: Omit<Tournament, 'date'> & { date: Date }
+    tournament: Omit<Tournament, 'date'> & { date: string }
 }): Promise<(Omit<Match, 'id' | 'startTime'> & { startTime: Date })[]> {
     const result = await scheduleMatchesFlow(input);
     return result.matches;

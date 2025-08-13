@@ -83,6 +83,7 @@ const teamFormSchema = z.object({
   genderP2: z.enum(['male', 'female']).optional(),
   organizationId: z.string({ required_error: "Organization is required." }),
   photoUrl: z.string().optional(),
+  lotNumber: z.coerce.number().optional(),
 }).refine(data => {
     if (data.type === 'mens_doubles' || data.type === 'womens_doubles' || data.type === 'mixed_doubles') {
         return !!data.player2Name && data.player2Name.length >= 2;
@@ -338,6 +339,7 @@ export default function TournamentSettingsPage() {
         teamData.type = values.type;
         teamData.player1Name = values.player1Name;
         teamData.organizationId = values.organizationId;
+        teamData.lotNumber = values.lotNumber;
         
         if (values.photoUrl) teamData.photoUrl = values.photoUrl;
 
@@ -484,6 +486,14 @@ export default function TournamentSettingsPage() {
                         {organizations.map(org => <SelectItem key={org.id} value={org.id}>{org.name}</SelectItem>)}
                     </SelectContent>
                 </Select><FormMessage />
+            </FormItem>
+        )} />
+        
+        <FormField control={teamForm.control} name="lotNumber" render={({ field }) => (
+            <FormItem>
+                <FormLabel>Lot Number</FormLabel>
+                <FormControl><Input type="number" placeholder="e.g. 1" {...field} /></FormControl>
+                <FormMessage />
             </FormItem>
         )} />
 
@@ -700,6 +710,7 @@ export default function TournamentSettingsPage() {
             <Table>
               <TableHeader>
                 <TableRow>
+                  <TableHead>Lot #</TableHead>
                   <TableHead>Photo</TableHead>
                   <TableHead>Event</TableHead>
                   <TableHead>Players</TableHead>
@@ -710,6 +721,7 @@ export default function TournamentSettingsPage() {
               <TableBody>
                 {teams.map((t) => (
                   <TableRow key={t.id}>
+                    <TableCell>{t.lotNumber || 'N/A'}</TableCell>
                     <TableCell>
                       <Image 
                         data-ai-hint="badminton players"
