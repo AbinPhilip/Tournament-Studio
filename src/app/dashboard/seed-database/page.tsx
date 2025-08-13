@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
 import { db } from '@/lib/firebase';
-import { collection, addDoc, getDocs, writeBatch, doc, DocumentReference, collectionGroup, query, WriteBatch } from 'firebase/firestore';
+import { collection, addDoc, getDocs, writeBatch, doc, DocumentReference, collectionGroup, query, WriteBatch, where } from 'firebase/firestore';
 import { mockUsers, mockAppData, mockOrganizations, mockTeams } from '@/lib/mock-data';
 import type { Organization, Team } from '@/types';
 import { Loader2 } from 'lucide-react';
@@ -21,8 +21,8 @@ export default function SeedDatabasePage() {
     setIsLoading(true);
     try {
         // 1. Check if any data exists to prevent re-seeding
-        const allCollectionsQuery = query(collectionGroup(db, 'users')); // Check one collection is enough
-        const snapshot = await getDocs(allCollectionsQuery);
+        const usersQuery = query(collection(db, 'users'));
+        const snapshot = await getDocs(usersQuery);
         if (!snapshot.empty) {
             toast({
                 title: 'Database Not Empty',
@@ -34,8 +34,31 @@ export default function SeedDatabasePage() {
             return;
         }
 
-        // 2. Prepare all data for a single batch write
+        // 2. Use a single batch for all writes
         const batch = writeBatch(db);
+
+        // Add Organizations and get their new document IDs
+        const orgsCollectionRef = collection(db, 'organizations');
+        const orgNameIdMap: { [key: string]: string } = {};
+
+        for (const org of mockOrganizations) {
+          const docRef = doc(orgsCollectionRef); // Create a new doc with a generated ID
+          batch.set(docRef, org);
+          orgNameIdMap[org.name] = docRef.id;
+        }
+        
+        // Add Teams with correct organization IDs from the map
+        const teamsCollectionRef = collection(db, 'teams');
+        mockTeams.forEach(team => {
+            const orgId = orgNameIdMap[team.organizationName];
+            if (orgId) {
+                const docRef = doc(teamsCollectionRef);
+                const { organizationName, ...teamData } = team;
+                batch.set(docRef, { ...teamData, organizationId: orgId });
+            } else {
+              console.warn(`Could not find organization ID for team associated with: ${team.organizationName}`);
+            }
+        });
 
         // Add Users
         const usersCollectionRef = collection(db, 'users');
@@ -51,26 +74,6 @@ export default function SeedDatabasePage() {
             batch.set(docRef, data);
         });
 
-        // Add Organizations and prepare for teams
-        const orgsCollectionRef = collection(db, 'organizations');
-        const orgNameIdMap: { [key: string]: string } = {};
-        mockOrganizations.forEach(org => {
-            const docRef = doc(orgsCollectionRef);
-            batch.set(docRef, org);
-            orgNameIdMap[org.name] = docRef.id;
-        });
-        
-        // Add Teams with correct organization IDs
-        const teamsCollectionRef = collection(db, 'teams');
-        mockTeams.forEach(team => {
-            const orgId = orgNameIdMap[team.organizationName];
-            if (orgId) {
-                const docRef = doc(teamsCollectionRef);
-                const { organizationName, ...teamData } = team;
-                batch.set(docRef, { ...teamData, organizationId: orgId });
-            }
-        });
-
         // 3. Commit the single batch
         await batch.commit();
 
@@ -84,7 +87,7 @@ export default function SeedDatabasePage() {
         console.error("Seeding failed:", error);
         toast({
             title: 'Seeding Failed',
-            description: 'An error occurred while seeding the database.',
+            description: 'An error occurred while seeding the database. Check console for details.',
             variant: 'destructive',
         });
     } finally {
@@ -101,7 +104,7 @@ export default function SeedDatabasePage() {
           <CardDescription>
             Populate your Firestore database with the initial mock data. This will allow you to
             use the application with a predefined set of users, teams, and other information.
-            This action should only be performed once.
+            This action should only be performed once on an empty database.
           </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-4">
