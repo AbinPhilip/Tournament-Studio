@@ -33,5 +33,7 @@ export interface Team {
     player1Name: string;
     player2Name?: string;
     genderP1?: Gender;
+    genderP2?: Gender;
     organizationId: string;
+    photoUrl?: string;
 }

@@ -18,7 +18,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Switch } from '@/components/ui/switch';
 import type { User, UserRole, Team, Organization } from '@/types';
 import { useAuth } from '@/hooks/use-auth';
-import { MoreHorizontal, Trash2, UserPlus, Users as TeamsIcon, Building, PlusCircle, Database } from 'lucide-react';
+import { MoreHorizontal, Trash2, UserPlus, Users as TeamsIcon, Building, PlusCircle, Database, Upload } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -69,6 +69,7 @@ import { db } from '@/lib/firebase';
 import { collection, getDocs, addDoc, deleteDoc, doc, query, where } from 'firebase/firestore';
 import Link from 'next/link';
 import { sendWelcomeEmail } from '@/ai/flows/send-welcome-email-flow';
+import Image from 'next/image';
 
 function RoleBadge({ role }: { role: UserRole }) {
     const variant: BadgeProps["variant"] = {
@@ -99,9 +100,10 @@ const teamFormSchema = z.object({
   player1Name: z.string().min(2, "Player 1 name is required."),
   player2Name: z.string().optional(),
   genderP1: z.enum(['male', 'female']).optional(),
+  genderP2: z.enum(['male', 'female']).optional(),
   organizationId: z.string({ required_error: "Organization is required." }),
 }).refine(data => {
-    if (data.type === 'mens_doubles' || data.type === 'mixed_doubles' || data.type === 'womens_doubles') {
+    if (data.type === 'mens_doubles' || data.type === 'womens_doubles' || data.type === 'mixed_doubles') {
         return !!data.player2Name && data.player2Name.length >= 2;
     }
     return true;
@@ -114,8 +116,24 @@ const teamFormSchema = z.object({
     }
     return true;
 }, {
-    message: "Gender is required for Mixed Doubles.",
+    message: "Player 1 gender is required for Mixed Doubles.",
     path: ["genderP1"],
+}).refine(data => {
+    if (data.type === 'mixed_doubles') {
+        return !!data.genderP2;
+    }
+    return true;
+}, {
+    message: "Player 2 gender is required for Mixed Doubles.",
+    path: ["genderP2"],
+}).refine(data => {
+    if (data.type === 'mixed_doubles') {
+        return data.genderP1 !== data.genderP2;
+    }
+    return true;
+}, {
+    message: "Players must have different genders for Mixed Doubles.",
+    path: ["genderP2"],
 });
 
 
@@ -223,15 +241,17 @@ export default function AdminView() {
   
   const handleAddTeam = async (values: z.infer<typeof teamFormSchema>) => {
     try {
-        const teamData = {
+        const teamData: Omit<Team, 'id' | 'photoUrl'> = {
           type: values.type,
           player1Name: values.player1Name,
           player2Name: values.type !== 'singles' ? values.player2Name : undefined,
           genderP1: values.type === 'mixed_doubles' ? values.genderP1 : undefined,
+          genderP2: values.type === 'mixed_doubles' ? values.genderP2 : undefined,
           organizationId: values.organizationId,
         };
         const newTeamDoc = await addDoc(collection(db, 'teams'), teamData);
-        setTeams([...teams, { id: newTeamDoc.id, ...teamData }]);
+        const newTeam = { id: newTeamDoc.id, ...teamData };
+        setTeams([...teams, newTeam as Team]);
         toast({
           title: 'Team Registered',
           description: `Team "${teamData.player1Name}${teamData.player2Name ? ' & ' + teamData.player2Name : ''}" has been registered.`,
@@ -345,7 +365,7 @@ export default function AdminView() {
                         Register Team
                     </Button>
                     </DialogTrigger>
-                    <DialogContent>
+                    <DialogContent className="sm:max-w-[600px]">
                     <DialogHeader>
                         <DialogTitle>Register New Team</DialogTitle>
                         <DialogDescription>Enter the details for the new team.</DialogDescription>
@@ -366,36 +386,56 @@ export default function AdminView() {
                                 </Select><FormMessage />
                             </FormItem>
                         )} />
-                        <FormField control={teamForm.control} name="player1Name" render={({ field }) => (
-                            <FormItem>
-                                <FormLabel>{teamType === 'singles' ? 'Player Name' : 'Player 1 Name'}</FormLabel>
-                                <FormControl><Input placeholder="John Doe" {...field} /></FormControl>
-                                <FormMessage />
-                            </FormItem>
-                        )} />
-                        {(teamType === 'mens_doubles' || teamType === 'mixed_doubles' || teamType === 'womens_doubles') && (
-                            <FormField control={teamForm.control} name="player2Name" render={({ field }) => (
+                        <div className="grid grid-cols-2 gap-4">
+                            <FormField control={teamForm.control} name="player1Name" render={({ field }) => (
                                 <FormItem>
-                                    <FormLabel>Player 2 Name</FormLabel>
-                                    <FormControl><Input placeholder="Partner's Name" {...field} /></FormControl>
+                                    <FormLabel>{teamType === 'singles' ? 'Player Name' : 'Player 1 Name'}</FormLabel>
+                                    <FormControl><Input placeholder="John Doe" {...field} /></FormControl>
                                     <FormMessage />
                                 </FormItem>
                             )} />
+                             {teamType === 'mixed_doubles' && (
+                                <FormField control={teamForm.control} name="genderP1" render={({ field }) => (
+                                    <FormItem>
+                                        <FormLabel>Player 1 Gender</FormLabel>
+                                        <Select onValueChange={field.onChange} defaultValue={field.value}>
+                                        <FormControl><SelectTrigger><SelectValue placeholder="Select gender" /></SelectTrigger></FormControl>
+                                        <SelectContent>
+                                            <SelectItem value="male">Male</SelectItem>
+                                            <SelectItem value="female">Female</SelectItem>
+                                        </SelectContent>
+                                        </Select><FormMessage />
+                                    </FormItem>
+                                )} />
+                            )}
+                        </div>
+                        
+                        {(teamType === 'mens_doubles' || teamType === 'mixed_doubles' || teamType === 'womens_doubles') && (
+                             <div className="grid grid-cols-2 gap-4">
+                                <FormField control={teamForm.control} name="player2Name" render={({ field }) => (
+                                    <FormItem>
+                                        <FormLabel>Player 2 Name</FormLabel>
+                                        <FormControl><Input placeholder="Partner's Name" {...field} /></FormControl>
+                                        <FormMessage />
+                                    </FormItem>
+                                )} />
+                                {teamType === 'mixed_doubles' && (
+                                    <FormField control={teamForm.control} name="genderP2" render={({ field }) => (
+                                        <FormItem>
+                                            <FormLabel>Player 2 Gender</FormLabel>
+                                            <Select onValueChange={field.onChange} defaultValue={field.value}>
+                                            <FormControl><SelectTrigger><SelectValue placeholder="Select gender" /></SelectTrigger></FormControl>
+                                            <SelectContent>
+                                                <SelectItem value="male">Male</SelectItem>
+                                                <SelectItem value="female">Female</SelectItem>
+                                            </SelectContent>
+                                            </Select><FormMessage />
+                                        </FormItem>
+                                    )} />
+                                )}
+                            </div>
                         )}
-                        {teamType === 'mixed_doubles' && (
-                            <FormField control={teamForm.control} name="genderP1" render={({ field }) => (
-                                <FormItem>
-                                    <FormLabel>Player 1 Gender</FormLabel>
-                                    <Select onValueChange={field.onChange} defaultValue={field.value}>
-                                    <FormControl><SelectTrigger><SelectValue placeholder="Select Player 1's gender" /></SelectTrigger></FormControl>
-                                    <SelectContent>
-                                        <SelectItem value="male">Male</SelectItem>
-                                        <SelectItem value="female">Female</SelectItem>
-                                    </SelectContent>
-                                    </Select><FormMessage />
-                                </FormItem>
-                            )} />
-                        )}
+                        
                         <FormField control={teamForm.control} name="organizationId" render={({ field }) => (
                             <FormItem>
                                 <FormLabel>Organization</FormLabel>
@@ -407,6 +447,21 @@ export default function AdminView() {
                                 </Select><FormMessage />
                             </FormItem>
                         )} />
+
+                        <FormItem>
+                          <FormLabel>Team Photo</FormLabel>
+                          <div className="flex items-center gap-4">
+                            <div className="h-24 w-24 bg-muted rounded-md flex items-center justify-center">
+                              <Image data-ai-hint="badminton duo" src="https://placehold.co/96x96.png" width={96} height={96} alt="Team photo placeholder" className="rounded-md" />
+                            </div>
+                            <Button type="button" variant="outline" disabled>
+                              <Upload className="mr-2 h-4 w-4" />
+                              Upload (coming soon)
+                            </Button>
+                          </div>
+                          <FormMessage />
+                        </FormItem>
+
                         <DialogFooter>
                             <DialogClose asChild><Button type="button" variant="secondary">Cancel</Button></DialogClose>
                             <Button type="submit">Register Team</Button>
@@ -420,6 +475,7 @@ export default function AdminView() {
                 <Table>
                     <TableHeader>
                     <TableRow>
+                        <TableHead>Photo</TableHead>
                         <TableHead>Event</TableHead>
                         <TableHead>Players</TableHead>
                         <TableHead>Organization</TableHead>
@@ -429,6 +485,16 @@ export default function AdminView() {
                     <TableBody>
                     {teams.map((t) => (
                         <TableRow key={t.id}>
+                        <TableCell>
+                           <Image 
+                                data-ai-hint="badminton players"
+                                src={t.photoUrl || 'https://placehold.co/40x40.png'} 
+                                alt="Team photo" 
+                                width={40} 
+                                height={40} 
+                                className="rounded-full"
+                            />
+                        </TableCell>
                         <TableCell className="font-medium capitalize">{t.type.replace('_', ' ')}</TableCell>
                         <TableCell>{t.player1Name}{t.player2Name ? ` & ${t.player2Name}`: ''}</TableCell>
                         <TableCell>{getOrgName(t.organizationId)}</TableCell>
