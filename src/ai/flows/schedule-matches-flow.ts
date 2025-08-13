@@ -1,17 +1,16 @@
 
 'use server';
 /**
- * @fileOverview A flow for generating a round-robin tournament schedule.
+ * @fileOverview A flow for generating a tournament schedule.
  * 
- * - scheduleMatches - Generates a match schedule.
+ * - scheduleMatches - Generates a match schedule based on tournament type.
  * - ScheduleMatchesInput - The input type for the scheduleMatches function.
  * - ScheduleMatchesOutput - The return type for the scheduleMatches function.
  */
 
 import { ai } from '@/ai/genkit';
 import { z } from 'zod';
-import type { Team, Tournament, Match, TeamType } from '@/types';
-import { Timestamp } from 'firebase/firestore';
+import type { Team, Tournament, Match } from '@/types';
 
 // Define Zod schemas for validation
 const TeamSchema = z.object({
@@ -28,6 +27,7 @@ const TournamentSchema = z.object({
     date: z.date(),
     numberOfCourts: z.number(),
     courtNames: z.array(z.object({ name: z.string() })),
+    tournamentType: z.enum(['round-robin', 'knockout']),
 });
 
 const ScheduleMatchesInputSchema = z.object({
@@ -45,6 +45,7 @@ const MatchSchema = z.object({
     courtName: z.string(),
     startTime: z.date(),
     status: z.enum(['PENDING', 'SCHEDULED', 'IN_PROGRESS', 'COMPLETED']),
+    round: z.number().optional(),
 });
 
 const ScheduleMatchesOutputSchema = z.object({
@@ -58,9 +59,10 @@ const schedulePrompt = ai.definePrompt({
     input: { schema: ScheduleMatchesInputSchema },
     output: { schema: ScheduleMatchesOutputSchema },
     prompt: `
-        You are a tournament scheduler for a badminton competition. Your task is to generate a round-robin schedule for all registered teams.
+        You are a tournament scheduler for a badminton competition. Your task is to generate a schedule for all registered teams based on the tournament type.
 
         Here is the tournament information:
+        - Tournament Type: {{{tournament.tournamentType}}}
         - Date: {{{tournament.date}}}
         - Location: {{{tournament.location}}}
         - Number of Courts: {{{tournament.numberOfCourts}}}
@@ -71,8 +73,6 @@ const schedulePrompt = ai.definePrompt({
         - Team ID: {{this.id}}, Players: {{this.player1Name}}{{#if this.player2Name}} & {{this.player2Name}}{{/if}}, Event: {{this.type}}
         {{/each}}
 
-        Please generate a full round-robin schedule. This means every team in an event type must play every other team in the same event type exactly once.
-
         Constraints and rules:
         1.  Group teams by their 'type' (e.g., 'mens_doubles', 'singles'). The schedule must only contain matches between teams of the same type.
         2.  Assign matches to courts sequentially from the list of court names.
@@ -81,6 +81,10 @@ const schedulePrompt = ai.definePrompt({
         5.  You can schedule multiple matches at the same time if there are enough courts. For example, with 4 courts, you can schedule 4 matches at 9:00 AM, then 4 more at 10:00 AM.
         6.  For each match, provide the IDs and names of both teams.
         7.  Set the initial status of all generated matches to 'SCHEDULED'.
+
+        Scheduling Logic by Tournament Type:
+        - If 'tournamentType' is 'round-robin': Generate a full round-robin schedule. This means every team in an event type must play every other team in the same event type exactly once.
+        - If 'tournamentType' is 'knockout': Generate ONLY the first round of a single-elimination knockout bracket. Randomly pair the teams. If there is an odd number of teams in an event type, one team gets a "bye" and automatically advances to the next round (do not generate a match for the team with the bye). For all generated matches, set the 'round' field to 1.
 
         Generate the list of matches in the required JSON format.
     `,
@@ -111,7 +115,7 @@ const scheduleMatchesFlow = ai.defineFlow(
 export async function scheduleMatches(input: {
     teams: Team[],
     tournament: Omit<Tournament, 'date'> & { date: Date }
-}): Promise<Omit<Match, 'id' | 'startTime'> & { startTime: Date }[]> {
+}): Promise<(Omit<Match, 'id' | 'startTime'> & { startTime: Date })[]> {
     const result = await scheduleMatchesFlow(input);
     return result.matches;
 }

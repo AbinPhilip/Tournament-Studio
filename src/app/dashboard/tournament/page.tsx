@@ -15,6 +15,13 @@ import {
   FormLabel,
   FormMessage,
 } from '@/components/ui/form';
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from '@/components/ui/select';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
@@ -24,7 +31,7 @@ import { format } from 'date-fns';
 import { useToast } from '@/hooks/use-toast';
 import { db } from '@/lib/firebase';
 import { collection, doc, getDocs, setDoc, updateDoc, Timestamp, DocumentReference, deleteDoc, query } from 'firebase/firestore';
-import type { Tournament } from '@/types';
+import type { Tournament, TournamentType } from '@/types';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useRouter } from 'next/navigation';
 import {
@@ -41,6 +48,7 @@ import {
 const tournamentFormSchema = z.object({
   location: z.string().min(3, { message: 'Location must be at least 3 characters.' }),
   date: z.date({ required_error: 'A date is required.' }),
+  tournamentType: z.enum(['round-robin', 'knockout'], { required_error: 'Tournament type is required.' }),
   numberOfCourts: z.coerce.number().min(1, { message: 'There must be at least 1 court.' }).max(50, { message: "Cannot exceed 50 courts."}),
   courtNames: z.array(z.object({ name: z.string().min(1, {message: 'Court name cannot be empty.'}) })),
 });
@@ -58,6 +66,7 @@ export default function TournamentAdminPage() {
     defaultValues: {
       location: '',
       date: new Date(),
+      tournamentType: 'round-robin',
       numberOfCourts: 4,
       courtNames: Array.from({ length: 4 }, () => ({ name: '' })),
     },
@@ -140,6 +149,7 @@ export default function TournamentAdminPage() {
         form.reset({
           location: '',
           date: new Date(),
+          tournamentType: 'round-robin',
           numberOfCourts: 4,
           courtNames: Array.from({ length: 4 }, (_, i) => ({ name: `Court ${i + 1}` })),
         });
@@ -239,6 +249,28 @@ export default function TournamentAdminPage() {
                 />
             </div>
             
+             <FormField
+                control={form.control}
+                name="tournamentType"
+                render={({ field }) => (
+                    <FormItem>
+                    <FormLabel>Tournament Type</FormLabel>
+                     <Select onValueChange={field.onChange} defaultValue={field.value}>
+                        <FormControl>
+                        <SelectTrigger>
+                            <SelectValue placeholder="Select a tournament format" />
+                        </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                        <SelectItem value="round-robin">Round Robin</SelectItem>
+                        <SelectItem value="knockout">Knockout</SelectItem>
+                        </SelectContent>
+                    </Select>
+                    <FormMessage />
+                    </FormItem>
+                )}
+            />
+
             <FormField
               control={form.control}
               name="numberOfCourts"
@@ -332,5 +364,3 @@ export default function TournamentAdminPage() {
     </>
   );
 }
-
-    

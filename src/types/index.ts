@@ -40,12 +40,15 @@ export interface Team {
     photoUrl?: string;
 }
 
+export type TournamentType = 'round-robin' | 'knockout';
+
 export interface Tournament {
     id:string;
     location: string;
     date: Timestamp;
     numberOfCourts: number;
     courtNames: { name: string }[];
+    tournamentType: TournamentType;
 }
 
 export type MatchStatus = 'PENDING' | 'SCHEDULED' | 'IN_PROGRESS' | 'COMPLETED';
@@ -62,4 +65,5 @@ export interface Match {
     status: MatchStatus;
     winnerId?: string;
     score?: string;
+    round?: number; // For knockout tournaments
 }

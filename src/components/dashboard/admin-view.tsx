@@ -19,7 +19,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Switch } from '@/components/ui/switch';
 import type { User, UserRole, Team, Organization } from '@/types';
 import { useAuth } from '@/hooks/use-auth';
-import { MoreHorizontal, Trash2, UserPlus, Users as TeamsIcon, Building, PlusCircle, Database, Upload, Trophy, Edit, CheckCircle, Calendar as CalendarIcon } from 'lucide-react';
+import { MoreHorizontal, Trash2, UserPlus, Users as TeamsIcon, Building, PlusCircle, Database, Upload, Trophy, Edit, CheckCircle, Calendar as CalendarIcon, Gavel } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -798,14 +798,17 @@ export default function AdminView() {
                 <Card>
                     <CardHeader>
                         <CardTitle>Tournament & Schedule</CardTitle>
-                        <CardDescription>Configure tournament settings and generate the match schedule.</CardDescription>
+                        <CardDescription>Configure tournament settings, generate the match schedule, and manage scores.</CardDescription>
                     </CardHeader>
                     <CardContent className="flex flex-wrap gap-4">
                         <Button onClick={() => router.push('/dashboard/tournament')}>
-                            <Trophy className="mr-2 h-4 w-4" /> Go to Tournament Page
+                            <Trophy className="mr-2 h-4 w-4" /> Tournament Page
                         </Button>
                         <Button onClick={() => router.push('/dashboard/scheduler')}>
-                            <CalendarIcon className="mr-2 h-4 w-4" /> Go to Scheduler
+                            <CalendarIcon className="mr-2 h-4 w-4" /> Scheduler
+                        </Button>
+                         <Button onClick={() => router.push('/dashboard/umpire')}>
+                            <Gavel className="mr-2 h-4 w-4" /> Umpire View
                         </Button>
                     </CardContent>
                 </Card>
