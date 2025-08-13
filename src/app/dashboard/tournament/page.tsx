@@ -437,10 +437,14 @@ export default function TournamentSettingsPage() {
         existingMatchesQuery.forEach(doc => deleteBatch.delete(doc.ref));
         await deleteBatch.commit();
         
-        const { startedAt, ...restOfTournament } = tournament;
         const plainTournament = {
-            ...restOfTournament,
+            id: tournament.id,
+            location: tournament.location,
+            numberOfCourts: tournament.numberOfCourts,
+            courtNames: tournament.courtNames,
+            tournamentType: tournament.tournamentType,
             date: format(tournament.date, 'yyyy-MM-dd'),
+            status: tournament.status,
         };
 
         const generatedMatches = await scheduleMatches({ teams, tournament: plainTournament });
@@ -448,16 +452,12 @@ export default function TournamentSettingsPage() {
         const saveBatch = writeBatch(db);
         generatedMatches.forEach(match => {
             const matchRef = doc(collection(db, 'matches'));
-            const dataToSave = {
-                ...match,
-                startTime: Timestamp.fromDate(match.startTime)
-            }
-            saveBatch.set(matchRef, dataToSave);
+            saveBatch.set(matchRef, match);
         });
 
         await saveBatch.commit();
-        toast({ title: 'Schedule Generated!', description: `${generatedMatches.length} matches have been scheduled.` });
-        router.push('/dashboard/umpire');
+        toast({ title: 'Pairings Generated!', description: `${generatedMatches.length} matches have been created. Go to the scheduler to assign them.` });
+        router.push('/dashboard/scheduler');
 
     } catch (error) {
         console.error("Error generating schedule:", error);
@@ -810,7 +810,7 @@ export default function TournamentSettingsPage() {
                     </Button>
                      <Button type="button" variant="default" onClick={handleGenerateSchedule} disabled={isGenerating}>
                         {isGenerating ? <Loader2 className="animate-spin" /> : <ListOrdered />}
-                        Generate Schedule
+                        Generate Pairings
                     </Button>
 
                     <div className="flex-grow" />
@@ -1122,5 +1122,3 @@ export default function TournamentSettingsPage() {
     </div>
   );
 }
-
-    

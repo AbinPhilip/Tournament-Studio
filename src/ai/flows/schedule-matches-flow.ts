@@ -48,8 +48,6 @@ const MatchSchema = z.object({
     team1Name: z.string(),
     team2Name: z.string(),
     eventType: z.enum(['singles', 'mens_doubles', 'womens_doubles', 'mixed_doubles']),
-    courtName: z.string(),
-    startTime: z.string().datetime(),
     status: z.enum(['PENDING', 'SCHEDULED', 'IN_PROGRESS', 'COMPLETED']),
     round: z.number().optional(),
 });
@@ -65,14 +63,10 @@ const schedulePrompt = ai.definePrompt({
     input: { schema: ScheduleMatchesInputSchema },
     output: { schema: ScheduleMatchesOutputSchema },
     prompt: `
-        You are a highly intelligent tournament scheduler for a badminton competition. Your task is to generate a complete and fair schedule based on the "picking of lots" principle for randomness.
+        You are a highly intelligent tournament scheduler for a badminton competition. Your task is to generate a complete and fair schedule based on the "picking of lots" principle for randomness. You should only generate the pairings. Do NOT assign courts or times.
 
         Here is the tournament information:
         - Tournament Type: {{{tournament.tournamentType}}}
-        - Location: {{{tournament.location}}}
-        - Date: {{{tournament.date}}}
-        - Number of Courts: {{{tournament.numberOfCourts}}}
-        - Court Names: {{#each tournament.courtNames}}{{this.name}}, {{/each}}
 
         Here is the list of all registered teams, which you must group by their 'type' for scheduling:
         {{#each teams}}
@@ -81,8 +75,7 @@ const schedulePrompt = ai.definePrompt({
 
         General Rules:
         1.  **Group by Event:** All scheduling must happen independently for each event type (e.g., 'mens_doubles', 'singles'). Matches must only be between teams of the same type.
-        2.  **Court & Time Assignment:** Assign matches to courts and time slots logically. Start at 9:00 AM on the tournament date. Assign one match to each available court. Once all courts are used for a time slot, schedule the next batch of matches for the next hour (e.g., 10:00 AM). Assume each match takes exactly 1 hour.
-        3.  **Initial Status:** Set the initial 'status' of all generated matches to 'SCHEDULED'.
+        2.  **Initial Status:** Set the initial 'status' of all generated matches to 'PENDING'.
 
         --- SCHEDULING ALGORITHM BY TOURNAMENT TYPE ---
 
@@ -108,7 +101,7 @@ const schedulePrompt = ai.definePrompt({
         2.  **Perform the Draw (Picking Lots):**
             *   Take this complete list of generated matches.
             *   **Shuffle this list of matches randomly.** This randomizes the order of play.
-        3.  **Assign Courts and Times:** Assign a court and a sequential time slot to each match from the shuffled list.
+        3.  **Assign Courts and Times:** Do NOT assign courts or times.
 
         Now, generate the complete list of matches in the required JSON format according to these rules.
     `,
@@ -133,13 +126,7 @@ const scheduleMatchesFlow = ai.defineFlow(
 export async function scheduleMatches(input: {
     teams: Team[],
     tournament: Omit<Tournament, 'date' | 'startedAt' | 'status'> & { id: string; date: string; status?: string; startedAt?:string; }
-}): Promise<(Omit<Match, 'id' | 'startTime'> & { startTime: Date })[]> {
+}): Promise<Omit<Match, 'id'>[]> {
     const result = await scheduleMatchesFlow(input);
-    // Convert date strings from AI back to Date objects
-    const matchesWithDates = result.matches.map(match => ({
-        ...match,
-        startTime: new Date(match.startTime),
-    }));
-
-    return matchesWithDates;
+    return result.matches;
 }

@@ -11,6 +11,7 @@ export function MainNav() {
   const navItems = [
     { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
     { href: "/dashboard/tournament", label: "Tournament Settings", icon: Cog },
+    { href: "/dashboard/scheduler", label: "Scheduler", icon: ListOrdered },
     { href: "/dashboard/umpire", label: "Umpire View", icon: Shield },
     { href: "/dashboard/settings", label: "System Settings", icon: Settings },
   ]
