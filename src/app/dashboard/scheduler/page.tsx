@@ -9,7 +9,7 @@ import { useToast } from '@/hooks/use-toast';
 import { db } from '@/lib/firebase';
 import { collection, getDocs, writeBatch, doc, query, updateDoc, Timestamp, deleteDoc } from 'firebase/firestore';
 import type { Tournament, Team, Match, TeamType } from '@/types';
-import { Loader2, Save, Trash2, GripVertical, Users } from 'lucide-react';
+import { Loader2, Save, Trash2, GripVertical } from 'lucide-react';
 import { DndContext, closestCenter, PointerSensor, useSensor, useSensors, DragOverlay, type DragStartEvent, type DragEndEvent } from '@dnd-kit/core';
 import { SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
@@ -212,9 +212,9 @@ export default function SchedulerPage() {
     };
 
     const handleDragEnd = (event: DragEndEvent) => {
-        const { active, over } = event;
         setActiveId(null);
-        if (!over) return;
+        const { active, over } = event;
+        if (!over || !active) return;
         
         const activeTeam = allTeams.find(t => t.id === active.id);
         if (!activeTeam) return;
@@ -222,12 +222,33 @@ export default function SchedulerPage() {
         const overId = over.id as string;
         const [courtName, slot] = overId.split('-');
 
+        // --- Start of new validation logic ---
+        const existingMatchesOnCourt = matches.filter(m => m.courtName === courtName);
+        let matchOnCourt = existingMatchesOnCourt.find(m => m.status === 'PENDING' || m.status === 'SCHEDULED');
+
+        if (matchOnCourt) {
+             // Validate drop
+            if (matchOnCourt.eventType !== activeTeam.type) {
+                toast({ title: 'Invalid Matchup', description: 'Teams must be from the same event type.', variant: 'destructive' });
+                return;
+            }
+            if ((slot === 'team1' && matchOnCourt.team1Id) || (slot === 'team2' && matchOnCourt.team2Id)) {
+                toast({ title: 'Slot Occupied', description: 'This slot is already taken.', variant: 'destructive' });
+                return;
+            }
+            if (matchOnCourt.team1Id === activeTeam.id || matchOnCourt.team2Id === activeTeam.id) {
+                toast({ title: 'Team Already in Match', description: 'This team is already in this match.', variant: 'destructive' });
+                return;
+            }
+        }
+        // --- End of new validation logic ---
+
         setMatches(prevMatches => {
             const newMatches = [...prevMatches];
-            // Find an existing match on this court or create a new one.
-            let matchOnCourt = newMatches.find(m => m.courtName === courtName);
+            let matchOnCourt = newMatches.find(m => m.courtName === courtName && (m.status === 'PENDING' || m.status === 'SCHEDULED'));
             
             if (!matchOnCourt) {
+                // If no pending match on court, create one
                 matchOnCourt = {
                     id: courtName, // Use court name as a temporary ID
                     team1Id: '', team2Id: '',
@@ -240,30 +261,14 @@ export default function SchedulerPage() {
                 };
                 newMatches.push(matchOnCourt);
             }
-
-            const match = matchOnCourt;
-
-            // Validate drop
-            if (match.eventType !== activeTeam.type) {
-                toast({ title: 'Invalid Matchup', description: 'Teams must be from the same event type.', variant: 'destructive' });
-                return prevMatches;
-            }
-            if ((slot === 'team1' && match.team1Id) || (slot === 'team2' && match.team2Id)) {
-                toast({ title: 'Slot Occupied', description: 'This slot is already taken.', variant: 'destructive' });
-                return prevMatches;
-            }
-            if (match.team1Id === activeTeam.id || match.team2Id === activeTeam.id) {
-                toast({ title: 'Team Already in Match', description: 'This team is already in this match.', variant: 'destructive' });
-                return prevMatches;
-            }
-            
+           
             // Update match
             if (slot === 'team1') {
-                match.team1Id = activeTeam.id;
-                match.team1Name = activeTeam.player1Name + (activeTeam.player2Name ? ` & ${activeTeam.player2Name}` : '');
+                matchOnCourt.team1Id = activeTeam.id;
+                matchOnCourt.team1Name = activeTeam.player1Name + (activeTeam.player2Name ? ` & ${activeTeam.player2Name}` : '');
             } else {
-                match.team2Id = activeTeam.id;
-                match.team2Name = activeTeam.player1Name + (activeTeam.player2Name ? ` & ${activeTeam.player2Name}` : '');
+                matchOnCourt.team2Id = activeTeam.id;
+                matchOnCourt.team2Name = activeTeam.player1Name + (activeTeam.player2Name ? ` & ${activeTeam.player2Name}` : '');
             }
 
             return newMatches;
@@ -272,11 +277,14 @@ export default function SchedulerPage() {
 
     const handleRemoveTeamFromCourt = (teamIdToRemove: string, courtName: string) => {
         setMatches(prevMatches => {
-            const match = prevMatches.find(m => m.courtName === courtName);
-            if (!match) return prevMatches;
+            const matchIndex = prevMatches.findIndex(m => m.courtName === courtName);
+            if (matchIndex === -1) return prevMatches;
 
-            if (match.status === 'SCHEDULED') {
-                toast({ title: 'Cannot Modify', description: 'This match is already saved. Clear the schedule to make changes.', variant: 'destructive'});
+            const newMatches = [...prevMatches];
+            const match = { ...newMatches[matchIndex] };
+
+            if (match.status === 'SCHEDULED' || match.status === 'IN_PROGRESS' || match.status === 'COMPLETED') {
+                toast({ title: 'Cannot Modify', description: 'This match is already saved or in progress. Clear the schedule to make changes.', variant: 'destructive'});
                 return prevMatches;
             }
             
@@ -290,10 +298,12 @@ export default function SchedulerPage() {
 
             // If match is now empty, remove it entirely
             if (!match.team1Id && !match.team2Id) {
-                return prevMatches.filter(m => m.courtName !== courtName);
+                 newMatches.splice(matchIndex, 1);
+            } else {
+                newMatches[matchIndex] = match;
             }
 
-            return [...prevMatches];
+            return newMatches;
         });
     }
 
@@ -308,11 +318,18 @@ export default function SchedulerPage() {
     }, [unscheduledTeams]);
     
     const matchesByCourt = useMemo(() => {
-        return matches.reduce((acc, match) => {
-            acc[match.courtName] = match;
+        // Find the latest non-completed match for each court
+        return tournament?.courtNames.reduce((acc, court) => {
+            const courtMatches = matches
+                .filter(m => m.courtName === court.name && m.status !== 'COMPLETED')
+                .sort((a,b) => (b.startTime as Date).getTime() - (a.startTime as Date).getTime());
+            
+            if(courtMatches.length > 0) {
+               acc[court.name] = courtMatches[0];
+            }
             return acc;
-        }, {} as Record<string, Match>);
-    }, [matches]);
+        }, {} as Record<string, Match>) || {};
+    }, [matches, tournament?.courtNames]);
 
 
     if (isLoading) {
@@ -395,19 +412,21 @@ export default function SchedulerPage() {
                                     const team1 = match?.team1Id ? allTeams.find(t => t.id === match.team1Id) : null;
                                     const team2 = match?.team2Id ? allTeams.find(t => t.id === match.team2Id) : null;
                                     
-                                    const handleRemoveTeam1 = () => handleRemoveTeamFromCourt(team1!.id, court.name);
-                                    const handleRemoveTeam2 = () => handleRemoveTeamFromCourt(team2!.id, court.name);
+                                    const handleRemoveTeam1 = team1 ? () => handleRemoveTeamFromCourt(team1.id, court.name) : undefined;
+                                    const handleRemoveTeam2 = team2 ? () => handleRemoveTeamFromCourt(team2.id, court.name) : undefined;
+
+                                    const isCourtBusy = match?.status === 'SCHEDULED' || match?.status === 'IN_PROGRESS';
 
                                     return (
                                         <Card key={court.name}>
                                             <CardHeader>
                                                 <CardTitle className="flex justify-between items-center">
                                                    <span>{court.name}</span> 
-                                                   {match && <Badge variant={match.status === 'SCHEDULED' ? 'default' : 'secondary'} className="capitalize text-xs">{match.eventType.replace(/_/g, ' ')}</Badge>}
+                                                   {match && <Badge variant={isCourtBusy ? 'default' : 'secondary'} className="capitalize text-xs">{match.eventType.replace(/_/g, ' ')}</Badge>}
                                                 </CardTitle>
                                             </CardHeader>
                                             <CardContent>
-                                                 {match?.status === 'SCHEDULED' && (
+                                                 {isCourtBusy && (
                                                     <div className="text-center text-sm p-4 bg-green-100 text-green-800 rounded-md">
                                                         Match is scheduled and live!
                                                     </div>
@@ -417,7 +436,7 @@ export default function SchedulerPage() {
                                                         Match completed. Court is free.
                                                     </div>
                                                  )}
-                                                 {!match || match?.status === 'PENDING' ? (
+                                                 {!isCourtBusy ? (
                                                     <SortableContext items={[`${court.name}-team1`, `${court.name}-team2`]}>
                                                         <div className="space-y-2">
                                                             <DroppableSlot id={`${court.name}-team1`} team={team1 || null} onRemove={handleRemoveTeam1}>
@@ -445,6 +464,3 @@ export default function SchedulerPage() {
         </DndContext>
     );
 }
-
-
-    

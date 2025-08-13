@@ -52,7 +52,7 @@ export default function UmpirePage() {
     const fetchMatches = async () => {
         setIsLoading(true);
         try {
-            const matchesQuery = query(collection(db, 'matches'), orderBy('startTime'));
+            const matchesQuery = query(collection(db, 'matches'), orderBy('startTime', 'desc'));
             const matchesSnap = await getDocs(matchesQuery);
             const matchesData = matchesSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Omit<Match, 'startTime'> & {startTime: Timestamp})).map(m => ({...m, startTime: m.startTime.toDate()}));
             setMatches(matchesData as Match[]);
@@ -66,7 +66,7 @@ export default function UmpirePage() {
     
     useEffect(() => {
         fetchMatches();
-    }, [toast]);
+    }, []);
     
     useEffect(() => {
         if (selectedMatch) {
@@ -174,14 +174,14 @@ export default function UmpirePage() {
                                     </TableHeader>
                                     <TableBody>
                                         {groupedMatchesByCourt[courtName].map(match => (
-                                            <TableRow key={match.id}>
+                                            <TableRow key={match.id} className={match.status === 'IN_PROGRESS' ? 'bg-yellow-50' : ''}>
                                                 <TableCell className="font-medium">{format(match.startTime, 'p')}</TableCell>
                                                 <TableCell className="capitalize">{match.eventType.replace(/_/g, ' ')}</TableCell>
                                                 <TableCell className={match.winnerId === match.team1Id ? 'font-bold' : ''}>{match.team1Name}</TableCell>
                                                 <TableCell className={match.winnerId === match.team2Id ? 'font-bold' : ''}>{match.team2Name}</TableCell>
                                                 <TableCell>{match.score || 'N/A'}</TableCell>
                                                 <TableCell>
-                                                    <Badge variant={match.status === 'COMPLETED' ? 'default' : match.status === 'IN_PROGRESS' ? 'secondary' : 'outline'}>
+                                                    <Badge variant={match.status === 'COMPLETED' ? 'default' : (match.status === 'IN_PROGRESS' || match.status === 'SCHEDULED') ? 'secondary' : 'outline'}>
                                                         {match.status}
                                                     </Badge>
                                                 </TableCell>
