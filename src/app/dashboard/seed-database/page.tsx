@@ -51,18 +51,19 @@ export default function SeedDatabasePage() {
         return;
     }
     
-    const orgIdMap: { [key: string]: string } = {};
-    mockOrganizations.forEach((mockOrg, index) => {
-        const foundOrg = orgs.find(o => o.name === mockOrg.name);
-        if(foundOrg) {
-            orgIdMap[(index + 1).toString()] = foundOrg.id;
-        }
+    const orgNameIdMap: { [key: string]: string } = {};
+    orgs.forEach(org => {
+        orgNameIdMap[org.name] = org.id;
     });
 
-    const teamsToSeed = mockTeams.map(team => ({
-        ...team,
-        organizationId: orgIdMap[team.organizationId] || ''
-    })).filter(team => team.organizationId);
+    const teamsToSeed = mockTeams.map(team => {
+        const mockOrg = mockOrganizations[parseInt(team.organizationId, 10) - 1];
+        const orgId = mockOrg ? orgNameIdMap[mockOrg.name] : undefined;
+        return {
+            ...team,
+            organizationId: orgId || ''
+        }
+    }).filter(team => team.organizationId);
 
     const batch = writeBatch(db);
     teamsToSeed.forEach((item) => {
