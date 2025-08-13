@@ -23,7 +23,7 @@ import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 import { useToast } from '@/hooks/use-toast';
 import { db } from '@/lib/firebase';
-import { collection, doc, getDocs, setDoc, updateDoc, Timestamp } from 'firebase/firestore';
+import { collection, doc, getDocs, setDoc, updateDoc, Timestamp, DocumentReference } from 'firebase/firestore';
 import type { Tournament } from '@/types';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useRouter } from 'next/navigation';
@@ -38,7 +38,7 @@ const tournamentFormSchema = z.object({
 export default function TournamentAdminPage() {
   const { toast } = useToast();
   const router = useRouter();
-  const [tournamentId, setTournamentId] = useState<string | null>(null);
+  const [tournamentDocRef, setTournamentDocRef] = useState<DocumentReference | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   const form = useForm<z.infer<typeof tournamentFormSchema>>({
@@ -75,7 +75,7 @@ export default function TournamentAdminPage() {
         if (!querySnapshot.empty) {
           const tournamentDoc = querySnapshot.docs[0];
           const data = tournamentDoc.data() as Tournament;
-          setTournamentId(tournamentDoc.id);
+          setTournamentDocRef(tournamentDoc.ref);
           form.reset({
             ...data,
             date: data.date.toDate(),
@@ -97,12 +97,12 @@ export default function TournamentAdminPage() {
         date: Timestamp.fromDate(values.date),
       };
 
-      if (tournamentId) {
-        await updateDoc(doc(db, 'tournaments', tournamentId), dataToSave);
+      if (tournamentDocRef) {
+        await updateDoc(tournamentDocRef, dataToSave);
       } else {
         const newDocRef = doc(collection(db, 'tournaments'));
         await setDoc(newDocRef, dataToSave);
-        setTournamentId(newDocRef.id);
+        setTournamentDocRef(newDocRef);
       }
       toast({ title: 'Success', description: 'Tournament details have been saved.' });
     } catch (error) {
