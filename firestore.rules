@@ -1,22 +1,13 @@
+
 rules_version = '2';
+
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Allow the initial seed if the users collection does not exist yet.
-    // After the first write, this rule will no longer apply.
+    // Allow public read/write access to all documents.
+    // This is temporary to allow for initial database seeding.
+    // WARNING: These rules are insecure and should be updated after seeding.
     match /{document=**} {
-      allow write: if !exists(/databases/$(database)/documents/users);
-    }
-
-    match /users/{userId} {
-      // Allow anyone to read user documents. This is needed for the login query to work.
-      allow read: if true;
-      // Allow authenticated users to write to their own document.
-      allow write: if request.auth != null && request.auth.uid == userId;
-    }
-    
-    // For all other collections, allow read/write access if the user is authenticated.
-    match /{path=**}/{document} {
-        allow read, write: if request.auth != null;
+      allow read, write: if true;
     }
   }
 }
