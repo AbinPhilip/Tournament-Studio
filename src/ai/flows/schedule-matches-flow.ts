@@ -31,9 +31,9 @@ const TournamentSchema = z.object({
     numberOfCourts: z.number(),
     courtNames: z.array(z.object({ name: z.string() })),
     tournamentType: z.enum(['round-robin', 'knockout']),
-    date: z.string({ coerce: true }),
+    date: z.string(),
     status: z.enum(['PENDING', 'IN_PROGRESS', 'COMPLETED']).optional(),
-    startedAt: z.string({ coerce: true }).optional(),
+    startedAt: z.string().optional(),
 });
 
 const ScheduleMatchesInputSchema = z.object({
@@ -49,7 +49,7 @@ const MatchSchema = z.object({
     team2Name: z.string(),
     eventType: z.enum(['singles', 'mens_doubles', 'womens_doubles', 'mixed_doubles']),
     courtName: z.string(),
-    startTime: z.date(),
+    startTime: z.string().datetime(),
     status: z.enum(['PENDING', 'SCHEDULED', 'IN_PROGRESS', 'COMPLETED']),
     round: z.number().optional(),
 });
@@ -121,34 +121,25 @@ const scheduleMatchesFlow = ai.defineFlow(
     outputSchema: ScheduleMatchesOutputSchema,
   },
   async (input) => {
-    
-    const flowInput = {
-        ...input,
-        tournament: {
-            ...input.tournament,
-            date: new Date(input.tournament.date),
-        }
-    }
-
-    const { output } = await schedulePrompt(flowInput);
+    const { output } = await schedulePrompt(input);
     if (!output) {
       throw new Error('Failed to generate a schedule.');
     }
-    // Convert date strings from AI back to Date objects
-    const matchesWithDates = output.matches.map(match => ({
-        ...match,
-        startTime: new Date(match.startTime),
-    }));
-
-    return { matches: matchesWithDates };
+    return output;
   }
 );
 
 // Wrapper function to be called from the application
 export async function scheduleMatches(input: {
     teams: Team[],
-    tournament: Omit<Tournament, 'date'> & { date: string }
+    tournament: Omit<Tournament, 'date' | 'startedAt' | 'status'> & { id: string; date: string; status?: string; startedAt?:string; }
 }): Promise<(Omit<Match, 'id' | 'startTime'> & { startTime: Date })[]> {
     const result = await scheduleMatchesFlow(input);
-    return result.matches;
+    // Convert date strings from AI back to Date objects
+    const matchesWithDates = result.matches.map(match => ({
+        ...match,
+        startTime: new Date(match.startTime),
+    }));
+
+    return matchesWithDates;
 }
