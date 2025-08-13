@@ -9,15 +9,14 @@ import { useToast } from '@/hooks/use-toast';
 import { db } from '@/lib/firebase';
 import { collection, getDocs, writeBatch, doc, query, updateDoc, Timestamp, deleteDoc } from 'firebase/firestore';
 import type { Tournament, Team, Match, TeamType } from '@/types';
-import { Loader2, Save, Trash2, GripVertical } from 'lucide-react';
-import { DndContext, closestCenter, PointerSensor, useSensor, useSensors, DragOverlay, type DragStartEvent, type DragEndEvent, type DragOverEvent } from '@dnd-kit/core';
+import { Loader2, Save, Trash2, GripVertical, Users } from 'lucide-react';
+import { DndContext, closestCenter, PointerSensor, useSensor, useSensors, DragOverlay, type DragStartEvent, type DragEndEvent } from '@dnd-kit/core';
 import { SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { Badge } from '@/components/ui/badge';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog"
 import { ScrollArea } from '@/components/ui/scroll-area';
 import Image from 'next/image';
-
 
 // Draggable Team Item
 const DraggableTeam = ({ team, isOverlay }: { team: Team, isOverlay?: boolean }) => {
@@ -54,8 +53,8 @@ const DraggableTeam = ({ team, isOverlay }: { team: Team, isOverlay?: boolean })
 };
 
 // Droppable Slot for a team in a match
-const DroppableSlot = ({ id, team, onDrop, eventType, onRemove, children }: { id: string, team: Team | null, onDrop: (teamId: string, matchId: string, slot: 'team1' | 'team2') => void, eventType: TeamType | null, onRemove?: (teamId: string) => void, children?: React.ReactNode }) => {
-    const { setNodeRef, isOver } = useSortable({ id, data: { type: 'slot', accepts: eventType } });
+const DroppableSlot = ({ id, team, onRemove, children }: { id: string, team: Team | null, onRemove?: (teamId: string) => void, children?: React.ReactNode }) => {
+    const { setNodeRef, isOver } = useSortable({ id });
 
     const handleRemove = (e: React.MouseEvent) => {
         e.preventDefault();
@@ -68,7 +67,7 @@ const DroppableSlot = ({ id, team, onDrop, eventType, onRemove, children }: { id
     return (
         <div
             ref={setNodeRef}
-            className={`h-20 p-2 border-2 border-dashed rounded-lg flex items-center justify-center text-muted-foreground relative ${isOver ? 'border-primary bg-primary/10' : 'border-border'}`}
+            className={`h-24 p-2 border-2 border-dashed rounded-lg flex items-center justify-center text-muted-foreground relative ${isOver ? 'border-primary bg-primary/10' : 'border-border'}`}
         >
             {team ? (
                  <div className="relative w-full">
@@ -79,7 +78,7 @@ const DroppableSlot = ({ id, team, onDrop, eventType, onRemove, children }: { id
                          </button>
                     )}
                 </div>
-            ) : children}
+            ) : <div className="text-center text-xs">{children}</div>}
         </div>
     );
 };
@@ -148,7 +147,7 @@ export default function SchedulerPage() {
         
         const validMatchesToSave = matches.filter(m => m.team1Id && m.team2Id && m.status === 'PENDING');
         if (validMatchesToSave.length === 0) {
-            toast({ title: 'No new valid matches to save', description: 'Create a match by dropping two teams into a slot.', variant: 'destructive' });
+            toast({ title: 'No new valid matches to save', description: 'Create a match by dropping two teams onto a court.', variant: 'destructive' });
             return;
         }
 
@@ -220,37 +219,29 @@ export default function SchedulerPage() {
         const activeTeam = allTeams.find(t => t.id === active.id);
         if (!activeTeam) return;
 
-        const overData = over.data.current;
-        if (overData?.type !== 'slot') return;
-        
-        const [matchId, slot] = (over.id as string).split('-');
+        const overId = over.id as string;
+        const [courtName, slot] = overId.split('-');
 
         setMatches(prevMatches => {
             const newMatches = [...prevMatches];
-            let matchIndex = newMatches.findIndex(m => m.id === matchId);
+            // Find an existing match on this court or create a new one.
+            let matchOnCourt = newMatches.find(m => m.courtName === courtName);
             
-            // Create a new match if one doesn't exist for this slot
-            if (matchIndex === -1) {
-                const [courtName, timeStr] = matchId.split('_');
-                const matchTime = new Date(tournament!.date);
-                const [hour, minute] = timeStr.split(':').map(Number);
-                matchTime.setHours(hour, minute, 0, 0);
-
-                const newMatch: Match = {
-                    id: matchId,
+            if (!matchOnCourt) {
+                matchOnCourt = {
+                    id: courtName, // Use court name as a temporary ID
                     team1Id: '', team2Id: '',
                     team1Name: '', team2Name: '',
                     eventType: activeTeam.type, // Set event type based on first team
                     courtName: courtName,
-                    startTime: matchTime,
+                    startTime: new Date(), // Match is "now"
                     status: 'PENDING',
                     round: 1
                 };
-                newMatches.push(newMatch);
-                matchIndex = newMatches.length - 1;
+                newMatches.push(matchOnCourt);
             }
 
-            const match = newMatches[matchIndex];
+            const match = matchOnCourt;
 
             // Validate drop
             if (match.eventType !== activeTeam.type) {
@@ -279,13 +270,10 @@ export default function SchedulerPage() {
         });
     };
 
-    const handleRemoveTeamFromMatch = (teamIdToRemove: string, matchId: string) => {
+    const handleRemoveTeamFromCourt = (teamIdToRemove: string, courtName: string) => {
         setMatches(prevMatches => {
-            const newMatches = [...prevMatches];
-            const matchIndex = newMatches.findIndex(m => m.id === matchId);
-            if (matchIndex === -1) return prevMatches;
-
-            const match = newMatches[matchIndex];
+            const match = prevMatches.find(m => m.courtName === courtName);
+            if (!match) return prevMatches;
 
             if (match.status === 'SCHEDULED') {
                 toast({ title: 'Cannot Modify', description: 'This match is already saved. Clear the schedule to make changes.', variant: 'destructive'});
@@ -300,12 +288,12 @@ export default function SchedulerPage() {
                 match.team2Name = '';
             }
 
-            // If match is now empty, remove it to clear the slot
+            // If match is now empty, remove it entirely
             if (!match.team1Id && !match.team2Id) {
-                return newMatches.filter(m => m.id !== matchId);
+                return prevMatches.filter(m => m.courtName !== courtName);
             }
 
-            return newMatches;
+            return [...prevMatches];
         });
     }
 
@@ -319,35 +307,12 @@ export default function SchedulerPage() {
         }, {} as Record<TeamType, Team[]>);
     }, [unscheduledTeams]);
     
-    const scheduleGrid = useMemo(() => {
-        const grid: Record<string, Record<string, Match | null>> = {}; // { time: { courtName: match } }
-        if (!tournament) return grid;
-
-        const startTime = 9; // 9 AM
-        const endTime = 20; // 8 PM
-        const tournamentDate = tournament.date;
-
-        for (let i = startTime; i <= endTime; i++) {
-            const time = new Date(tournamentDate);
-            time.setHours(i, 0, 0, 0);
-            const timeString = time.toLocaleTimeString('en-US', { hour: 'numeric', minute:'2-digit', hour12: true });
-            grid[timeString] = {};
-            tournament.courtNames.forEach(court => {
-                grid[timeString][court.name] = null;
-            });
-        }
-        
-        matches.forEach(match => {
-            const time = (match.startTime as Date).toLocaleTimeString('en-US', { hour: 'numeric', minute:'2-digit', hour12: true });
-            if (grid[time]) {
-                grid[time][match.courtName] = match;
-            }
-        });
-
-        return grid;
-    }, [matches, tournament]);
-    
-    const timeSlots = useMemo(() => Object.keys(scheduleGrid).sort((a,b) => new Date('1970/01/01 ' + a).getTime() - new Date('1970/01/01 ' + b).getTime()), [scheduleGrid]);
+    const matchesByCourt = useMemo(() => {
+        return matches.reduce((acc, match) => {
+            acc[match.courtName] = match;
+            return acc;
+        }, {} as Record<string, Match>);
+    }, [matches]);
 
 
     if (isLoading) {
@@ -367,20 +332,20 @@ export default function SchedulerPage() {
         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
             <div className="flex flex-col h-full">
                 <CardHeader className="px-0">
-                    <CardTitle>Match Scheduler</CardTitle>
+                    <CardTitle>Live Match Scheduler</CardTitle>
                     <CardDescription>
-                        Drag teams from the left panel and drop them onto court time slots on the right to create a match.
+                        Drag teams from the left and drop them onto a court on the right to start a match immediately.
                     </CardDescription>
                 </CardHeader>
                 
-                <div className="flex-grow flex gap-4 overflow-hidden">
+                <div className="flex-grow flex flex-col lg:flex-row gap-4 overflow-hidden">
                     {/* Left Panel: Teams */}
-                    <Card className="w-1/3 flex flex-col">
+                    <Card className="lg:w-1/3 flex flex-col">
                         <CardHeader>
                             <CardTitle>Available Teams</CardTitle>
                         </CardHeader>
                         <CardContent className="flex-grow overflow-hidden">
-                            <ScrollArea className="h-full">
+                            <ScrollArea className="h-full pr-4">
                                 {Object.keys(teamsByEvent).length > 0 ? Object.entries(teamsByEvent).map(([type, eventTeams]) => (
                                     eventTeams.length > 0 && (
                                         <div key={type} className="mb-4">
@@ -396,11 +361,11 @@ export default function SchedulerPage() {
                     </Card>
 
                     {/* Right Panel: Schedule */}
-                    <Card className="w-2/3 flex flex-col">
+                    <Card className="lg:w-2/3 flex flex-col">
                          <CardHeader className="flex flex-row items-center justify-between">
                             <div>
-                               <CardTitle>Court Schedule</CardTitle>
-                               <CardDescription>{tournament?.tournamentType} | {tournament?.date.toDateString()}</CardDescription>
+                               <CardTitle>Courts</CardTitle>
+                               <CardDescription>{tournament?.tournamentType} | Ready for immediate play</CardDescription>
                             </div>
                             <div className="flex gap-2">
                                 <Button onClick={handleSaveSchedule} disabled={isSaving}>
@@ -424,46 +389,51 @@ export default function SchedulerPage() {
                             </div>
                         </CardHeader>
                         <CardContent className="flex-grow overflow-y-auto">
-                           <div className="grid gap-x-4" style={{ gridTemplateColumns: `60px repeat(${tournament?.courtNames.length || 1}, 1fr)` }}>
-                                {/* Header Row */}
-                                <div />
-                                {tournament?.courtNames.map(court => (
-                                    <div key={court.name} className="font-bold text-center sticky top-0 bg-background py-2">{court.name}</div>
-                                ))}
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                {tournament.courtNames.map(court => {
+                                    const match = matchesByCourt[court.name];
+                                    const team1 = match?.team1Id ? allTeams.find(t => t.id === match.team1Id) : null;
+                                    const team2 = match?.team2Id ? allTeams.find(t => t.id === match.team2Id) : null;
+                                    
+                                    const handleRemoveTeam1 = () => handleRemoveTeamFromCourt(team1!.id, court.name);
+                                    const handleRemoveTeam2 = () => handleRemoveTeamFromCourt(team2!.id, court.name);
 
-                                {/* Schedule Rows */}
-                                {timeSlots.map(time => (
-                                    <React.Fragment key={time}>
-                                        <div className="font-semibold text-right pr-2 sticky left-0 bg-background">{time}</div>
-                                        {tournament?.courtNames.map(court => {
-                                            const match = scheduleGrid[time]?.[court.name] || null;
-                                            const matchId = match?.id || `${court.name}_${new Date('1970/01/01 ' + time).getHours()}:${new Date('1970/01/01 ' + time).getMinutes()}`;
-
-                                            const team1 = match?.team1Id ? allTeams.find(t => t.id === match.team1Id) || null : null;
-                                            const team2 = match?.team2Id ? allTeams.find(t => t.id === match.team2Id) || null : null;
-                                            
-                                            const handleRemoveTeam1 = (teamId: string) => handleRemoveTeamFromMatch(teamId, matchId);
-                                            const handleRemoveTeam2 = (teamId: string) => handleRemoveTeamFromMatch(teamId, matchId);
-
-                                            return (
-                                                <div key={court.name} className="border-b border-l p-1 space-y-2 min-h-[220px]">
-                                                     {match && <Badge variant={match.status === 'SCHEDULED' ? 'default' : 'secondary'} className="capitalize">{match.eventType.replace(/_/g, ' ')}</Badge>}
-                                                    <div className="space-y-1">
-                                                        <SortableContext items={[`${matchId}-team1`, `${matchId}-team2`]}>
-                                                             <DroppableSlot id={`${matchId}-team1`} team={team1} onDrop={() => {}} eventType={match?.eventType || null} onRemove={handleRemoveTeam1}>
-                                                                {!match && <span className="text-xs text-center">Drop Team 1 Here</span>}
-                                                             </DroppableSlot>
-                                                            <div className="text-center text-sm font-bold">vs</div>
-                                                            <DroppableSlot id={`${matchId}-team2`} team={team2} onDrop={() => {}} eventType={match?.eventType || null} onRemove={handleRemoveTeam2}>
-                                                                {match && !team2 && <span className="text-xs text-center">Drop Team 2 Here</span>}
-                                                            </DroppableSlot>
-                                                        </SortableContext>
+                                    return (
+                                        <Card key={court.name}>
+                                            <CardHeader>
+                                                <CardTitle className="flex justify-between items-center">
+                                                   <span>{court.name}</span> 
+                                                   {match && <Badge variant={match.status === 'SCHEDULED' ? 'default' : 'secondary'} className="capitalize text-xs">{match.eventType.replace(/_/g, ' ')}</Badge>}
+                                                </CardTitle>
+                                            </CardHeader>
+                                            <CardContent>
+                                                 {match?.status === 'SCHEDULED' && (
+                                                    <div className="text-center text-sm p-4 bg-green-100 text-green-800 rounded-md">
+                                                        Match is scheduled and live!
                                                     </div>
-                                                </div>
-                                            );
-                                        })}
-                                    </React.Fragment>
-                                ))}
+                                                 )}
+                                                 {match?.status === 'COMPLETED' && (
+                                                    <div className="text-center text-sm p-4 bg-blue-100 text-blue-800 rounded-md">
+                                                        Match completed. Court is free.
+                                                    </div>
+                                                 )}
+                                                 {!match || match?.status === 'PENDING' ? (
+                                                    <SortableContext items={[`${court.name}-team1`, `${court.name}-team2`]}>
+                                                        <div className="space-y-2">
+                                                            <DroppableSlot id={`${court.name}-team1`} team={team1 || null} onRemove={handleRemoveTeam1}>
+                                                                Drop Team 1 Here
+                                                            </DroppableSlot>
+                                                            <div className="text-center font-bold">VS</div>
+                                                            <DroppableSlot id={`${court.name}-team2`} team={team2 || null} onRemove={handleRemoveTeam2}>
+                                                                Drop Team 2 Here
+                                                            </DroppableSlot>
+                                                        </div>
+                                                     </SortableContext>
+                                                 ) : null}
+                                            </CardContent>
+                                        </Card>
+                                    );
+                                })}
                             </div>
                         </CardContent>
                     </Card>
@@ -475,3 +445,6 @@ export default function SchedulerPage() {
         </DndContext>
     );
 }
+
+
+    
