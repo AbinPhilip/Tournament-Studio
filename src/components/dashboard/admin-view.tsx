@@ -17,7 +17,7 @@ import { Badge, type BadgeProps } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Switch } from '@/components/ui/switch';
-import type { User, UserRole, Team, Organization } from '@/types';
+import type { User, UserRole, Team, Organization, Gender } from '@/types';
 import { useAuth } from '@/hooks/use-auth';
 import { MoreHorizontal, Trash2, UserPlus, Users as TeamsIcon, Building, PlusCircle, Database, Upload, Trophy, Edit, CheckCircle, Calendar as CalendarIcon, Gavel } from 'lucide-react';
 import {
@@ -275,10 +275,12 @@ export default function AdminView() {
       const newUserDoc = await addDoc(collection(db, 'users'), values);
       const newUser: User = { id: newUserDoc.id, ...values, role: values.role as UserRole };
       setUsers([...users, newUser]);
-      toast({ title: 'User Created', description: `User "${newUser.name}" has been added.` });
-      
       setIsAddUserOpen(false);
       userForm.reset();
+      setSuccessModalTitle('User Created');
+      setSuccessModalMessage(`User "${newUser.name}" has been added.`);
+      setIsSuccessModalOpen(true);
+
     } catch (error) {
        toast({ title: 'Error', description: 'Failed to add user.', variant: 'destructive' });
     }
@@ -359,30 +361,35 @@ export default function AdminView() {
   const handleTeamSubmit = async (values: z.infer<typeof teamFormSchema>, isEditing: boolean) => {
     try {
         const teamData: Partial<Team> = {
-          type: values.type,
-          player1Name: values.player1Name,
-          organizationId: values.organizationId,
+            type: values.type,
+            player1Name: values.player1Name,
+            organizationId: values.organizationId,
+            player2Name: values.player2Name || '',
+            photoUrl: values.photoUrl || ''
         };
 
-        if (values.photoUrl) {
-            teamData.photoUrl = values.photoUrl;
-        }
-
         if (values.type === 'mens_doubles') {
-            teamData.player2Name = values.player2Name;
             teamData.genderP1 = 'male';
             teamData.genderP2 = 'male';
         } else if (values.type === 'womens_doubles') {
-            teamData.player2Name = values.player2Name;
             teamData.genderP1 = 'female';
             teamData.genderP2 = 'female';
         } else if (values.type === 'mixed_doubles') {
-            teamData.player2Name = values.player2Name;
             teamData.genderP1 = values.genderP1;
             teamData.genderP2 = values.genderP2;
         } else if (values.type === 'singles') {
             teamData.genderP1 = values.genderP1;
+            // Ensure player2Name and genderP2 are not set for singles
+            delete teamData.player2Name;
+            delete teamData.genderP2;
         }
+
+        // Clean up empty/undefined fields before saving to Firebase
+        Object.keys(teamData).forEach(key => {
+            if (teamData[key as keyof typeof teamData] === undefined || teamData[key as keyof typeof teamData] === '') {
+                delete teamData[key as keyof typeof teamData];
+            }
+        });
         
         if (isEditing) {
             if (!teamToEdit) return;
@@ -673,11 +680,11 @@ export default function AdminView() {
                         <TableCell>
                            <Image 
                                 data-ai-hint="badminton players"
-                                src={t.photoUrl || 'https://placehold.co/40x40.png'} 
+                                src={t.photoUrl || 'https://placehold.co/80x80.png'} 
                                 alt="Team photo" 
-                                width={40} 
-                                height={40} 
-                                className="rounded-full object-cover"
+                                width={80} 
+                                height={80} 
+                                className="rounded-md object-cover"
                             />
                         </TableCell>
                         <TableCell className="font-medium capitalize">{t.type.replace(/_/g, ' ')}</TableCell>
