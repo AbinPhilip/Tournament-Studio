@@ -113,6 +113,14 @@ const teamFormSchema = z.object({
     message: "Player 2 name is required for doubles.",
     path: ["player2Name"],
 }).refine(data => {
+    if (data.type === 'singles') {
+        return !!data.genderP1;
+    }
+    return true;
+}, {
+    message: "Player gender is required for Singles.",
+    path: ["genderP1"],
+}).refine(data => {
     if (data.type === 'mixed_doubles') {
         return !!data.genderP1;
     }
@@ -354,18 +362,28 @@ export default function AdminView() {
           type: values.type,
           player1Name: values.player1Name,
           organizationId: values.organizationId,
-          photoUrl: values.photoUrl,
         };
 
-        if (values.type !== 'singles') {
-          teamData.player2Name = values.player2Name;
+        if (values.photoUrl) {
+            teamData.photoUrl = values.photoUrl;
         }
 
-        if (values.type === 'mixed_doubles') {
-          teamData.genderP1 = values.genderP1;
-          teamData.genderP2 = values.genderP2;
+        if (values.type === 'mens_doubles') {
+            teamData.player2Name = values.player2Name;
+            teamData.genderP1 = 'male';
+            teamData.genderP2 = 'male';
+        } else if (values.type === 'womens_doubles') {
+            teamData.player2Name = values.player2Name;
+            teamData.genderP1 = 'female';
+            teamData.genderP2 = 'female';
+        } else if (values.type === 'mixed_doubles') {
+            teamData.player2Name = values.player2Name;
+            teamData.genderP1 = values.genderP1;
+            teamData.genderP2 = values.genderP2;
+        } else if (values.type === 'singles') {
+            teamData.genderP1 = values.genderP1;
         }
-
+        
         if (isEditing) {
             if (!teamToEdit) return;
             const teamRef = doc(db, 'teams', teamToEdit.id);
@@ -447,10 +465,10 @@ export default function AdminView() {
                     <FormMessage />
                 </FormItem>
             )} />
-             {teamType === 'mixed_doubles' && (
+             {(teamType === 'mixed_doubles' || teamType === 'singles') && (
                 <FormField control={teamForm.control} name="genderP1" render={({ field }) => (
                     <FormItem>
-                        <FormLabel>Player 1 Gender</FormLabel>
+                        <FormLabel>Player Gender</FormLabel>
                         <Select onValueChange={field.onChange} defaultValue={field.value}>
                         <FormControl><SelectTrigger><SelectValue placeholder="Select gender" /></SelectTrigger></FormControl>
                         <SelectContent>
@@ -1031,5 +1049,4 @@ export default function AdminView() {
 
     </div>
   );
-
-    
+}
