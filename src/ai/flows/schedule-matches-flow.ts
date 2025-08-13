@@ -1,7 +1,7 @@
 
 'use server';
 /**
- * @fileOverview A flow for generating a tournament schedule.
+ * @fileOverview A flow for generating a tournament schedule based on a "picking of lots" algorithm.
  * 
  * - scheduleMatches - Generates a match schedule based on tournament type.
  * - ScheduleMatchesInput - The input type for the scheduleMatches function.
@@ -65,33 +65,52 @@ const schedulePrompt = ai.definePrompt({
     input: { schema: ScheduleMatchesInputSchema },
     output: { schema: ScheduleMatchesOutputSchema },
     prompt: `
-        You are a tournament scheduler for a badminton competition. Your task is to generate a schedule for all registered teams based on the tournament type.
+        You are a highly intelligent tournament scheduler for a badminton competition. Your task is to generate a complete and fair schedule based on the "picking of lots" principle for randomness.
 
         Here is the tournament information:
         - Tournament Type: {{{tournament.tournamentType}}}
         - Location: {{{tournament.location}}}
+        - Date: {{{tournament.date}}}
         - Number of Courts: {{{tournament.numberOfCourts}}}
         - Court Names: {{#each tournament.courtNames}}{{this.name}}, {{/each}}
 
-        Here is the list of teams, grouped by event type:
+        Here is the list of all registered teams, which you must group by their 'type' for scheduling:
         {{#each teams}}
-        - Team ID: {{this.id}}, Players: {{this.player1Name}}{{#if this.player2Name}} & {{this.player2Name}}{{/if}}, Event: {{this.type}}, Lot Number: {{this.lotNumber}}
+        - Team ID: {{this.id}}, Players: {{this.player1Name}}{{#if this.player2Name}} & {{this.player2Name}}{{/if}}, Event: {{this.type}}
         {{/each}}
 
-        Constraints and rules:
-        1.  Group teams by their 'type' (e.g., 'mens_doubles', 'singles'). The schedule must only contain matches between teams of the same type.
-        2.  Assign matches to courts sequentially from the list of court names.
-        3.  Schedule ALL matches for the same day. Start scheduling from 9:00 AM on the tournament date. If all courts are used for a time slot, the next set of matches should be scheduled for the next hour (e.g., 10:00 AM).
-        4.  Assume each match takes exactly 1 hour.
-        5.  You can schedule multiple matches at the same time if there are enough courts. For example, with 4 courts, you can schedule 4 matches at 9:00 AM, then 4 more at 10:00 AM.
-        6.  For each match, provide the IDs and names of both teams.
-        7.  Set the initial status of all generated matches to 'SCHEDULED'.
+        General Rules:
+        1.  **Group by Event:** All scheduling must happen independently for each event type (e.g., 'mens_doubles', 'singles'). Matches must only be between teams of the same type.
+        2.  **Court & Time Assignment:** Assign matches to courts and time slots logically. Start at 9:00 AM on the tournament date. Assign one match to each available court. Once all courts are used for a time slot, schedule the next batch of matches for the next hour (e.g., 10:00 AM). Assume each match takes exactly 1 hour.
+        3.  **Initial Status:** Set the initial 'status' of all generated matches to 'SCHEDULED'.
 
-        Scheduling Logic by Tournament Type:
-        - If 'tournamentType' is 'round-robin': Generate a full round-robin schedule. This means every team in an event type must play every other team in the same event type exactly once.
-        - If 'tournamentType' is 'knockout': Generate ONLY the first round of a single-elimination knockout bracket. Pair the teams based on their assigned lotNumber (e.g., Lot 1 vs Lot 2, Lot 3 vs Lot 4). If there is an odd number of teams in an event type, the team with the highest lot number gets a "bye" and automatically advances to the next round (do not generate a match for the team with the bye). For all generated matches, set the 'round' field to 1.
+        --- SCHEDULING ALGORITHM BY TOURNAMENT TYPE ---
 
-        Generate the list of matches in the required JSON format.
+        **A. If 'tournamentType' is 'knockout':**
+
+        Follow this "picking of lots" procedure for EACH event type category:
+        1.  **Identify Teams:** Get the list of all N players/teams for the category.
+        2.  **Calculate Byes:** A "bye" is a pass to the next round. A bye is needed if N is not a power of 2.
+            *   Find the next highest power of 2 (P). (e.g., if N=13, P=16).
+            *   Number of byes = P - N. (if N=13, byes = 3).
+        3.  **Perform the Draw (Picking Lots):**
+            *   Create a list of all N team IDs for the category.
+            *   **Shuffle this list randomly.** This is the critical step for a random draw.
+        4.  **Assign Byes and Matches:**
+            *   The first (P - N) teams in your shuffled list receive a bye. Do NOT generate a match for them.
+            *   The remaining teams are paired up sequentially for the first round. For example, the next team in the shuffled list plays the one after it, and so on.
+        5.  **Set Round Number:** For all generated matches, set the 'round' field to 1.
+
+        **B. If 'tournamentType' is 'round-robin':**
+        
+        Follow this procedure for EACH event type category:
+        1.  **Generate All Pairings:** First, create a list of all possible unique pairings. For N teams, this will be N * (N-1) / 2 matches.
+        2.  **Perform the Draw (Picking Lots):**
+            *   Take this complete list of generated matches.
+            *   **Shuffle this list of matches randomly.** This randomizes the order of play.
+        3.  **Assign Courts and Times:** Assign a court and a sequential time slot to each match from the shuffled list.
+
+        Now, generate the complete list of matches in the required JSON format according to these rules.
     `,
 });
 

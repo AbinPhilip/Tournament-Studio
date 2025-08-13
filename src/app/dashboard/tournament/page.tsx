@@ -29,12 +29,12 @@ import {
 } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Save, ArrowLeft, Trash2, CheckCircle, Calendar as CalendarIcon, MoreHorizontal, UserPlus, Users as TeamsIcon, Building, Edit } from 'lucide-react';
+import { Save, ArrowLeft, Trash2, CheckCircle, Calendar as CalendarIcon, MoreHorizontal, UserPlus, Users as TeamsIcon, Building, Edit, Loader2, ListOrdered } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import { db } from '@/lib/firebase';
-import { collection, doc, getDocs, setDoc, updateDoc, DocumentReference, deleteDoc, query, Timestamp, addDoc, where } from 'firebase/firestore';
-import type { Tournament, Team, Organization, Gender } from '@/types';
+import { collection, doc, getDocs, setDoc, updateDoc, DocumentReference, deleteDoc, query, Timestamp, addDoc, where, writeBatch } from 'firebase/firestore';
+import type { Tournament, Team, Organization, Gender, Match } from '@/types';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useRouter } from 'next/navigation';
 import { format } from 'date-fns';
@@ -62,6 +62,7 @@ import {
 import Image from 'next/image';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { scheduleMatches } from '@/ai/flows/schedule-matches-flow';
 
 const tournamentFormSchema = z.object({
   location: z.string().min(3, { message: 'Location must be at least 3 characters.' }),
@@ -115,8 +116,10 @@ const teamFormSchema = z.object({
 export default function TournamentSettingsPage() {
   const { toast } = useToast();
   const router = useRouter();
+  const [tournament, setTournament] = useState<(Omit<Tournament, 'date'> & { date: Date }) | null>(null);
   const [tournamentDocRef, setTournamentDocRef] = useState<DocumentReference | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isGenerating, setIsGenerating] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [isSuccessModalOpen, setIsSuccessModalOpen] = useState(false);
 
@@ -186,6 +189,8 @@ export default function TournamentSettingsPage() {
         if (!tournamentSnap.empty) {
           const tournamentDoc = tournamentSnap.docs[0];
           const data = tournamentDoc.data() as Omit<Tournament, 'id'|'date'> & { date: Timestamp };
+          const tournamentData = { id: tournamentDoc.id, ...data, date: data.date.toDate()};
+          setTournament(tournamentData)
           setTournamentDocRef(tournamentDoc.ref);
           form.reset({
             ...data,
@@ -193,6 +198,7 @@ export default function TournamentSettingsPage() {
           });
         } else {
             setTournamentDocRef(null);
+            setTournament(null);
         }
         
         const fetchedTeams = teamsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Team));
@@ -412,6 +418,53 @@ export default function TournamentSettingsPage() {
     }
     setTeamToDelete(null);
   };
+
+  const handleGenerateSchedule = async () => {
+    if (!tournament) {
+        toast({ title: 'Error', description: 'Please create and save a tournament first.', variant: 'destructive'});
+        return;
+    }
+     if (teams.length < 2) {
+        toast({ title: 'Not enough teams', description: 'You need at least 2 teams to generate a schedule.', variant: 'destructive' });
+        return;
+    }
+
+    setIsGenerating(true);
+    try {
+        // Clear existing matches
+        const existingMatchesQuery = await getDocs(collection(db, 'matches'));
+        const deleteBatch = writeBatch(db);
+        existingMatchesQuery.forEach(doc => deleteBatch.delete(doc.ref));
+        await deleteBatch.commit();
+        
+        const plainTournament = {
+            ...tournament,
+            date: format(tournament.date, 'yyyy-MM-dd')
+        }
+
+        const generatedMatches = await scheduleMatches({ teams, tournament: plainTournament });
+        
+        const saveBatch = writeBatch(db);
+        generatedMatches.forEach(match => {
+            const matchRef = doc(collection(db, 'matches'));
+            const dataToSave = {
+                ...match,
+                startTime: Timestamp.fromDate(match.startTime)
+            }
+            saveBatch.set(matchRef, dataToSave);
+        });
+
+        await saveBatch.commit();
+        toast({ title: 'Schedule Generated!', description: `${generatedMatches.length} matches have been scheduled.` });
+        router.push('/dashboard/umpire');
+
+    } catch (error) {
+        console.error("Error generating schedule:", error);
+        toast({ title: 'Error Generating Schedule', description: 'An error occurred. Check the AI prompt and try again.', variant: 'destructive' });
+    } finally {
+        setIsGenerating(false);
+    }
+};
   
   const getOrgName = (orgId: string) => organizations.find(o => o.id === orgId)?.name || 'N/A';
   
@@ -625,7 +678,7 @@ export default function TournamentSettingsPage() {
           <CardHeader>
             <CardTitle>Tournament Administration</CardTitle>
             <CardDescription>
-              Configure the settings for the upcoming tournament.
+              Configure the settings for the upcoming tournament. Once settings are finalized, generate the schedule.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -745,7 +798,7 @@ export default function TournamentSettingsPage() {
                   </div>
                 </div>
 
-                <div className="flex gap-4 flex-wrap">
+                <div className="flex gap-4 flex-wrap items-center border-t pt-6">
                     <Button type="submit">
                         <Save className="mr-2 h-4 w-4" />
                         {tournamentDocRef ? 'Update Tournament' : 'Create Tournament'}
@@ -754,6 +807,13 @@ export default function TournamentSettingsPage() {
                         <ArrowLeft className="mr-2 h-4 w-4" />
                         Back to Dashboard
                     </Button>
+                     <Button type="button" variant="default" onClick={handleGenerateSchedule} disabled={isGenerating}>
+                        {isGenerating ? <Loader2 className="animate-spin" /> : <ListOrdered />}
+                        Generate Schedule
+                    </Button>
+
+                    <div className="flex-grow" />
+
                     {tournamentDocRef && (
                       <AlertDialog>
                           <AlertDialogTrigger asChild>
@@ -1061,7 +1121,3 @@ export default function TournamentSettingsPage() {
     </div>
   );
 }
-
-    
-
-    

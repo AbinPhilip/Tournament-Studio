@@ -25,10 +25,7 @@ export default function AdminView() {
         </CardHeader>
         <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <Button variant="outline" onClick={() => router.push('/dashboard/tournament')}>
-                <Cog className="mr-2"/> Configure Tournament
-            </Button>
-            <Button variant="outline" onClick={() => router.push('/dashboard/scheduler')}>
-                <ListOrdered className="mr-2"/> Go to Scheduler
+                <Cog className="mr-2"/> Configure & Schedule
             </Button>
             <Button variant="outline" onClick={() => router.push('/dashboard/umpire')}>
                 <Shield className="mr-2"/> Go to Umpire View
