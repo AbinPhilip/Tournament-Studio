@@ -18,7 +18,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Switch } from '@/components/ui/switch';
 import type { User, UserRole, Team, Organization } from '@/types';
 import { useAuth } from '@/hooks/use-auth';
-import { MoreHorizontal, Trash2, UserPlus, Users as TeamsIcon, Building, PlusCircle, Database, Upload, Trophy, Edit } from 'lucide-react';
+import { MoreHorizontal, Trash2, UserPlus, Users as TeamsIcon, Building, PlusCircle, Database, Upload, Trophy, Edit, CheckCircle } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -163,6 +163,10 @@ export default function AdminView() {
   const [isEditOrgOpen, setIsEditOrgOpen] = useState(false);
   const [isEditTeamOpen, setIsEditTeamOpen] = useState(false);
 
+  const [isSuccessModalOpen, setIsSuccessModalOpen] = useState(false);
+  const [successModalTitle, setSuccessModalTitle] = useState('');
+  const [successModalMessage, setSuccessModalMessage] = useState('');
+
   const fetchData = async () => {
     const [usersSnap, teamsSnap, orgsSnap] = await Promise.all([
         getDocs(collection(db, 'users')),
@@ -267,9 +271,11 @@ export default function AdminView() {
         const userRef = doc(db, 'users', userToEdit.id);
         await updateDoc(userRef, values);
         setUsers(users.map(u => u.id === userToEdit.id ? { ...u, ...values } : u));
-        toast({ title: 'User Updated', description: 'User details have been successfully updated.' });
         setIsEditUserOpen(false);
         setUserToEdit(null);
+        setSuccessModalTitle('User Updated');
+        setSuccessModalMessage('User details have been successfully updated.');
+        setIsSuccessModalOpen(true);
     } catch (error) {
         toast({ title: 'Error', description: 'Failed to update user.', variant: 'destructive' });
     }
@@ -294,9 +300,11 @@ export default function AdminView() {
         const orgRef = doc(db, 'organizations', orgToEdit.id);
         await updateDoc(orgRef, values);
         setOrganizations(organizations.map(o => o.id === orgToEdit.id ? { ...o, ...values } : o));
-        toast({ title: 'Organization Updated', description: 'Organization details have been successfully updated.'});
         setIsEditOrgOpen(false);
         setOrgToEdit(null);
+        setSuccessModalTitle('Organization Updated');
+        setSuccessModalMessage('Organization details have been successfully updated.');
+        setIsSuccessModalOpen(true);
     } catch (error) {
         toast({ title: 'Error', description: 'Failed to update organization.', variant: 'destructive' });
     }
@@ -360,9 +368,11 @@ export default function AdminView() {
         };
         await updateDoc(teamRef, teamData);
         setTeams(teams.map(t => t.id === teamToEdit.id ? { ...teamToEdit, ...teamData } : t));
-        toast({ title: 'Team Updated', description: 'Team details have been successfully updated.'});
         setIsEditTeamOpen(false);
         setTeamToEdit(null);
+        setSuccessModalTitle('Team Updated');
+        setSuccessModalMessage('Team details have been successfully updated.');
+        setIsSuccessModalOpen(true);
     } catch (error) {
         toast({ title: 'Error', description: 'Failed to update team.', variant: 'destructive' });
     }
@@ -1033,6 +1043,24 @@ export default function AdminView() {
                 <AlertDialogAction onClick={handleDeleteTeam} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
                   Delete Team
                 </AlertDialogAction>
+            </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+      
+      {/* Success Modal */}
+      <AlertDialog open={isSuccessModalOpen} onOpenChange={setIsSuccessModalOpen}>
+        <AlertDialogContent>
+            <AlertDialogHeader>
+                <div className="flex items-center gap-2">
+                    <CheckCircle className="h-6 w-6 text-green-500" />
+                    <AlertDialogTitle>{successModalTitle}</AlertDialogTitle>
+                </div>
+                <AlertDialogDescription>
+                  {successModalMessage}
+                </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+                <AlertDialogAction onClick={() => setIsSuccessModalOpen(false)}>OK</AlertDialogAction>
             </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

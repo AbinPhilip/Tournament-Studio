@@ -18,7 +18,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
-import { CalendarIcon, Save, ArrowLeft, Trash2 } from 'lucide-react';
+import { CalendarIcon, Save, ArrowLeft, Trash2, CheckCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 import { useToast } from '@/hooks/use-toast';
@@ -51,6 +51,7 @@ export default function TournamentAdminPage() {
   const [tournamentDocRef, setTournamentDocRef] = useState<DocumentReference | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [isSuccessModalOpen, setIsSuccessModalOpen] = useState(false);
 
   const form = useForm<z.infer<typeof tournamentFormSchema>>({
     resolver: zodResolver(tournamentFormSchema),
@@ -117,7 +118,7 @@ export default function TournamentAdminPage() {
         await setDoc(newDocRef, dataToSave);
         setTournamentDocRef(newDocRef);
       }
-      toast({ title: 'Success', description: 'Tournament details have been saved.' });
+      setIsSuccessModalOpen(true);
     } catch (error) {
       console.error(error);
       toast({ title: 'Error', description: 'Failed to save tournament details.', variant: 'destructive' });
@@ -304,6 +305,24 @@ export default function TournamentAdminPage() {
             </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <AlertDialog open={isSuccessModalOpen} onOpenChange={setIsSuccessModalOpen}>
+        <AlertDialogContent>
+            <AlertDialogHeader>
+                <div className="flex items-center gap-2">
+                    <CheckCircle className="h-6 w-6 text-green-500" />
+                    <AlertDialogTitle>Success!</AlertDialogTitle>
+                </div>
+                <AlertDialogDescription>
+                  Tournament details have been saved successfully.
+                </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+                <AlertDialogAction onClick={() => setIsSuccessModalOpen(false)}>OK</AlertDialogAction>
+            </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
     </>
   );
 }
