@@ -1,3 +1,5 @@
+import { Timestamp } from "firebase/firestore";
+
 export type UserRole = 'individual' | 'update' | 'admin' | 'inquiry' | 'super';
 
 export interface User {
@@ -36,4 +38,12 @@ export interface Team {
     genderP2?: Gender;
     organizationId: string;
     photoUrl?: string;
+}
+
+export interface Tournament {
+    id: string;
+    location: string;
+    date: Timestamp;
+    numberOfCourts: number;
+    courtNames: { name: string }[];
 }
