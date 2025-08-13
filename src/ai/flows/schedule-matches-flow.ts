@@ -30,7 +30,7 @@ const TournamentSchema = z.object({
     courtNames: z.array(z.object({ name: z.string() })),
     tournamentType: z.enum(['round-robin', 'knockout']),
     // The client sends a JS Date, which serializes to a string.
-    date: z.date({ coerce: true }), 
+    date: z.string(),
 });
 
 const ScheduleMatchesInputSchema = z.object({
