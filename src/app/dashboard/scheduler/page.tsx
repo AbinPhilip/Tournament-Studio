@@ -36,8 +36,10 @@ export default function SchedulerPage() {
                     router.push('/dashboard/tournament');
                     return;
                 }
-                const tourneyData = tournamentSnap.docs[0].data() as Omit<Tournament, 'date'>;
-                setTournament({ id: tournamentSnap.docs[0].id, ...tourneyData });
+                const tourneyDoc = tournamentSnap.docs[0];
+                // eslint-disable-next-line @typescript-eslint/no-unused-vars
+                const { date, ...tourneyData } = tourneyDoc.data();
+                setTournament({ id: tourneyDoc.id, ...tourneyData } as Tournament);
 
                 const teamsSnap = await getDocs(collection(db, 'teams'));
                 setTeams(teamsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Team)));
