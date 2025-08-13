@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState } from 'react';
@@ -9,10 +10,12 @@ import { collection, addDoc, getDocs, writeBatch, doc } from 'firebase/firestore
 import { mockUsers, mockAppData, mockOrganizations, mockTeams } from '@/lib/mock-data';
 import { Loader2 } from 'lucide-react';
 import type { Organization, Team } from '@/types';
+import { useRouter } from 'next/navigation';
 
 export default function SeedDatabasePage() {
   const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
+  const router = useRouter();
 
   const seedCollection = async (collectionName: string, data: any[]) => {
     const collectionRef = collection(db, collectionName);
@@ -24,8 +27,8 @@ export default function SeedDatabasePage() {
 
     const batch = writeBatch(db);
     data.forEach((item) => {
-        const docRef = doc(collectionRef);
-        batch.set(docRef, item);
+        const newDocRef = doc(collectionRef);
+        batch.set(newDocRef, item);
     });
     await batch.commit();
     toast({ title: 'Success', description: `Collection "${collectionName}" seeded.`});
@@ -48,12 +51,10 @@ export default function SeedDatabasePage() {
         return;
     }
     
-    // Map mock organization IDs to real Firestore IDs
     const orgIdMap: { [key: string]: string } = {};
     mockOrganizations.forEach((mockOrg, index) => {
         const foundOrg = orgs.find(o => o.name === mockOrg.name);
         if(foundOrg) {
-            // The mock team data uses 1-based indexing for organizationId
             orgIdMap[(index + 1).toString()] = foundOrg.id;
         }
     });
@@ -79,6 +80,11 @@ export default function SeedDatabasePage() {
         await seedCollection('appData', mockAppData);
         await seedCollection('organizations', mockOrganizations);
         await seedTeamsWithOrgIds();
+        toast({
+          title: 'Database Seeded!',
+          description: 'You can now log in using the credentials provided.',
+          duration: 5000,
+        });
     } catch (error) {
       console.error(error);
       toast({
@@ -92,23 +98,24 @@ export default function SeedDatabasePage() {
   };
 
   return (
-    <div className="container mx-auto max-w-2xl">
-      <Card>
-        <CardHeader>
-          <CardTitle>Seed Database</CardTitle>
-          <CardDescription>
-            Populate your Firestore database with the initial mock data. This will allow you to
-            use the application with a predefined set of users, teams, and other information.
-            This action should only be performed once.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Button onClick={handleSeed} disabled={isLoading}>
-            {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            Seed Database
-          </Button>
-        </CardContent>
-      </Card>
-    </div>
+    <Card>
+      <CardHeader>
+        <CardTitle>Seed Database</CardTitle>
+        <CardDescription>
+          Populate your Firestore database with the initial mock data. This will allow you to
+          use the application with a predefined set of users, teams, and other information.
+          This action should only be performed once.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-4">
+        <Button onClick={handleSeed} disabled={isLoading}>
+          {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+          Seed Database
+        </Button>
+        <Button onClick={() => router.push('/login')} variant="outline">
+            Go to Login
+        </Button>
+      </CardContent>
+    </Card>
   );
 }
