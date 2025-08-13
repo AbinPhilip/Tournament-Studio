@@ -70,11 +70,17 @@ export default function SchedulerPage() {
 
         setIsGenerating(true);
         try {
-            const tournamentWithDate = { ...tournament, date: tournament.date.toDate() };
+            // Ensure we pass the tournamentType to the flow
+            const tournamentWithDate = { 
+                ...tournament, 
+                date: tournament.date.toDate(),
+                tournamentType: tournament.tournamentType,
+            };
             const generatedMatches = await scheduleMatches({ teams, tournament: tournamentWithDate });
             
             if (!generatedMatches || generatedMatches.length === 0) {
                 toast({ title: 'Schedule Generation Failed', description: 'The AI could not generate a schedule. Please try again.', variant: 'destructive' });
+                setIsGenerating(false);
                 return;
             }
 
@@ -159,7 +165,7 @@ export default function SchedulerPage() {
                     <div>
                         <CardTitle>Match Scheduler</CardTitle>
                         <CardDescription>
-                            Generate and view the tournament match schedule.
+                            Generate and view the tournament match schedule. Current format: <span className="font-semibold capitalize">{tournament?.tournamentType?.replace('-', ' ')}</span>
                         </CardDescription>
                     </div>
                     <Button variant="outline" onClick={() => router.push('/dashboard')}>
@@ -218,6 +224,7 @@ export default function SchedulerPage() {
                                             <TableHead>Team 1</TableHead>
                                             <TableHead>Team 2</TableHead>
                                             <TableHead>Status</TableHead>
+                                             {tournament?.tournamentType === 'knockout' && <TableHead>Round</TableHead>}
                                         </TableRow>
                                     </TableHeader>
                                     <TableBody>
@@ -232,6 +239,7 @@ export default function SchedulerPage() {
                                                         {match.status}
                                                     </Badge>
                                                 </TableCell>
+                                                {tournament?.tournamentType === 'knockout' && <TableCell>{match.round}</TableCell>}
                                             </TableRow>
                                         ))}
                                     </TableBody>
