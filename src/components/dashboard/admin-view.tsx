@@ -16,10 +16,9 @@ import {
 import { Badge, type BadgeProps } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Switch } from '@/components/ui/switch';
 import type { User, UserRole, Team, Organization, Gender } from '@/types';
 import { useAuth } from '@/hooks/use-auth';
-import { MoreHorizontal, Trash2, UserPlus, Users as TeamsIcon, Building, PlusCircle, Database, Upload, Trophy, Edit, CheckCircle, Calendar as CalendarIcon, Gavel } from 'lucide-react';
+import { MoreHorizontal, Trash2, UserPlus, Users as TeamsIcon, Building, Edit, CheckCircle, Calendar as CalendarIcon, Gavel, Trophy } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -64,11 +63,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
 import { db } from '@/lib/firebase';
 import { collection, getDocs, addDoc, deleteDoc, doc, query, where, updateDoc } from 'firebase/firestore';
-import Link from 'next/link';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 
@@ -154,7 +151,6 @@ export default function AdminView() {
   const [users, setUsers] = useState<User[]>([]);
   const [teams, setTeams] = useState<Team[]>([]);
   const [organizations, setOrganizations] = useState<Organization[]>([]);
-  const [maintenanceMode, setMaintenanceMode] = useState(false);
   
   const [userToDelete, setUserToDelete] = useState<User | null>(null);
   const [userToEdit, setUserToEdit] = useState<User | null>(null);
@@ -379,15 +375,14 @@ export default function AdminView() {
             teamData.genderP2 = values.genderP2;
         } else if (values.type === 'singles') {
             teamData.genderP1 = values.genderP1;
-            // Ensure player2Name and genderP2 are not set for singles
             delete teamData.player2Name;
             delete teamData.genderP2;
         }
 
-        // Clean up empty/undefined fields before saving to Firebase
         Object.keys(teamData).forEach(key => {
-            if (teamData[key as keyof typeof teamData] === undefined || teamData[key as keyof typeof teamData] === '') {
-                delete teamData[key as keyof typeof teamData];
+            const typedKey = key as keyof typeof teamData;
+            if (teamData[typedKey] === undefined || teamData[typedKey] === '') {
+                delete teamData[typedKey];
             }
         });
         
@@ -539,7 +534,6 @@ export default function AdminView() {
                 />
             </div>
             <Button type="button" variant="outline" onClick={() => fileInputRef.current?.click()}>
-              <Upload className="mr-2 h-4 w-4" />
               Upload
             </Button>
             <Input type="file" ref={fileInputRef} onChange={handlePhotoChange} className="hidden" accept="image/png, image/jpeg, image/gif" />
@@ -558,326 +552,283 @@ export default function AdminView() {
     <div className="grid gap-8">
       <div>
         <h1 className="text-3xl font-bold mb-2">Administrator Dashboard</h1>
-        <p className="text-muted-foreground">Welcome, {user?.name}. Manage users, teams, and system settings.</p>
+        <p className="text-muted-foreground">Welcome, {user?.name}. Manage users, teams, and tournament settings.</p>
       </div>
 
-      <Tabs defaultValue="teams">
-        <TabsList className="grid w-full grid-cols-3">
-          <TabsTrigger value="teams">Team & Org Management</TabsTrigger>
-          <TabsTrigger value="users">User Management</TabsTrigger>
-          <TabsTrigger value="settings">System Settings</TabsTrigger>
-        </TabsList>
-        <TabsContent value="teams">
-          <div className="grid gap-8 mt-4">
-             <Card>
-                <CardHeader className="flex flex-row items-center justify-between">
-                <div>
-                    <CardTitle>Organization Management</CardTitle>
-                    <CardDescription>Create and manage organizations.</CardDescription>
-                </div>
-                <Dialog open={isAddOrgOpen} onOpenChange={setIsAddOrgOpen}>
-                    <DialogTrigger asChild>
-                    <Button>
-                        <Building className="mr-2 h-4 w-4" />
-                        Create Organization
-                    </Button>
-                    </DialogTrigger>
-                    <DialogContent>
-                    <DialogHeader>
-                        <DialogTitle>Create New Organization</DialogTitle>
-                    </DialogHeader>
-                    <Form {...orgForm}>
-                        <form onSubmit={orgForm.handleSubmit(handleAddOrg)} className="space-y-4">
-                        <FormField control={orgForm.control} name="name" render={({ field }) => (
-                            <FormItem>
-                                <FormLabel>Organization Name</FormLabel>
-                                <FormControl><Input placeholder="e.g. Premier Badminton Club" {...field} /></FormControl>
-                                <FormMessage />
-                            </FormItem>
-                        )} />
-                        <FormField control={orgForm.control} name="location" render={({ field }) => (
-                            <FormItem>
-                                <FormLabel>Location</FormLabel>
-                                <FormControl><Input placeholder="e.g. New York, USA" {...field} /></FormControl>
-                                <FormMessage />
-                            </FormItem>
-                        )} />
-                        <DialogFooter>
-                            <DialogClose asChild><Button type="button" variant="secondary">Cancel</Button></DialogClose>
-                            <Button type="submit">Create Organization</Button>
-                        </DialogFooter>
-                        </form>
-                    </Form>
-                    </DialogContent>
-                </Dialog>
-                </CardHeader>
-                <CardContent>
-                    <Table>
-                        <TableHeader>
-                        <TableRow>
-                            <TableHead>Organization</TableHead>
-                            <TableHead>Location</TableHead>
-                            <TableHead><span className="sr-only">Actions</span></TableHead>
-                        </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                        {organizations.map((org) => (
-                            <TableRow key={org.id}>
-                            <TableCell className="font-medium">{org.name}</TableCell>
-                            <TableCell>{org.location}</TableCell>
-                            <TableCell className="text-right">
-                                <DropdownMenu>
-                                <DropdownMenuTrigger asChild><Button variant="ghost" className="h-8 w-8 p-0"><MoreHorizontal className="h-4 w-4" /></Button></DropdownMenuTrigger>
-                                <DropdownMenuContent align="end">
-                                    <DropdownMenuItem onSelect={() => setOrgToEdit(org)}><Edit className="mr-2 h-4 w-4" />Edit</DropdownMenuItem>
-                                    <DropdownMenuItem className="text-destructive focus:text-destructive" onSelect={() => setOrgToDelete(org)}><Trash2 className="mr-2 h-4 w-4" />Delete</DropdownMenuItem>
-                                </DropdownMenuContent>
-                                </DropdownMenu>
-                            </TableCell>
-                            </TableRow>
-                        ))}
-                        </TableBody>
-                    </Table>
-                </CardContent>
-            </Card>
-
-            <Card>
-                <CardHeader className="flex flex-row items-center justify-between">
-                <div>
-                    <CardTitle>Team Management</CardTitle>
-                    <CardDescription>Register and manage badminton teams.</CardDescription>
-                </div>
-                <Dialog open={isAddTeamOpen} onOpenChange={setIsAddTeamOpen}>
-                    <DialogTrigger asChild>
-                    <Button>
-                        <TeamsIcon className="mr-2 h-4 w-4" />
-                        Register Team
-                    </Button>
-                    </DialogTrigger>
-                    <DialogContent className="sm:max-w-[600px]">
-                        <DialogHeader>
-                            <DialogTitle>Register New Team</DialogTitle>
-                            <DialogDescription>Enter the details for the new team.</DialogDescription>
-                        </DialogHeader>
-                        <TeamFormContent isEditing={false} />
-                    </DialogContent>
-                </Dialog>
-                </CardHeader>
-                <CardContent>
-                <Table>
-                    <TableHeader>
-                    <TableRow>
-                        <TableHead>Photo</TableHead>
-                        <TableHead>Event</TableHead>
-                        <TableHead>Players</TableHead>
-                        <TableHead>Organization</TableHead>
-                        <TableHead><span className="sr-only">Actions</span></TableHead>
-                    </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                    {teams.map((t) => (
-                        <TableRow key={t.id}>
-                        <TableCell>
-                           <Image 
-                                data-ai-hint="badminton players"
-                                src={t.photoUrl || 'https://placehold.co/80x80.png'} 
-                                alt="Team photo" 
-                                width={80} 
-                                height={80} 
-                                className="rounded-md object-cover"
-                            />
-                        </TableCell>
-                        <TableCell className="font-medium capitalize">{t.type.replace(/_/g, ' ')}</TableCell>
-                        <TableCell>{t.player1Name}{t.player2Name ? ` & ${t.player2Name}`: ''}</TableCell>
-                        <TableCell>{getOrgName(t.organizationId)}</TableCell>
-                        <TableCell className="text-right">
-                            <DropdownMenu>
-                                <DropdownMenuTrigger asChild><Button variant="ghost" className="h-8 w-8 p-0"><MoreHorizontal className="h-4 w-4" /></Button></DropdownMenuTrigger>
-                                <DropdownMenuContent align="end">
-                                    <DropdownMenuItem onSelect={() => setTeamToEdit(t)}><Edit className="mr-2 h-4 w-4" />Edit</DropdownMenuItem>
-                                    <DropdownMenuItem className="text-destructive focus:text-destructive" onSelect={() => setTeamToDelete(t)}><Trash2 className="mr-2 h-4 w-4" />Delete</DropdownMenuItem>
-                                </DropdownMenuContent>
-                            </DropdownMenu>
-                        </TableCell>
-                        </TableRow>
-                    ))}
-                    </TableBody>
-                </Table>
-                </CardContent>
-            </Card>
-          </div>
-        </TabsContent>
-        <TabsContent value="users">
-            <Card className="mt-4">
-                <CardHeader className="flex flex-row items-center justify-between">
-                <div>
-                    <CardTitle>User Management</CardTitle>
-                    <CardDescription>View, edit, and remove users from the system.</CardDescription>
-                </div>
-                <Dialog open={isAddUserOpen} onOpenChange={setIsAddUserOpen}>
-                    <DialogTrigger asChild>
-                    <Button>
-                        <UserPlus className="mr-2 h-4 w-4" />
-                        Add User
-                    </Button>
-                    </DialogTrigger>
-                    <DialogContent>
-                    <DialogHeader>
-                        <DialogTitle>Add New User</DialogTitle>
-                        <DialogDescription>Enter the details for the new user account.</DialogDescription>
-                    </DialogHeader>
-                    <Form {...userForm}>
-                        <form onSubmit={userForm.handleSubmit(handleAddUser)} className="space-y-4">
-                        <FormField control={userForm.control} name="name" render={({ field }) => (
-                            <FormItem>
-                                <FormLabel>Full Name</FormLabel>
-                                <FormControl><Input placeholder="John Doe" {...field} /></FormControl>
-                                <FormMessage />
-                            </FormItem>
-                        )} />
-                        <FormField control={userForm.control} name="username" render={({ field }) => (
-                            <FormItem>
-                                <FormLabel>Username</FormLabel>
-                                <FormControl><Input placeholder="johndoe" {...field} /></FormControl>
-                                <FormMessage />
-                            </FormItem>
-                        )} />
-                        <FormField control={userForm.control} name="email" render={({ field }) => (
-                            <FormItem>
-                                <FormLabel>Email</FormLabel>
-                                <FormControl><Input type="email" placeholder="john.doe@example.com" {...field} /></FormControl>
-                                <FormMessage />
-                            </FormItem>
-                        )} />
-                        <FormField control={userForm.control} name="phoneNumber" render={({ field }) => (
-                            <FormItem>
-                                <FormLabel>Phone Number</FormLabel>
-                                <FormControl><Input type="tel" placeholder="1234567890" {...field} /></FormControl>
-                                <FormMessage />
-                            </FormItem>
-                        )} />
-                        <FormField control={userForm.control} name="role" render={({ field }) => (
-                            <FormItem>
-                                <FormLabel>Role</FormLabel>
-                                <Select onValueChange={field.onChange} defaultValue={field.value}>
-                                    <FormControl><SelectTrigger><SelectValue placeholder="Select a role" /></SelectTrigger></FormControl>
-                                    <SelectContent>
-                                        <SelectItem value="individual">Individual</SelectItem>
-                                        <SelectItem value="update">Update User</SelectItem>
-                                        <SelectItem value="inquiry">Inquiry User</SelectItem>
-                                        <SelectItem value="admin">Admin</SelectItem>
-                                        <SelectItem value="super">Super User</SelectItem>
-                                    </SelectContent>
-                                </Select><FormMessage />
-                            </FormItem>
-                        )} />
-                        <DialogFooter>
-                            <DialogClose asChild><Button type="button" variant="secondary">Cancel</Button></DialogClose>
-                            <Button type="submit">Create User</Button>
-                        </DialogFooter>
-                        </form>
-                    </Form>
-                    </DialogContent>
-                </Dialog>
-                </CardHeader>
-                <CardContent>
-                <Table>
-                    <TableHeader>
-                    <TableRow>
-                        <TableHead>Name</TableHead>
-                        <TableHead>Email</TableHead>
-                        <TableHead>Phone</TableHead>
-                        <TableHead>Role</TableHead>
-                        <TableHead><span className="sr-only">Actions</span></TableHead>
-                    </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                    {users.map((u) => (
-                        <TableRow key={u.id}>
-                        <TableCell className="font-medium">{u.name}</TableCell>
-                        <TableCell>{u.email}</TableCell>
-                        <TableCell>{u.phoneNumber}</TableCell>
-                        <TableCell><RoleBadge role={u.role} /></TableCell>
-                        <TableCell className="text-right">
-                            <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                                <Button variant="ghost" className="h-8 w-8 p-0" disabled={u.id === user?.id}>
-                                <span className="sr-only">Open menu</span>
-                                <MoreHorizontal className="h-4 w-4" />
-                                </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                                <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                                <DropdownMenuItem onSelect={() => setUserToEdit(u)} disabled={u.id === user?.id}><Edit className="mr-2 h-4 w-4" />Edit user</DropdownMenuItem>
-                                <DropdownMenuSeparator />
-                                <DropdownMenuItem className="text-destructive focus:text-destructive focus:bg-destructive/10" onSelect={() => setUserToDelete(u)} disabled={u.id === user?.id}>
-                                <Trash2 className="mr-2 h-4 w-4" />
-                                Delete
-                                </DropdownMenuItem>
-                            </DropdownMenuContent>
-                            </DropdownMenu>
-                        </TableCell>
-                        </TableRow>
-                    ))}
-                    </TableBody>
-                </Table>
-                </CardContent>
-            </Card>
-        </TabsContent>
-        <TabsContent value="settings">
-            <div className="grid gap-4 mt-4">
-                <Card>
-                    <CardHeader>
-                        <CardTitle>Tournament & Schedule</CardTitle>
-                        <CardDescription>Configure tournament settings, generate the match schedule, and manage scores.</CardDescription>
-                    </CardHeader>
-                    <CardContent className="flex flex-wrap gap-4">
-                        <Button onClick={() => router.push('/dashboard/tournament')}>
-                            <Trophy className="mr-2 h-4 w-4" /> Tournament Page
-                        </Button>
-                        <Button onClick={() => router.push('/dashboard/scheduler')}>
-                            <CalendarIcon className="mr-2 h-4 w-4" /> Scheduler
-                        </Button>
-                         <Button onClick={() => router.push('/dashboard/umpire')}>
-                            <Gavel className="mr-2 h-4 w-4" /> Umpire View
-                        </Button>
-                    </CardContent>
-                </Card>
-                <Card>
-                    <CardHeader>
-                    <CardTitle>System Settings</CardTitle>
-                    <CardDescription>Global application settings.</CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                        <div className="flex items-center space-x-4 rounded-md border p-4">
-                            <div className="flex-1 space-y-1">
-                                <p className="text-sm font-medium leading-none">Maintenance Mode</p>
-                                <p className="text-sm text-muted-foreground">
-                                    Temporarily disable access to the app for non-admin users.
-                                </p>
-                            </div>
-                            <Switch 
-                                checked={maintenanceMode} 
-                                onCheckedChange={setMaintenanceMode}
-                                aria-label="Toggle maintenance mode"
-                            />
-                        </div>
-                    </CardContent>
-                </Card>
-                 <Card>
-                    <CardHeader>
-                        <CardTitle>Database Management</CardTitle>
-                        <CardDescription>Seed the database with initial mock data.</CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                        <Link href="/dashboard/seed-database">
-                           <Button><Database className="mr-2"/> Seed Database</Button>
-                        </Link>
-                    </CardContent>
-                </Card>
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <Card className="lg:col-span-3">
+              <CardHeader>
+                  <CardTitle>Tournament Actions</CardTitle>
+                  <CardDescription>Configure tournament settings, generate the match schedule, and manage scores.</CardDescription>
+              </CardHeader>
+              <CardContent className="flex flex-wrap gap-4">
+                  <Button onClick={() => router.push('/dashboard/tournament')}>
+                      <Trophy className="mr-2 h-4 w-4" /> Tournament Page
+                  </Button>
+                  <Button onClick={() => router.push('/dashboard/scheduler')}>
+                      <CalendarIcon className="mr-2 h-4 w-4" /> Scheduler
+                  </Button>
+                   <Button onClick={() => router.push('/dashboard/umpire')}>
+                      <Gavel className="mr-2 h-4 w-4" /> Umpire View
+                  </Button>
+              </CardContent>
+          </Card>
+      </div>
+      
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between">
+            <div>
+              <CardTitle>Team Management</CardTitle>
+              <CardDescription>Register and manage badminton teams.</CardDescription>
             </div>
-        </TabsContent>
-      </Tabs>
+            <Dialog open={isAddTeamOpen} onOpenChange={setIsAddTeamOpen}>
+              <DialogTrigger asChild>
+                <Button>
+                  <TeamsIcon className="mr-2 h-4 w-4" />
+                  Register Team
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="sm:max-w-[600px]">
+                <DialogHeader>
+                  <DialogTitle>Register New Team</DialogTitle>
+                  <DialogDescription>Enter the details for the new team.</DialogDescription>
+                </DialogHeader>
+                <TeamFormContent isEditing={false} />
+              </DialogContent>
+            </Dialog>
+          </CardHeader>
+          <CardContent>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Photo</TableHead>
+                  <TableHead>Event</TableHead>
+                  <TableHead>Players</TableHead>
+                  <TableHead>Organization</TableHead>
+                  <TableHead><span className="sr-only">Actions</span></TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {teams.map((t) => (
+                  <TableRow key={t.id}>
+                    <TableCell>
+                      <Image 
+                        data-ai-hint="badminton players"
+                        src={t.photoUrl || 'https://placehold.co/80x80.png'} 
+                        alt="Team photo" 
+                        width={80} 
+                        height={80} 
+                        className="rounded-md object-cover"
+                      />
+                    </TableCell>
+                    <TableCell className="font-medium capitalize">{t.type.replace(/_/g, ' ')}</TableCell>
+                    <TableCell>{t.player1Name}{t.player2Name ? ` & ${t.player2Name}`: ''}</TableCell>
+                    <TableCell>{getOrgName(t.organizationId)}</TableCell>
+                    <TableCell className="text-right">
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild><Button variant="ghost" className="h-8 w-8 p-0"><MoreHorizontal className="h-4 w-4" /></Button></DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem onSelect={() => setTeamToEdit(t)}><Edit className="mr-2 h-4 w-4" />Edit</DropdownMenuItem>
+                          <DropdownMenuItem className="text-destructive focus:text-destructive" onSelect={() => setTeamToDelete(t)}><Trash2 className="mr-2 h-4 w-4" />Delete</DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+        
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between">
+            <div>
+              <CardTitle>Organization Management</CardTitle>
+              <CardDescription>Create and manage organizations.</CardDescription>
+            </div>
+            <Dialog open={isAddOrgOpen} onOpenChange={setIsAddOrgOpen}>
+              <DialogTrigger asChild>
+                <Button>
+                  <Building className="mr-2 h-4 w-4" />
+                  Create Organization
+                </Button>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Create New Organization</DialogTitle>
+                </DialogHeader>
+                <Form {...orgForm}>
+                  <form onSubmit={orgForm.handleSubmit(handleAddOrg)} className="space-y-4">
+                    <FormField control={orgForm.control} name="name" render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Organization Name</FormLabel>
+                        <FormControl><Input placeholder="e.g. Premier Badminton Club" {...field} /></FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )} />
+                    <FormField control={orgForm.control} name="location" render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Location</FormLabel>
+                        <FormControl><Input placeholder="e.g. New York, USA" {...field} /></FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )} />
+                    <DialogFooter>
+                      <DialogClose asChild><Button type="button" variant="secondary">Cancel</Button></DialogClose>
+                      <Button type="submit">Create Organization</Button>
+                    </DialogFooter>
+                  </form>
+                </Form>
+              </DialogContent>
+            </Dialog>
+          </CardHeader>
+          <CardContent>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Organization</TableHead>
+                  <TableHead>Location</TableHead>
+                  <TableHead><span className="sr-only">Actions</span></TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {organizations.map((org) => (
+                  <TableRow key={org.id}>
+                    <TableCell className="font-medium">{org.name}</TableCell>
+                    <TableCell>{org.location}</TableCell>
+                    <TableCell className="text-right">
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild><Button variant="ghost" className="h-8 w-8 p-0"><MoreHorizontal className="h-4 w-4" /></Button></DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem onSelect={() => setOrgToEdit(org)}><Edit className="mr-2 h-4 w-4" />Edit</DropdownMenuItem>
+                          <DropdownMenuItem className="text-destructive focus:text-destructive" onSelect={() => setOrgToDelete(org)}><Trash2 className="mr-2 h-4 w-4" />Delete</DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+      </div>
+
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between">
+          <div>
+            <CardTitle>User Management</CardTitle>
+            <CardDescription>View, edit, and remove users from the system.</CardDescription>
+          </div>
+          <Dialog open={isAddUserOpen} onOpenChange={setIsAddUserOpen}>
+            <DialogTrigger asChild>
+              <Button>
+                <UserPlus className="mr-2 h-4 w-4" />
+                Add User
+              </Button>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Add New User</DialogTitle>
+                <DialogDescription>Enter the details for the new user account.</DialogDescription>
+              </DialogHeader>
+              <Form {...userForm}>
+                <form onSubmit={userForm.handleSubmit(handleAddUser)} className="space-y-4">
+                  <FormField control={userForm.control} name="name" render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Full Name</FormLabel>
+                      <FormControl><Input placeholder="John Doe" {...field} /></FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )} />
+                  <FormField control={userForm.control} name="username" render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Username</FormLabel>
+                      <FormControl><Input placeholder="johndoe" {...field} /></FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )} />
+                  <FormField control={userForm.control} name="email" render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Email</FormLabel>
+                      <FormControl><Input type="email" placeholder="john.doe@example.com" {...field} /></FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )} />
+                  <FormField control={userForm.control} name="phoneNumber" render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Phone Number</FormLabel>
+                      <FormControl><Input type="tel" placeholder="1234567890" {...field} /></FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )} />
+                  <FormField control={userForm.control} name="role" render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Role</FormLabel>
+                      <Select onValueChange={field.onChange} defaultValue={field.value}>
+                        <FormControl><SelectTrigger><SelectValue placeholder="Select a role" /></SelectTrigger></FormControl>
+                        <SelectContent>
+                          <SelectItem value="individual">Individual</SelectItem>
+                          <SelectItem value="update">Update User</SelectItem>
+                          <SelectItem value="inquiry">Inquiry User</SelectItem>
+                          <SelectItem value="admin">Admin</SelectItem>
+                          <SelectItem value="super">Super User</SelectItem>
+                        </SelectContent>
+                      </Select><FormMessage />
+                    </FormItem>
+                  )} />
+                  <DialogFooter>
+                    <DialogClose asChild><Button type="button" variant="secondary">Cancel</Button></DialogClose>
+                    <Button type="submit">Create User</Button>
+                  </DialogFooter>
+                </form>
+              </Form>
+            </DialogContent>
+          </Dialog>
+        </CardHeader>
+        <CardContent>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Name</TableHead>
+                <TableHead>Email</TableHead>
+                <TableHead>Phone</TableHead>
+                <TableHead>Role</TableHead>
+                <TableHead><span className="sr-only">Actions</span></TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {users.map((u) => (
+                <TableRow key={u.id}>
+                  <TableCell className="font-medium">{u.name}</TableCell>
+                  <TableCell>{u.email}</TableCell>
+                  <TableCell>{u.phoneNumber}</TableCell>
+                  <TableCell><RoleBadge role={u.role} /></TableCell>
+                  <TableCell className="text-right">
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" className="h-8 w-8 p-0" disabled={u.id === user?.id}>
+                          <span className="sr-only">Open menu</span>
+                          <MoreHorizontal className="h-4 w-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                        <DropdownMenuItem onSelect={() => setUserToEdit(u)} disabled={u.id === user?.id}><Edit className="mr-2 h-4 w-4" />Edit user</DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem className="text-destructive focus:text-destructive focus:bg-destructive/10" onSelect={() => setUserToDelete(u)} disabled={u.id === user?.id}>
+                          <Trash2 className="mr-2 h-4 w-4" />
+                          Delete
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
       
       {/* Edit User Dialog */}
       <Dialog open={isEditUserOpen} onOpenChange={setIsEditUserOpen}>
