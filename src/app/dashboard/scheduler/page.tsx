@@ -21,7 +21,7 @@ export default function SchedulerPage() {
     const router = useRouter();
     const [isLoading, setIsLoading] = useState(true);
     const [isGenerating, setIsGenerating] = useState(false);
-    const [tournament, setTournament] = useState<Tournament | null>(null);
+    const [tournament, setTournament] = useState<(Omit<Tournament, 'date'> & { date: Date }) | null>(null);
     const [teams, setTeams] = useState<Team[]>([]);
     const [matches, setMatches] = useState<Match[]>([]);
     
@@ -36,7 +36,7 @@ export default function SchedulerPage() {
                     return;
                 }
                 const tourneyDoc = tournamentSnap.docs[0];
-                const tourneyData = tourneyDoc.data() as Omit<Tournament, 'id' | 'date'> & { date: Timestamp };
+                const tourneyData = tourneyDoc.data() as Omit<Tournament, 'id'|'date'> & { date: Timestamp };
                 setTournament({ 
                     id: tourneyDoc.id, 
                     ...tourneyData,
@@ -85,14 +85,7 @@ export default function SchedulerPage() {
             const tournamentRef = doc(db, 'tournaments', tournament.id);
             await updateDoc(tournamentRef, { status: 'IN_PROGRESS', startedAt: new Date() });
             
-            // Create a plain object for the tournament data to pass to the flow
-            const plainTournament = { 
-                ...tournament,
-                date: tournament.date.toISOString(),
-            };
-
-
-            const generatedMatches = await scheduleMatches({ teams, tournament: plainTournament });
+            const generatedMatches = await scheduleMatches({ teams, tournament });
             
             if (!generatedMatches || generatedMatches.length === 0) {
                 toast({ title: 'Schedule Generation Failed', description: 'The AI could not generate a schedule. Please try again.', variant: 'destructive' });

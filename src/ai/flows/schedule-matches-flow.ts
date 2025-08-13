@@ -21,6 +21,7 @@ const TeamSchema = z.object({
     organizationId: z.string(),
     genderP1: z.enum(['male', 'female']).optional(),
     genderP2: z.enum(['male', 'female']).optional(),
+    photoUrl: z.string().optional(),
 });
 
 const TournamentSchema = z.object({
@@ -29,8 +30,9 @@ const TournamentSchema = z.object({
     numberOfCourts: z.number(),
     courtNames: z.array(z.object({ name: z.string() })),
     tournamentType: z.enum(['round-robin', 'knockout']),
-    // The client sends a JS Date, which serializes to a string.
-    date: z.string(),
+    date: z.date({ coerce: true }),
+    status: z.enum(['PENDING', 'IN_PROGRESS', 'COMPLETED']).optional(),
+    startedAt: z.date({ coerce: true }).optional(),
 });
 
 const ScheduleMatchesInputSchema = z.object({
@@ -99,16 +101,7 @@ const scheduleMatchesFlow = ai.defineFlow(
     outputSchema: ScheduleMatchesOutputSchema,
   },
   async (input) => {
-    // The date comes in as a string, so we ensure it's a Date object for the prompt.
-    const promptInput = {
-      ...input,
-      tournament: {
-        ...input.tournament,
-        date: new Date(input.tournament.date),
-      },
-    };
-
-    const { output } = await schedulePrompt(promptInput);
+    const { output } = await schedulePrompt(input);
     if (!output) {
       throw new Error('Failed to generate a schedule.');
     }
@@ -125,7 +118,7 @@ const scheduleMatchesFlow = ai.defineFlow(
 // Wrapper function to be called from the application
 export async function scheduleMatches(input: {
     teams: Team[],
-    tournament: Tournament
+    tournament: Omit<Tournament, 'date'> & { date: Date }
 }): Promise<(Omit<Match, 'id' | 'startTime'> & { startTime: Date })[]> {
     const result = await scheduleMatchesFlow(input);
     return result.matches;
