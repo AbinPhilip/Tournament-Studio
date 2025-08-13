@@ -29,8 +29,8 @@ const TournamentSchema = z.object({
     numberOfCourts: z.number(),
     courtNames: z.array(z.object({ name: z.string() })),
     tournamentType: z.enum(['round-robin', 'knockout']),
-    // Date is for planning, but the AI will schedule for a single day starting at 9 AM.
-    date: z.date(), 
+    // The client sends a JS Date, which serializes to a string.
+    date: z.date({ coerce: true }), 
 });
 
 const ScheduleMatchesInputSchema = z.object({

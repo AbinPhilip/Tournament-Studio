@@ -34,7 +34,7 @@ import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import { db } from '@/lib/firebase';
 import { collection, doc, getDocs, setDoc, updateDoc, DocumentReference, deleteDoc, query, Timestamp } from 'firebase/firestore';
-import type { Tournament, TournamentType } from '@/types';
+import type { Tournament } from '@/types';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useRouter } from 'next/navigation';
 import { format } from 'date-fns';
@@ -99,11 +99,11 @@ export default function TournamentAdminPage() {
         const querySnapshot = await getDocs(collection(db, 'tournaments'));
         if (!querySnapshot.empty) {
           const tournamentDoc = querySnapshot.docs[0];
-          const data = tournamentDoc.data() as Tournament;
+          const data = tournamentDoc.data() as Omit<Tournament, 'id'|'date'> & { date: Timestamp };
           setTournamentDocRef(tournamentDoc.ref);
           form.reset({
             ...data,
-            date: (data.date as Timestamp).toDate(),
+            date: data.date.toDate(),
           });
         } else {
             setTournamentDocRef(null);
@@ -125,7 +125,7 @@ export default function TournamentAdminPage() {
       };
 
       if (tournamentDocRef) {
-        await updateDoc(tournamentDocRef, dataToSave);
+        await updateDoc(tournamentDocRef, dataToSave as { [x: string]: any });
       } else {
         const q = query(collection(db, 'tournaments'));
         const querySnapshot = await getDocs(q);

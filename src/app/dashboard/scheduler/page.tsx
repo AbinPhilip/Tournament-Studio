@@ -6,12 +6,11 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
 import { db } from '@/lib/firebase';
-import { collection, getDocs, writeBatch, doc, query, updateDoc } from 'firebase/firestore';
+import { collection, getDocs, writeBatch, doc, query, updateDoc, Timestamp } from 'firebase/firestore';
 import type { Tournament, Team, Match, TeamType } from '@/types';
-import { Loader2, CalendarPlus, Trash2, ArrowLeft, PlayCircle } from 'lucide-react';
+import { Loader2, PlayCircle, Trash2, ArrowLeft } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { scheduleMatches } from '@/ai/flows/schedule-matches-flow';
-import { Timestamp } from 'firebase/firestore';
 import { format } from 'date-fns';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
@@ -37,15 +36,27 @@ export default function SchedulerPage() {
                     return;
                 }
                 const tourneyDoc = tournamentSnap.docs[0];
-                setTournament({ id: tourneyDoc.id, ...tourneyDoc.data() } as Tournament);
+                const tourneyData = tourneyDoc.data() as Omit<Tournament, 'id' | 'date'> & { date: Timestamp };
+                setTournament({ 
+                    id: tourneyDoc.id, 
+                    ...tourneyData,
+                    date: tourneyData.date.toDate() // Convert Timestamp to JS Date
+                } as Tournament);
 
                 const teamsSnap = await getDocs(collection(db, 'teams'));
                 setTeams(teamsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Team)));
 
                 const matchesSnap = await getDocs(collection(db, 'matches'));
-                const matchesData = matchesSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Match))
-                    .sort((a, b) => a.startTime.toMillis() - b.startTime.toMillis());
-                setMatches(matchesData);
+                const matchesData = matchesSnap.docs.map(doc => {
+                    const match = doc.data() as Omit<Match, 'id' | 'startTime'> & { startTime: Timestamp };
+                    return {
+                        id: doc.id,
+                        ...match,
+                        startTime: match.startTime.toDate()
+                    }
+                })
+                .sort((a, b) => a.startTime.getTime() - b.startTime.getTime());
+                setMatches(matchesData as Match[]);
 
             } catch (error) {
                 console.error("Error fetching data:", error);
@@ -75,12 +86,7 @@ export default function SchedulerPage() {
             await updateDoc(tournamentRef, { status: 'IN_PROGRESS', startedAt: new Date() });
             
             // Now generate the matches
-            const tournamentWithDate = {
-                ...tournament,
-                date: tournament.date.toDate() // Ensure date is a JS Date object for the flow
-            };
-
-            const generatedMatches = await scheduleMatches({ teams, tournament: tournamentWithDate });
+            const generatedMatches = await scheduleMatches({ teams, tournament });
             
             if (!generatedMatches || generatedMatches.length === 0) {
                 toast({ title: 'Schedule Generation Failed', description: 'The AI could not generate a schedule. Please try again.', variant: 'destructive' });
@@ -96,19 +102,19 @@ export default function SchedulerPage() {
             generatedMatches.forEach(matchData => {
                 const newDocRef = doc(matchesCollection);
                 const startTimeTimestamp = Timestamp.fromDate(matchData.startTime);
-                const newMatch: Match = {
-                    id: newDocRef.id,
+                const newMatch: Omit<Match, 'id'> = {
                     ...matchData,
                     startTime: startTimeTimestamp,
                 };
-                batch.set(newDocRef, { ...matchData, startTime: startTimeTimestamp });
-                newMatches.push(newMatch);
+                batch.set(newDocRef, newMatch);
+                newMatches.push({ id: newDocRef.id, ...newMatch } as Match);
             });
 
             await batch.commit();
             
-            newMatches.sort((a, b) => a.startTime.toMillis() - b.startTime.toMillis());
-            setMatches(newMatches);
+            const sortedMatches = newMatches.map(m => ({...m, startTime: (m.startTime as Timestamp).toDate()}))
+                                           .sort((a, b) => a.startTime.getTime() - b.startTime.getTime());
+            setMatches(sortedMatches as Match[]);
             setTournament(prev => prev ? { ...prev, status: 'IN_PROGRESS' } : null);
 
             toast({ title: 'Tournament Started & Schedule Generated!', description: `${newMatches.length} matches have been scheduled.` });
@@ -248,7 +254,7 @@ export default function SchedulerPage() {
                                     <TableBody>
                                         {groupedMatches[eventType].map(match => (
                                             <TableRow key={match.id}>
-                                                <TableCell className="font-medium">{format(match.startTime.toDate(), 'p')}</TableCell>
+                                                <TableCell className="font-medium">{format(match.startTime as Date, 'p')}</TableCell>
                                                 <TableCell>{match.courtName}</TableCell>
                                                 <TableCell>{match.team1Name}</TableCell>
                                                 <TableCell>{match.team2Name}</TableCell>
