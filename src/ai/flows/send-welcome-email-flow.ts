@@ -25,11 +25,11 @@ const sendWelcomeEmailFlow = ai.defineFlow(
     outputSchema: z.object({ success: z.boolean() }),
   },
   async (input) => {
-    const subject = 'Welcome to Battledore!';
+    const subject = 'Welcome to Score Vision!';
     const body = `
       Hello ${input.name},
 
-      Welcome to Battledore! Your account has been created successfully.
+      Welcome to Score Vision! Your account has been created successfully.
       
       You can log in using the following credentials:
       Username: ${input.username}
@@ -40,7 +40,7 @@ const sendWelcomeEmailFlow = ai.defineFlow(
       You can access the application at: ${input.appUrl}
 
       Best regards,
-      The Battledore Team
+      The Score Vision Team
     `;
 
     // In a real application, you would integrate an email sending service here.

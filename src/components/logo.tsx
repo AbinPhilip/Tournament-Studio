@@ -20,7 +20,7 @@ export function Logo() {
         <path d="M4 14.5h7" />
         <path d="M4 9.5h7" />
       </svg>
-      <span className="text-lg font-semibold text-primary">Battledore</span>
+      <span className="text-lg font-semibold text-primary">Score Vision</span>
     </div>
   );
 }
