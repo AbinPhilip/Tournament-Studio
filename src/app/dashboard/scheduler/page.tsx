@@ -8,7 +8,7 @@ import { useToast } from '@/hooks/use-toast';
 import { db } from '@/lib/firebase';
 import { collection, getDocs, writeBatch, doc, query, deleteDoc } from 'firebase/firestore';
 import type { Tournament, Team, Match, TeamType } from '@/types';
-import { Loader2, CalendarPlus, Trash2, ArrowLeft } from 'lucide-re';
+import { Loader2, CalendarPlus, Trash2, ArrowLeft } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { scheduleMatches } from '@/ai/flows/schedule-matches-flow';
 import { Timestamp } from 'firebase/firestore';
