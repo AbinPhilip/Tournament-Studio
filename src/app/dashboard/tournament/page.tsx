@@ -133,6 +133,7 @@ export default function TournamentSettingsPage() {
   const [isEditTeamOpen, setIsEditTeamOpen] = useState(false);
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const inlineFileInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
   const [originalLotNumbers, setOriginalLotNumbers] = useState<Record<string, number | undefined>>({});
 
   const form = useForm<z.infer<typeof tournamentFormSchema>>({
@@ -428,6 +429,27 @@ export default function TournamentSettingsPage() {
         };
         reader.readAsDataURL(file);
     }
+  };
+  
+  const handleInlinePhotoChange = async (e: React.ChangeEvent<HTMLInputElement>, teamId: string) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onloadend = async () => {
+      const dataUrl = reader.result as string;
+      try {
+        const teamRef = doc(db, 'teams', teamId);
+        await updateDoc(teamRef, { photoUrl: dataUrl });
+        setTeams(prevTeams => prevTeams.map(t => 
+            t.id === teamId ? { ...t, photoUrl: dataUrl } : t
+        ));
+        toast({ title: 'Photo Updated', description: 'The team photo has been changed.' });
+      } catch (error) {
+        toast({ title: 'Error', description: 'Failed to update photo.', variant: 'destructive' });
+      }
+    };
+    reader.readAsDataURL(file);
   };
   
   const handleLotNumberChange = (teamId: string, value: string) => {
@@ -813,14 +835,26 @@ export default function TournamentSettingsPage() {
                       />
                     </TableCell>
                     <TableCell>
-                      <Image 
-                        data-ai-hint="badminton players"
-                        src={t.photoUrl || 'https://placehold.co/80x80.png'} 
-                        alt="Team photo" 
-                        width={80} 
-                        height={80} 
-                        className="rounded-md object-cover"
-                      />
+                        <div className="relative group cursor-pointer" onClick={() => inlineFileInputRefs.current[t.id]?.click()}>
+                           <Image 
+                             data-ai-hint="badminton players"
+                             src={t.photoUrl || 'https://placehold.co/80x80.png'} 
+                             alt="Team photo" 
+                             width={80} 
+                             height={80} 
+                             className="rounded-md object-cover group-hover:opacity-50 transition-opacity"
+                           />
+                           <div className="absolute inset-0 flex items-center justify-center bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity rounded-md">
+                                <Edit className="h-6 w-6 text-white" />
+                           </div>
+                           <Input
+                                type="file"
+                                className="hidden"
+                                ref={el => (inlineFileInputRefs.current[t.id] = el)}
+                                onChange={(e) => handleInlinePhotoChange(e, t.id)}
+                                accept="image/png, image/jpeg, image/gif"
+                            />
+                        </div>
                     </TableCell>
                     <TableCell className="font-medium capitalize">{t.type.replace('_', ' ')}</TableCell>
                     <TableCell>{t.player1Name}{t.player2Name ? ` & ${t.player2Name}`: ''}</TableCell>
