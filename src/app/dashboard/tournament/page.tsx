@@ -132,6 +132,7 @@ export default function TournamentSettingsPage() {
   const [isEditTeamOpen, setIsEditTeamOpen] = useState(false);
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [originalLotNumbers, setOriginalLotNumbers] = useState<Record<string, number | undefined>>({});
 
   const form = useForm<z.infer<typeof tournamentFormSchema>>({
     resolver: zodResolver(tournamentFormSchema),
@@ -192,7 +193,14 @@ export default function TournamentSettingsPage() {
             setTournamentDocRef(null);
         }
         
-        setTeams(teamsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Team)));
+        const fetchedTeams = teamsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Team));
+        setTeams(fetchedTeams);
+        const lotNumberMap: Record<string, number | undefined> = {};
+        fetchedTeams.forEach(team => {
+            lotNumberMap[team.id] = team.lotNumber;
+        });
+        setOriginalLotNumbers(lotNumberMap);
+
         setOrganizations(orgsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Organization)));
         
       } catch (error) {
@@ -412,6 +420,49 @@ export default function TournamentSettingsPage() {
         reader.readAsDataURL(file);
     }
   };
+  
+  const handleLotNumberChange = (teamId: string, value: string) => {
+    const newLotNumber = value === '' ? undefined : parseInt(value, 10);
+    if (value !== '' && isNaN(newLotNumber)) return; // Prevent non-numeric input
+
+    setTeams(prevTeams => prevTeams.map(t => 
+        t.id === teamId ? { ...t, lotNumber: newLotNumber } : t
+    ));
+  };
+  
+  const handleLotNumberBlur = async (teamId: string) => {
+    const team = teams.find(t => t.id === teamId);
+    if (!team) return;
+
+    const originalLot = originalLotNumbers[teamId];
+    const currentLot = team.lotNumber;
+    
+    // Only update if the value has actually changed
+    if (originalLot !== currentLot) {
+        try {
+            const teamRef = doc(db, 'teams', teamId);
+            await updateDoc(teamRef, { lotNumber: currentLot === undefined ? null : currentLot });
+            
+            // Update the original value in state to prevent re-triggers
+            setOriginalLotNumbers(prev => ({ ...prev, [teamId]: currentLot }));
+            
+            toast({
+                title: 'Lot Number Updated',
+                description: `Lot number for ${team.player1Name} saved.`
+            });
+        } catch (error) {
+            toast({
+                title: 'Error Saving Lot Number',
+                variant: 'destructive'
+            });
+            // Revert the change in UI on failure
+            setTeams(prevTeams => prevTeams.map(t => 
+                t.id === teamId ? { ...t, lotNumber: originalLot } : t
+            ));
+        }
+    }
+  };
+
 
   const TeamFormContent = ({ isEditing }: { isEditing: boolean }) => {
     const teamType = teamForm.watch('type');
@@ -721,7 +772,16 @@ export default function TournamentSettingsPage() {
               <TableBody>
                 {teams.map((t) => (
                   <TableRow key={t.id}>
-                    <TableCell>{t.lotNumber || 'N/A'}</TableCell>
+                    <TableCell>
+                      <Input
+                        type="number"
+                        className="w-20"
+                        value={t.lotNumber ?? ''}
+                        onChange={(e) => handleLotNumberChange(t.id, e.target.value)}
+                        onBlur={() => handleLotNumberBlur(t.id)}
+                        placeholder="N/A"
+                      />
+                    </TableCell>
                     <TableCell>
                       <Image 
                         data-ai-hint="badminton players"
@@ -939,3 +999,5 @@ export default function TournamentSettingsPage() {
     </div>
   );
 }
+
+    
