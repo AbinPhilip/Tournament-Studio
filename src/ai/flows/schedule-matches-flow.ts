@@ -30,7 +30,7 @@ const TournamentSchema = z.object({
     courtNames: z.array(z.object({ name: z.string() })),
 });
 
-export const ScheduleMatchesInputSchema = z.object({
+const ScheduleMatchesInputSchema = z.object({
   teams: z.array(TeamSchema),
   tournament: TournamentSchema,
 });
@@ -47,7 +47,7 @@ const MatchSchema = z.object({
     status: z.enum(['PENDING', 'SCHEDULED', 'IN_PROGRESS', 'COMPLETED']),
 });
 
-export const ScheduleMatchesOutputSchema = z.object({
+const ScheduleMatchesOutputSchema = z.object({
     matches: z.array(MatchSchema),
 });
 export type ScheduleMatchesOutput = z.infer<typeof ScheduleMatchesOutputSchema>;
