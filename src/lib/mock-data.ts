@@ -1,3 +1,4 @@
+
 import type { User, AppData, Team, Organization } from '@/types';
 
 // This file now only contains the structure for seeding data.
@@ -27,9 +28,10 @@ export const mockOrganizations: Omit<Organization, 'id'>[] = [
     { name: 'Japan National Team', location: 'Tokyo, Japan' },
 ];
 
-export const mockTeams: Omit<Team, 'id'>[] = [
-    { type: 'mens_doubles', player1Name: 'Lee Chong Wei', player2Name: 'Lin Dan', organizationId: '1', genderP1: 'male' },
-    { type: 'mixed_doubles', player1Name: 'Tontowi Ahmad', player2Name: 'Liliyana Natsir', organizationId: '2', genderP1: 'male' },
-    { type: 'singles', player1Name: 'Carolina Marín', organizationId: '3' },
-    { type: 'womens_doubles', player1Name: 'Yuki Fukushima', player2Name: 'Sayaka Hirota', organizationId: '4' },
+// Changed `organizationId` to `organizationName` for more robust mapping during seed.
+export const mockTeams: (Omit<Team, 'id' | 'organizationId'> & { organizationName: string })[] = [
+    { type: 'mens_doubles', player1Name: 'Lee Chong Wei', player2Name: 'Lin Dan', organizationName: 'Legends Club' },
+    { type: 'mixed_doubles', player1Name: 'Tontowi Ahmad', player2Name: 'Liliyana Natsir', organizationName: 'Indonesia National Team', genderP1: 'male', genderP2: 'female' },
+    { type: 'singles', player1Name: 'Carolina Marín', organizationName: 'Spain National Team' },
+    { type: 'womens_doubles', player1Name: 'Yuki Fukushima', player2Name: 'Sayaka Hirota', organizationName: 'Japan National Team' },
 ];
