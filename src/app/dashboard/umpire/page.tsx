@@ -17,7 +17,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
 import { db } from '@/lib/firebase';
-import { collection, getDocs, query, orderBy } from 'firebase/firestore';
+import { collection, getDocs, query, orderBy, Timestamp } from 'firebase/firestore';
 import type { Match, TeamType } from '@/types';
 import { Loader2, ArrowLeft, Pencil } from 'lucide-react';
 import { useRouter } from 'next/navigation';
@@ -52,10 +52,10 @@ export default function UmpirePage() {
     const fetchMatches = async () => {
         setIsLoading(true);
         try {
-            const matchesQuery = query(collection(db, 'matches'), orderBy('courtName'), orderBy('startTime'));
+            const matchesQuery = query(collection(db, 'matches'), orderBy('startTime'));
             const matchesSnap = await getDocs(matchesQuery);
-            const matchesData = matchesSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Match));
-            setMatches(matchesData);
+            const matchesData = matchesSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Omit<Match, 'startTime'> & {startTime: Timestamp})).map(m => ({...m, startTime: m.startTime.toDate()}));
+            setMatches(matchesData as Match[]);
         } catch (error) {
             console.error("Error fetching matches:", error);
             toast({ title: 'Error', description: 'Failed to fetch matches.', variant: 'destructive' });
@@ -66,7 +66,7 @@ export default function UmpirePage() {
     
     useEffect(() => {
         fetchMatches();
-    }, []);
+    }, [toast]);
     
     useEffect(() => {
         if (selectedMatch) {
@@ -100,7 +100,7 @@ export default function UmpirePage() {
 
             setIsDialogOpen(false);
             setSelectedMatch(null);
-            fetchMatches(); // Refresh the matches list to show new state and potential new matches
+            await fetchMatches(); // Refresh the matches list to show new state and potential new matches
         } catch (error) {
             console.error(error);
             toast({ title: 'Error', description: 'Failed to record match result.', variant: 'destructive' });
@@ -175,7 +175,7 @@ export default function UmpirePage() {
                                     <TableBody>
                                         {groupedMatchesByCourt[courtName].map(match => (
                                             <TableRow key={match.id}>
-                                                <TableCell className="font-medium">{format(match.startTime.toDate(), 'p')}</TableCell>
+                                                <TableCell className="font-medium">{format(match.startTime, 'p')}</TableCell>
                                                 <TableCell className="capitalize">{match.eventType.replace(/_/g, ' ')}</TableCell>
                                                 <TableCell className={match.winnerId === match.team1Id ? 'font-bold' : ''}>{match.team1Name}</TableCell>
                                                 <TableCell className={match.winnerId === match.team2Id ? 'font-bold' : ''}>{match.team2Name}</TableCell>
@@ -201,7 +201,12 @@ export default function UmpirePage() {
                 )}
             </CardContent>
 
-             <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+             <Dialog open={isDialogOpen} onOpenChange={(isOpen) => {
+                 if (!isOpen) {
+                     setSelectedMatch(null);
+                 }
+                 setIsDialogOpen(isOpen);
+             }}>
                 <DialogContent>
                 <DialogHeader>
                     <DialogTitle>Record Score</DialogTitle>
