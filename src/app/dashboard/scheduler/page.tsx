@@ -40,7 +40,7 @@ export default function SchedulerPage() {
                 setTournament({ 
                     id: tourneyDoc.id, 
                     ...tourneyData,
-                    date: tourneyData.date.toDate() // Convert Timestamp to JS Date
+                    date: tourneyData.date.toDate() 
                 } as Tournament);
 
                 const teamsSnap = await getDocs(collection(db, 'teams'));
@@ -85,8 +85,12 @@ export default function SchedulerPage() {
             const tournamentRef = doc(db, 'tournaments', tournament.id);
             await updateDoc(tournamentRef, { status: 'IN_PROGRESS', startedAt: new Date() });
             
-            // Now generate the matches
-            const generatedMatches = await scheduleMatches({ teams, tournament });
+            // Create a plain object for the tournament data to pass to the flow
+            const { id, location, numberOfCourts, courtNames, tournamentType, date } = tournament;
+            const plainTournament = { id, location, numberOfCourts, courtNames, tournamentType, date };
+
+
+            const generatedMatches = await scheduleMatches({ teams, tournament: plainTournament });
             
             if (!generatedMatches || generatedMatches.length === 0) {
                 toast({ title: 'Schedule Generation Failed', description: 'The AI could not generate a schedule. Please try again.', variant: 'destructive' });
