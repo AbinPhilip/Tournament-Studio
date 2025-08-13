@@ -83,7 +83,7 @@ export function LoginForm() {
                 <FormItem>
                   <FormLabel>Username</FormLabel>
                   <FormControl>
-                    <Input placeholder="e.g. admin_user" {...field} />
+                    <Input placeholder="admin_user" {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -96,7 +96,7 @@ export function LoginForm() {
                 <FormItem>
                   <FormLabel>Phone Number</FormLabel>
                   <FormControl>
-                    <Input type="tel" placeholder="e.g. 7778889999" {...field} />
+                    <Input type="tel" placeholder="7778889999" {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
