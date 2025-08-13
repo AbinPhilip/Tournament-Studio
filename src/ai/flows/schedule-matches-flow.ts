@@ -24,7 +24,7 @@ const TeamSchema = z.object({
 const TournamentSchema = z.object({
     id: z.string(),
     location: z.string(),
-    date: z.date(),
+    date: z.string().datetime(),
     numberOfCourts: z.number(),
     courtNames: z.array(z.object({ name: z.string() })),
     tournamentType: z.enum(['round-robin', 'knockout']),
