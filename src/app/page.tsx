@@ -12,46 +12,50 @@ export default function Home() {
   const { user, loading: authLoading } = useAuth();
   const router = useRouter();
   const [isCheckingDb, setIsCheckingDb] = useState(true);
-  const [dbIsEmpty, setDbIsEmpty] = useState(false);
-
+  
   useEffect(() => {
-    const checkDatabase = async () => {
-      setIsCheckingDb(true);
+    const checkDatabaseAndRedirect = async () => {
       try {
         const usersCollectionRef = collection(db, 'users');
         const q = query(usersCollectionRef, limit(1));
         const snapshot = await getDocs(q);
         
         if (snapshot.empty) {
-          setDbIsEmpty(true);
+          // If DB is empty, go straight to seeding, no auth check needed.
           router.replace('/dashboard/seed-database');
         } else {
-           setDbIsEmpty(false);
+          // If DB has data, now we check auth state.
+          // This part of the logic runs only when the DB is NOT empty.
+          if (!authLoading) {
+            if (user) {
+              router.replace('/dashboard');
+            } else {
+              router.replace('/login');
+            }
+          }
         }
       } catch (error) {
         console.error("Failed to check database:", error);
-        // Fallback to login on error, assuming DB might exist but is inaccessible
-        setDbIsEmpty(false);
+        // On error, the safest bet is to go to login.
+        if (!authLoading) {
+            router.replace('/login');
+        }
       } finally {
+        // The loading state should only be turned off after a decision is made.
+        // In the case of a populated DB, the second effect will handle it.
+        // We set it to false here for the empty DB case.
         setIsCheckingDb(false);
       }
     };
 
-    checkDatabase();
-  }, [router]);
-  
-  useEffect(() => {
-    // This effect handles redirection after the DB check and auth state are known.
-    if (!isCheckingDb && !dbIsEmpty && !authLoading) {
-        if (user) {
-            router.replace('/dashboard');
-        } else {
-            router.replace('/login');
-        }
+    // We only run this check once on mount.
+    // The second useEffect will handle re-routing if auth state changes later.
+    if(isCheckingDb) {
+        checkDatabaseAndRedirect();
     }
-  }, [user, authLoading, isCheckingDb, dbIsEmpty, router]);
-
-  // Show a loader while we determine where to go.
+  }, [router, authLoading, user, isCheckingDb]);
+  
+  // This loader will be shown until one of the redirects happen.
   return (
     <div className="flex h-screen w-full flex-col items-center justify-center bg-background text-foreground">
       <Loader2 className="h-12 w-12 animate-spin text-primary" />
