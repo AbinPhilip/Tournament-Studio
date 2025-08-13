@@ -20,13 +20,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     try {
-      const storedUser = localStorage.getItem('roleplay_user');
+      const storedUser = localStorage.getItem('battledore_user');
       if (storedUser) {
         setUser(JSON.parse(storedUser));
       }
     } catch (error) {
       console.error('Failed to parse user from localStorage', error);
-      localStorage.removeItem('roleplay_user');
+      localStorage.removeItem('battledore_user');
     } finally {
       setLoading(false);
     }
@@ -39,7 +39,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     );
 
     if (foundUser) {
-      localStorage.setItem('roleplay_user', JSON.stringify(foundUser));
+      localStorage.setItem('battledore_user', JSON.stringify(foundUser));
       setUser(foundUser);
       setLoading(false);
       return foundUser;
@@ -50,13 +50,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const logout = useCallback(() => {
-    localStorage.removeItem('roleplay_user');
+    localStorage.removeItem('battledore_user');
     setUser(null);
   }, []);
   
   const updateUserContext = useCallback((updatedUser: User) => {
     setUser(updatedUser);
-    localStorage.setItem('roleplay_user', JSON.stringify(updatedUser));
+    localStorage.setItem('battledore_user', JSON.stringify(updatedUser));
   }, []);
 
   return (

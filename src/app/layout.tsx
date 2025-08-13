@@ -4,8 +4,8 @@ import { AuthProvider } from '@/components/auth-provider';
 import { Toaster } from '@/components/ui/toaster';
 
 export const metadata: Metadata = {
-  title: 'RolePlay',
-  description: 'A sample web app with role-based access.',
+  title: 'Battledore',
+  description: 'A web app for managing badminton tournaments.',
 };
 
 export default function RootLayout({
