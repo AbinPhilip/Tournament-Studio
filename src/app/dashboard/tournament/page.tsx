@@ -18,14 +18,15 @@ import {
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
-import { CalendarIcon, Save } from 'lucide-react';
+import { CalendarIcon, Save, ArrowLeft } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 import { useToast } from '@/hooks/use-toast';
 import { db } from '@/lib/firebase';
-import { collection, doc, getDocs, setDoc, updateDoc } from 'firebase/firestore';
+import { collection, doc, getDocs, setDoc, updateDoc, Timestamp } from 'firebase/firestore';
 import type { Tournament } from '@/types';
 import { Skeleton } from '@/components/ui/skeleton';
+import { useRouter } from 'next/navigation';
 
 const tournamentFormSchema = z.object({
   location: z.string().min(3, { message: 'Location must be at least 3 characters.' }),
@@ -36,6 +37,7 @@ const tournamentFormSchema = z.object({
 
 export default function TournamentAdminPage() {
   const { toast } = useToast();
+  const router = useRouter();
   const [tournamentId, setTournamentId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -90,15 +92,21 @@ export default function TournamentAdminPage() {
 
   const onSubmit = async (values: z.infer<typeof tournamentFormSchema>) => {
     try {
+      const dataToSave = {
+        ...values,
+        date: Timestamp.fromDate(values.date),
+      };
+
       if (tournamentId) {
-        await updateDoc(doc(db, 'tournaments', tournamentId), values);
+        await updateDoc(doc(db, 'tournaments', tournamentId), dataToSave);
       } else {
         const newDocRef = doc(collection(db, 'tournaments'));
-        await setDoc(newDocRef, values);
+        await setDoc(newDocRef, dataToSave);
         setTournamentId(newDocRef.id);
       }
       toast({ title: 'Success', description: 'Tournament details have been saved.' });
     } catch (error) {
+      console.error(error);
       toast({ title: 'Error', description: 'Failed to save tournament details.', variant: 'destructive' });
     }
   };
@@ -225,10 +233,16 @@ export default function TournamentAdminPage() {
               </div>
             </div>
 
-            <Button type="submit">
-                <Save className="mr-2 h-4 w-4" />
-                Save Tournament Settings
-            </Button>
+            <div className="flex gap-4">
+                <Button type="submit">
+                    <Save className="mr-2 h-4 w-4" />
+                    Save Tournament Settings
+                </Button>
+                 <Button type="button" variant="outline" onClick={() => router.push('/dashboard')}>
+                    <ArrowLeft className="mr-2 h-4 w-4" />
+                    Back to Dashboard
+                </Button>
+            </div>
           </form>
         </Form>
       </CardContent>
