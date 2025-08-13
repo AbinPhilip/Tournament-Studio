@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   Table,
   TableBody,
@@ -16,18 +16,27 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogC
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
-import { mockAppData } from '@/lib/mock-data';
 import type { AppData } from '@/types';
 import { useAuth } from '@/hooks/use-auth';
 import { Pencil } from 'lucide-react';
+import { db } from '@/lib/firebase';
+import { collection, getDocs, doc, updateDoc } from 'firebase/firestore';
 
 export default function UpdateUserView() {
   const { user } = useAuth();
-  const [data, setData] = useState<AppData[]>(mockAppData);
+  const [data, setData] = useState<AppData[]>([]);
   const [selectedItem, setSelectedItem] = useState<AppData | null>(null);
   const [editValue, setEditValue] = useState('');
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const { toast } = useToast();
+
+  useEffect(() => {
+    const fetchData = async () => {
+        const appDataSnap = await getDocs(collection(db, 'appData'));
+        setData(appDataSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as AppData)));
+    };
+    fetchData();
+  }, []);
 
   const handleEditClick = (item: AppData) => {
     setSelectedItem(item);
@@ -35,12 +44,11 @@ export default function UpdateUserView() {
     setIsDialogOpen(true);
   };
 
-  const handleSaveChanges = () => {
+  const handleSaveChanges = async () => {
     if (!selectedItem || !user) return;
     
     let isFlagged = selectedItem.isFlagged;
     
-    // AI Tool simulation: Flag if a numeric value changes by more than 20%
     const originalNumericValue = parseFloat(selectedItem.value);
     const newNumericValue = parseFloat(editValue);
 
@@ -55,24 +63,34 @@ export default function UpdateUserView() {
         });
       }
     }
+    
+    const updatedItemData = {
+        value: editValue,
+        lastUpdated: new Date().toISOString(),
+        updatedBy: user.name,
+        isFlagged,
+    };
 
-    const updatedData = data.map((item) =>
-      item.id === selectedItem.id
-        ? {
-            ...item,
-            value: editValue,
-            lastUpdated: new Date().toISOString(),
-            updatedBy: user.name,
-            isFlagged,
-          }
-        : item
-    );
+    try {
+        await updateDoc(doc(db, 'appData', selectedItem.id as string), updatedItemData);
+        
+        const updatedData = data.map((item) =>
+          item.id === selectedItem.id ? { ...item, ...updatedItemData } : item
+        );
+        setData(updatedData);
 
-    setData(updatedData);
-    toast({
-        title: "Update Successful",
-        description: `"${selectedItem.name}" has been updated to "${editValue}".`,
-    });
+        toast({
+            title: "Update Successful",
+            description: `"${selectedItem.name}" has been updated by ${user.name}.`,
+        });
+    } catch (error) {
+        toast({
+            title: "Update Failed",
+            description: "An error occurred while saving changes.",
+            variant: "destructive",
+        });
+    }
+    
     setIsDialogOpen(false);
     setSelectedItem(null);
   };

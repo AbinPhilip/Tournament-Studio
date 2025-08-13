@@ -17,6 +17,8 @@ import {
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
 import type { User } from '@/types';
+import { db } from '@/lib/firebase';
+import { doc, updateDoc } from 'firebase/firestore';
 
 const profileFormSchema = z.object({
   name: z.string().min(2, { message: 'Name must be at least 2 characters.' }),
@@ -35,14 +37,27 @@ export default function IndividualView() {
     },
   });
 
-  function onSubmit(values: z.infer<typeof profileFormSchema>) {
+  async function onSubmit(values: z.infer<typeof profileFormSchema>) {
     if (user) {
-        const updatedUser: User = { ...user, ...values };
-        updateUserContext(updatedUser);
-        toast({
-          title: 'Profile Updated',
-          description: 'Your information has been successfully updated.',
-        });
+        try {
+            const userRef = doc(db, 'users', user.id);
+            await updateDoc(userRef, {
+                name: values.name,
+                email: values.email,
+            });
+            const updatedUser: User = { ...user, ...values };
+            updateUserContext(updatedUser);
+            toast({
+              title: 'Profile Updated',
+              description: 'Your information has been successfully updated.',
+            });
+        } catch(error) {
+            toast({
+              title: 'Error',
+              description: 'Failed to update your profile.',
+              variant: 'destructive'
+            });
+        }
     }
   }
   

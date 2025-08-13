@@ -10,7 +10,7 @@ export interface User {
 }
 
 export interface AppData {
-  id: number;
+  id: string | number;
   name: string;
   value: string;
   lastUpdated: string;
@@ -35,5 +35,3 @@ export interface Team {
     genderP1?: Gender;
     organizationId: string;
 }
-
-    

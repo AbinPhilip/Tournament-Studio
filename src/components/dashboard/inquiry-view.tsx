@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   Table,
   TableBody,
@@ -11,13 +11,22 @@ import {
 } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { mockAppData } from '@/lib/mock-data';
 import type { AppData } from '@/types';
 import { useAuth } from '@/hooks/use-auth';
+import { db } from '@/lib/firebase';
+import { collection, getDocs } from 'firebase/firestore';
 
 export default function InquiryView() {
   const { user } = useAuth();
-  const [data] = useState<AppData[]>(mockAppData);
+  const [data, setData] = useState<AppData[]>([]);
+
+  useEffect(() => {
+    const fetchData = async () => {
+        const appDataSnap = await getDocs(collection(db, 'appData'));
+        setData(appDataSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as AppData)));
+    };
+    fetchData();
+  }, []);
 
   return (
     <div>

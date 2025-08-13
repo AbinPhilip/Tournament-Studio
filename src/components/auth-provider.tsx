@@ -2,7 +2,9 @@
 
 import React, { createContext, useState, useEffect, useCallback } from 'react';
 import type { User } from '@/types';
-import { mockUsers } from '@/lib/mock-data';
+import { db } from '@/lib/firebase';
+import { collection, query, where, getDocs } from 'firebase/firestore';
+
 
 interface AuthContextType {
   user: User | null;
@@ -34,19 +36,29 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const login = useCallback(async (username: string, phoneNumber: string): Promise<User | null> => {
     setLoading(true);
-    const foundUser = mockUsers.find(
-      (u) => u.username === username && u.phoneNumber === phoneNumber
-    );
+    try {
+      const usersRef = collection(db, 'users');
+      const q = query(
+        usersRef,
+        where('username', '==', username),
+        where('phoneNumber', '==', phoneNumber)
+      );
+      const querySnapshot = await getDocs(q);
 
-    if (foundUser) {
-      localStorage.setItem('battledore_user', JSON.stringify(foundUser));
-      setUser(foundUser);
+      if (!querySnapshot.empty) {
+        const userDoc = querySnapshot.docs[0];
+        const foundUser = { id: userDoc.id, ...userDoc.data() } as User;
+        localStorage.setItem('battledore_user', JSON.stringify(foundUser));
+        setUser(foundUser);
+        return foundUser;
+      }
+      return null;
+    } catch (error) {
+      console.error("Firebase login error:", error);
+      return null;
+    } finally {
       setLoading(false);
-      return foundUser;
     }
-    
-    setLoading(false);
-    return null;
   }, []);
 
   const logout = useCallback(() => {

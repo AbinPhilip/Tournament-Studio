@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -16,10 +16,9 @@ import { Badge, type BadgeProps } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Switch } from '@/components/ui/switch';
-import { mockUsers, mockTeams, mockOrganizations } from '@/lib/mock-data';
 import type { User, UserRole, Team, Organization } from '@/types';
 import { useAuth } from '@/hooks/use-auth';
-import { MoreHorizontal, Trash2, UserPlus, Users as TeamsIcon, Building, PlusCircle } from 'lucide-react';
+import { MoreHorizontal, Trash2, UserPlus, Users as TeamsIcon, Building, PlusCircle, Database } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -66,6 +65,9 @@ import {
 } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
+import { db } from '@/lib/firebase';
+import { collection, getDocs, addDoc, deleteDoc, doc, query, where } from 'firebase/firestore';
+import Link from 'next/link';
 
 function RoleBadge({ role }: { role: UserRole }) {
     const variant: BadgeProps["variant"] = {
@@ -119,14 +121,29 @@ const teamFormSchema = z.object({
 export default function AdminView() {
   const { user } = useAuth();
   const { toast } = useToast();
-  const [users, setUsers] = useState<User[]>(mockUsers);
-  const [teams, setTeams] = useState<Team[]>(mockTeams);
-  const [organizations, setOrganizations] = useState<Organization[]>(mockOrganizations);
+  const [users, setUsers] = useState<User[]>([]);
+  const [teams, setTeams] = useState<Team[]>([]);
+  const [organizations, setOrganizations] = useState<Organization[]>([]);
   const [maintenanceMode, setMaintenanceMode] = useState(false);
   const [userToDelete, setUserToDelete] = useState<User | null>(null);
   const [isAddUserOpen, setIsAddUserOpen] = useState(false);
   const [isAddTeamOpen, setIsAddTeamOpen] = useState(false);
   const [isAddOrgOpen, setIsAddOrgOpen] = useState(false);
+
+  const fetchData = async () => {
+    const [usersSnap, teamsSnap, orgsSnap] = await Promise.all([
+        getDocs(collection(db, 'users')),
+        getDocs(collection(db, 'teams')),
+        getDocs(collection(db, 'organizations')),
+    ]);
+    setUsers(usersSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as User)));
+    setTeams(teamsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Team)));
+    setOrganizations(orgsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Organization)));
+  };
+
+  useEffect(() => {
+    fetchData();
+  }, []);
 
   const userForm = useForm<z.infer<typeof userFormSchema>>({
     resolver: zodResolver(userFormSchema),
@@ -145,44 +162,71 @@ export default function AdminView() {
 
   const teamType = teamForm.watch('type');
 
-  const handleDeleteUser = () => {
+  const handleDeleteUser = async () => {
     if(!userToDelete || userToDelete.id === user?.id) return;
-    setUsers(users.filter(u => u.id !== userToDelete.id));
+    try {
+        await deleteDoc(doc(db, 'users', userToDelete.id));
+        setUsers(users.filter(u => u.id !== userToDelete.id));
+        toast({ title: 'Success', description: 'User has been deleted.' });
+    } catch (error) {
+        toast({ title: 'Error', description: 'Failed to delete user.', variant: 'destructive' });
+    }
     setUserToDelete(null);
   }
 
-  const handleAddUser = (values: z.infer<typeof userFormSchema>) => {
-    const newUser: User = { id: (users.length + 1).toString(), ...values, role: values.role as UserRole };
-    setUsers([...users, newUser]);
-    toast({ title: 'User Created', description: `User "${newUser.name}" has been added.` });
-    setIsAddUserOpen(false);
-    userForm.reset();
+  const handleAddUser = async (values: z.infer<typeof userFormSchema>) => {
+    try {
+      const userExistsQuery = query(collection(db, 'users'), where('username', '==', values.username));
+      const userExistsSnap = await getDocs(userExistsQuery);
+      if (!userExistsSnap.empty) {
+        toast({ title: 'Error', description: 'Username already exists.', variant: 'destructive' });
+        return;
+      }
+
+      const newUserDoc = await addDoc(collection(db, 'users'), values);
+      const newUser: User = { id: newUserDoc.id, ...values, role: values.role as UserRole };
+      setUsers([...users, newUser]);
+      toast({ title: 'User Created', description: `User "${newUser.name}" has been added.` });
+      setIsAddUserOpen(false);
+      userForm.reset();
+    } catch (error) {
+       toast({ title: 'Error', description: 'Failed to add user.', variant: 'destructive' });
+    }
   };
 
-  const handleAddOrg = (values: z.infer<typeof organizationFormSchema>) => {
-    const newOrg: Organization = { id: (organizations.length + 1).toString(), ...values };
-    setOrganizations([...organizations, newOrg]);
-    toast({ title: 'Organization Created', description: `Organization "${newOrg.name}" has been added.` });
-    setIsAddOrgOpen(false);
-    orgForm.reset();
+  const handleAddOrg = async (values: z.infer<typeof organizationFormSchema>) => {
+    try {
+        const newOrgDoc = await addDoc(collection(db, 'organizations'), values);
+        const newOrg: Organization = { id: newOrgDoc.id, ...values };
+        setOrganizations([...organizations, newOrg]);
+        toast({ title: 'Organization Created', description: `Organization "${newOrg.name}" has been added.` });
+        setIsAddOrgOpen(false);
+        orgForm.reset();
+    } catch(error) {
+        toast({ title: 'Error', description: 'Failed to create organization.', variant: 'destructive' });
+    }
   };
   
-  const handleAddTeam = (values: z.infer<typeof teamFormSchema>) => {
-    const newTeam: Team = {
-      id: (teams.length + 1).toString(),
-      type: values.type,
-      player1Name: values.player1Name,
-      player2Name: values.type !== 'singles' ? values.player2Name : undefined,
-      genderP1: values.type === 'mixed_doubles' ? values.genderP1 : undefined,
-      organizationId: values.organizationId,
-    };
-    setTeams([...teams, newTeam]);
-    toast({
-      title: 'Team Registered',
-      description: `Team "${newTeam.player1Name}${newTeam.player2Name ? ' & ' + newTeam.player2Name : ''}" has been registered.`,
-    });
-    setIsAddTeamOpen(false);
-    teamForm.reset();
+  const handleAddTeam = async (values: z.infer<typeof teamFormSchema>) => {
+    try {
+        const teamData = {
+          type: values.type,
+          player1Name: values.player1Name,
+          player2Name: values.type !== 'singles' ? values.player2Name : undefined,
+          genderP1: values.type === 'mixed_doubles' ? values.genderP1 : undefined,
+          organizationId: values.organizationId,
+        };
+        const newTeamDoc = await addDoc(collection(db, 'teams'), teamData);
+        setTeams([...teams, { id: newTeamDoc.id, ...teamData }]);
+        toast({
+          title: 'Team Registered',
+          description: `Team "${teamData.player1Name}${teamData.player2Name ? ' & ' + teamData.player2Name : ''}" has been registered.`,
+        });
+        setIsAddTeamOpen(false);
+        teamForm.reset();
+    } catch(error) {
+        toast({ title: 'Error', description: 'Failed to register team.', variant: 'destructive' });
+    }
   };
   
   const getOrgName = (orgId: string) => organizations.find(o => o.id === orgId)?.name || 'N/A';
@@ -263,7 +307,7 @@ export default function AdminView() {
                                 <DropdownMenuTrigger asChild><Button variant="ghost" className="h-8 w-8 p-0"><MoreHorizontal className="h-4 w-4" /></Button></DropdownMenuTrigger>
                                 <DropdownMenuContent align="end">
                                     <DropdownMenuItem disabled>Edit</DropdownMenuItem>
-                                    <DropdownMenuItem className="text-destructive focus:text-destructive">Delete</DropdownMenuItem>
+                                    <DropdownMenuItem className="text-destructive focus:text-destructive" disabled>Delete</DropdownMenuItem>
                                 </DropdownMenuContent>
                                 </DropdownMenu>
                             </TableCell>
@@ -379,7 +423,7 @@ export default function AdminView() {
                                 <DropdownMenuTrigger asChild><Button variant="ghost" className="h-8 w-8 p-0"><MoreHorizontal className="h-4 w-4" /></Button></DropdownMenuTrigger>
                                 <DropdownMenuContent align="end">
                                     <DropdownMenuItem disabled>Edit</DropdownMenuItem>
-                                    <DropdownMenuItem className="text-destructive focus:text-destructive">Delete</DropdownMenuItem>
+                                    <DropdownMenuItem className="text-destructive focus:text-destructive" disabled>Delete</DropdownMenuItem>
                                 </DropdownMenuContent>
                             </DropdownMenu>
                         </TableCell>
@@ -509,27 +553,40 @@ export default function AdminView() {
             </Card>
         </TabsContent>
         <TabsContent value="settings">
-            <Card className="mt-4">
-                <CardHeader>
-                <CardTitle>System Settings</CardTitle>
-                <CardDescription>Global application settings.</CardDescription>
-                </CardHeader>
-                <CardContent>
-                    <div className="flex items-center space-x-4 rounded-md border p-4">
-                        <div className="flex-1 space-y-1">
-                            <p className="text-sm font-medium leading-none">Maintenance Mode</p>
-                            <p className="text-sm text-muted-foreground">
-                                Temporarily disable access to the app for non-admin users.
-                            </p>
+            <div className="grid gap-4 mt-4">
+                <Card>
+                    <CardHeader>
+                    <CardTitle>System Settings</CardTitle>
+                    <CardDescription>Global application settings.</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                        <div className="flex items-center space-x-4 rounded-md border p-4">
+                            <div className="flex-1 space-y-1">
+                                <p className="text-sm font-medium leading-none">Maintenance Mode</p>
+                                <p className="text-sm text-muted-foreground">
+                                    Temporarily disable access to the app for non-admin users.
+                                </p>
+                            </div>
+                            <Switch 
+                                checked={maintenanceMode} 
+                                onCheckedChange={setMaintenanceMode}
+                                aria-label="Toggle maintenance mode"
+                            />
                         </div>
-                        <Switch 
-                            checked={maintenanceMode} 
-                            onCheckedChange={setMaintenanceMode}
-                            aria-label="Toggle maintenance mode"
-                        />
-                    </div>
-                </CardContent>
-            </Card>
+                    </CardContent>
+                </Card>
+                 <Card>
+                    <CardHeader>
+                        <CardTitle>Database Management</CardTitle>
+                        <CardDescription>Seed the database with initial mock data.</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                        <Link href="/dashboard/seed-database">
+                           <Button><Database className="mr-2"/> Seed Database</Button>
+                        </Link>
+                    </CardContent>
+                </Card>
+            </div>
         </TabsContent>
       </Tabs>
       
