@@ -19,7 +19,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 export default function SchedulerPage() {
     const { toast } = useToast();
     const router = useRouter();
-    const [isLoading, setIsLoading] = useState(false);
+    const [isLoading, setIsLoading] = useState(true);
     const [isGenerating, setIsGenerating] = useState(false);
     const [tournament, setTournament] = useState<Tournament | null>(null);
     const [teams, setTeams] = useState<Team[]>([]);
@@ -41,7 +41,7 @@ export default function SchedulerPage() {
                     id: tourneyDoc.id, 
                     ...tourneyData,
                     date: tourneyData.date.toDate() 
-                } as Tournament);
+                });
 
                 const teamsSnap = await getDocs(collection(db, 'teams'));
                 setTeams(teamsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Team)));
@@ -86,8 +86,10 @@ export default function SchedulerPage() {
             await updateDoc(tournamentRef, { status: 'IN_PROGRESS', startedAt: new Date() });
             
             // Create a plain object for the tournament data to pass to the flow
-            const { id, location, numberOfCourts, courtNames, tournamentType, date } = tournament;
-            const plainTournament = { id, location, numberOfCourts, courtNames, tournamentType, date };
+            const plainTournament = { 
+                ...tournament,
+                date: tournament.date.toISOString(),
+            };
 
 
             const generatedMatches = await scheduleMatches({ teams, tournament: plainTournament });
@@ -105,7 +107,7 @@ export default function SchedulerPage() {
 
             generatedMatches.forEach(matchData => {
                 const newDocRef = doc(matchesCollection);
-                const startTimeTimestamp = Timestamp.fromDate(matchData.startTime);
+                const startTimeTimestamp = Timestamp.fromDate(new Date(matchData.startTime));
                 const newMatch: Omit<Match, 'id'> = {
                     ...matchData,
                     startTime: startTimeTimestamp,
@@ -182,102 +184,96 @@ export default function SchedulerPage() {
     }
 
     return (
-        <Card>
-            <CardHeader>
-                <div className="flex justify-between items-start">
-                    <div>
-                        <CardTitle>Match Scheduler</CardTitle>
-                        <CardDescription>
-                            Generate and view the tournament match schedule. Current format: <span className="font-semibold capitalize">{tournament?.tournamentType?.replace('-', ' ')}</span>
-                        </CardDescription>
-                    </div>
-                    <Button variant="outline" onClick={() => router.push('/dashboard')}>
-                        <ArrowLeft className="mr-2" />
-                        Back to Dashboard
-                    </Button>
-                </div>
+        <div>
+            <CardHeader className="px-0">
+                <CardTitle>Match Scheduler</CardTitle>
+                <CardDescription>
+                    Generate and view the tournament match schedule. Current format: <span className="font-semibold capitalize">{tournament?.tournamentType?.replace('-', ' ')}</span>
+                </CardDescription>
             </CardHeader>
-            <CardContent className="space-y-6">
-                <div className="flex flex-wrap gap-4 p-4 border rounded-lg bg-muted/50">
-                    <Button onClick={handleGenerateSchedule} disabled={isGenerating || matches.length > 0 || tournament?.status === 'IN_PROGRESS'}>
-                        {isGenerating ? (
-                            <Loader2 className="mr-2 animate-spin" />
-                        ) : (
-                            <PlayCircle className="mr-2" />
-                        )}
-                        {tournament?.status === 'IN_PROGRESS' ? 'Tournament In Progress' : 'Start Tournament & Generate Schedule'}
-                    </Button>
-                     <AlertDialog>
-                        <AlertDialogTrigger asChild>
-                            <Button variant="destructive" disabled={matches.length === 0}>
-                                <Trash2 className="mr-2" />
-                                Clear Schedule
-                            </Button>
-                        </AlertDialogTrigger>
-                        <AlertDialogContent>
-                            <AlertDialogHeader>
-                                <AlertDialogTitle>Are you sure?</AlertDialogTitle>
-                                <AlertDialogDescription>
-                                    This action cannot be undone. This will permanently delete all scheduled matches and reset the tournament status.
-                                </AlertDialogDescription>
-                            </AlertDialogHeader>
-                            <AlertDialogFooter>
-                                <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                <AlertDialogAction onClick={handleClearSchedule} className="bg-destructive hover:bg-destructive/90">Delete</AlertDialogAction>
-                            </AlertDialogFooter>
-                        </AlertDialogContent>
-                    </AlertDialog>
-                </div>
-                
-                {matches.length === 0 ? (
-                    <div className="text-center py-12">
-                         <p className="text-lg font-semibold mb-2">
-                            {tournament?.status === 'PENDING' ? 'Tournament Not Started' : 'No Matches Scheduled'}
-                        </p>
-                        <p className="text-muted-foreground">
-                            {tournament?.status === 'PENDING' ? 'Click "Start Tournament" to begin.' : 'No matches have been generated yet.'}
-                        </p>
+            <Card className="mt-4">
+                <CardContent className="space-y-6 pt-6">
+                    <div className="flex flex-wrap gap-4 p-4 border rounded-lg bg-muted/50">
+                        <Button onClick={handleGenerateSchedule} disabled={isGenerating || matches.length > 0 || tournament?.status === 'IN_PROGRESS'}>
+                            {isGenerating ? (
+                                <Loader2 className="mr-2 animate-spin" />
+                            ) : (
+                                <PlayCircle className="mr-2" />
+                            )}
+                            {tournament?.status === 'IN_PROGRESS' ? 'Tournament In Progress' : 'Start Tournament & Generate Schedule'}
+                        </Button>
+                        <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                                <Button variant="destructive" disabled={matches.length === 0}>
+                                    <Trash2 className="mr-2" />
+                                    Clear Schedule
+                                </Button>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent>
+                                <AlertDialogHeader>
+                                    <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+                                    <AlertDialogDescription>
+                                        This action cannot be undone. This will permanently delete all scheduled matches and reset the tournament status.
+                                    </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                    <AlertDialogAction onClick={handleClearSchedule} className="bg-destructive hover:bg-destructive/90">Delete</AlertDialogAction>
+                                </AlertDialogFooter>
+                            </AlertDialogContent>
+                        </AlertDialog>
                     </div>
-                ) : (
-                    <div className="space-y-8">
-                        {eventOrder.map(eventType => groupedMatches[eventType] && (
-                            <div key={eventType}>
-                                <h3 className="text-xl font-bold mb-4 capitalize">{eventType.replace(/_/g, ' ')}</h3>
-                                <div className="border rounded-md">
-                                <Table>
-                                    <TableHeader>
-                                        <TableRow>
-                                            <TableHead>Start Time</TableHead>
-                                            <TableHead>Court</TableHead>
-                                            <TableHead>Team 1</TableHead>
-                                            <TableHead>Team 2</TableHead>
-                                            <TableHead>Status</TableHead>
-                                             {tournament?.tournamentType === 'knockout' && <TableHead>Round</TableHead>}
-                                        </TableRow>
-                                    </TableHeader>
-                                    <TableBody>
-                                        {groupedMatches[eventType].map(match => (
-                                            <TableRow key={match.id}>
-                                                <TableCell className="font-medium">{format(match.startTime as Date, 'p')}</TableCell>
-                                                <TableCell>{match.courtName}</TableCell>
-                                                <TableCell>{match.team1Name}</TableCell>
-                                                <TableCell>{match.team2Name}</TableCell>
-                                                <TableCell>
-                                                    <Badge variant={match.status === 'COMPLETED' ? 'default' : 'secondary'}>
-                                                        {match.status}
-                                                    </Badge>
-                                                </TableCell>
-                                                {tournament?.tournamentType === 'knockout' && <TableCell>{match.round}</TableCell>}
+                    
+                    {matches.length === 0 ? (
+                        <div className="text-center py-12">
+                            <p className="text-lg font-semibold mb-2">
+                                {tournament?.status === 'PENDING' ? 'Tournament Not Started' : 'No Matches Scheduled'}
+                            </p>
+                            <p className="text-muted-foreground">
+                                {tournament?.status === 'PENDING' ? 'Click "Start Tournament" to begin.' : 'No matches have been generated yet.'}
+                            </p>
+                        </div>
+                    ) : (
+                        <div className="space-y-8">
+                            {eventOrder.map(eventType => groupedMatches[eventType] && (
+                                <div key={eventType}>
+                                    <h3 className="text-xl font-bold mb-4 capitalize">{eventType.replace(/_/g, ' ')}</h3>
+                                    <div className="border rounded-md">
+                                    <Table>
+                                        <TableHeader>
+                                            <TableRow>
+                                                <TableHead>Start Time</TableHead>
+                                                <TableHead>Court</TableHead>
+                                                <TableHead>Team 1</TableHead>
+                                                <TableHead>Team 2</TableHead>
+                                                <TableHead>Status</TableHead>
+                                                {tournament?.tournamentType === 'knockout' && <TableHead>Round</TableHead>}
                                             </TableRow>
-                                        ))}
-                                    </TableBody>
-                                </Table>
+                                        </TableHeader>
+                                        <TableBody>
+                                            {groupedMatches[eventType].map(match => (
+                                                <TableRow key={match.id}>
+                                                    <TableCell className="font-medium">{format(match.startTime as Date, 'p')}</TableCell>
+                                                    <TableCell>{match.courtName}</TableCell>
+                                                    <TableCell>{match.team1Name}</TableCell>
+                                                    <TableCell>{match.team2Name}</TableCell>
+                                                    <TableCell>
+                                                        <Badge variant={match.status === 'COMPLETED' ? 'default' : 'secondary'}>
+                                                            {match.status}
+                                                        </Badge>
+                                                    </TableCell>
+                                                    {tournament?.tournamentType === 'knockout' && <TableCell>{match.round}</TableCell>}
+                                                </TableRow>
+                                            ))}
+                                        </TableBody>
+                                    </Table>
+                                    </div>
                                 </div>
-                            </div>
-                        ))}
-                    </div>
-                )}
-            </CardContent>
-        </Card>
+                            ))}
+                        </div>
+                    )}
+                </CardContent>
+            </Card>
+        </div>
     );
 }

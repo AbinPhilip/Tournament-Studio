@@ -6,9 +6,7 @@ import { useRouter, usePathname } from 'next/navigation';
 import { useEffect } from 'react';
 import { DashboardHeader } from '@/components/dashboard/header';
 import { Loader2 } from 'lucide-react';
-import { db } from '@/lib/firebase';
-import { collection, getDocs, query, limit } from 'firebase/firestore';
-
+import { MainNav } from '@/components/dashboard/main-nav';
 
 export default function DashboardLayout({
   children,
@@ -19,20 +17,15 @@ export default function DashboardLayout({
   const router = useRouter();
   const pathname = usePathname();
 
-  // The seed page is publicly accessible and does not need authentication.
-  if (pathname === '/dashboard/seed-database') {
-    return <>{children}</>;
-  }
+  const isPublicPage = pathname === '/dashboard/seed-database';
 
   useEffect(() => {
-    if (!loading) {
-       if (!user) {
-          router.replace('/login');
-       }
+    if (!loading && !user && !isPublicPage) {
+      router.replace('/login');
     }
-  }, [user, loading, router]);
+  }, [user, loading, router, isPublicPage]);
 
-  if (loading || !user) {
+  if (loading && !isPublicPage) {
     return (
       <div className="flex h-screen w-full items-center justify-center bg-background">
         <Loader2 className="h-12 w-12 animate-spin text-primary" />
@@ -40,10 +33,29 @@ export default function DashboardLayout({
     );
   }
 
+  if (isPublicPage) {
+    return <>{children}</>;
+  }
+  
+  if (!user) {
+     return (
+      <div className="flex h-screen w-full items-center justify-center bg-background">
+        <Loader2 className="h-12 w-12 animate-spin text-primary" />
+      </div>
+    );
+  }
+  
+  const isAdmin = user.role === 'admin' || user.role === 'super';
+
   return (
     <div className="flex min-h-screen w-full flex-col bg-background">
       <DashboardHeader user={user} />
-      <main className="flex-1 p-4 md:p-8">{children}</main>
+      <div className="flex flex-1">
+        {isAdmin && <MainNav />}
+        <main className={`flex-1 p-4 md:p-8 ${isAdmin ? 'lg:ml-64' : ''}`}>
+          {children}
+        </main>
+      </div>
     </div>
   );
 }

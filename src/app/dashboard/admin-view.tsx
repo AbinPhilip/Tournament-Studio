@@ -48,7 +48,6 @@ export default function AdminView() {
             </Button>
           </CardContent>
         </Card>
-
     </div>
   );
 }
