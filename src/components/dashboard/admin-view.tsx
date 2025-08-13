@@ -96,7 +96,8 @@ const teamFormSchema = z.object({
   type: z.enum(['singles', 'mens_doubles', 'womens_doubles', 'mixed_doubles']),
   player1Name: z.string().min(2, "Player 1 name is required."),
   player2Name: z.string().optional(),
-  gender: z.enum(['male', 'female']).optional(),
+  genderP1: z.enum(['male', 'female']).optional(),
+  genderP2: z.enum(['male', 'female']).optional(),
   organizationId: z.string({ required_error: "Organization is required." }),
   photoUrl: z.string().optional(),
 }).refine(data => {
@@ -107,6 +108,22 @@ const teamFormSchema = z.object({
 }, {
     message: "Player 2 name is required for doubles.",
     path: ["player2Name"],
+}).refine(data => {
+    if (data.type === 'singles' || data.type === 'mixed_doubles') {
+        return !!data.genderP1;
+    }
+    return true;
+}, {
+    message: "Gender for Player 1 is required.",
+    path: ['genderP1']
+}).refine(data => {
+    if (data.type === 'mixed_doubles') {
+        return !!data.genderP2;
+    }
+    return true;
+}, {
+    message: "Gender for Player 2 is required for mixed doubles.",
+    path: ['genderP2']
 });
 
 
@@ -319,11 +336,28 @@ export default function AdminView() {
   
   const handleTeamSubmit = async (values: z.infer<typeof teamFormSchema>, isEditing: boolean) => {
     try {
-        const teamData: Partial<Team> = {
-            ...values,
-            player2Name: values.player2Name || undefined,
-            gender: values.gender || undefined
-        };
+        const teamData: Partial<Team> = {};
+        teamData.type = values.type;
+        teamData.player1Name = values.player1Name;
+        teamData.organizationId = values.organizationId;
+        
+        if (values.photoUrl) teamData.photoUrl = values.photoUrl;
+
+        if (values.type === 'mens_doubles') {
+            teamData.player2Name = values.player2Name;
+            teamData.genderP1 = 'male';
+            teamData.genderP2 = 'male';
+        } else if (values.type === 'womens_doubles') {
+            teamData.player2Name = values.player2Name;
+            teamData.genderP1 = 'female';
+            teamData.genderP2 = 'female';
+        } else if (values.type === 'mixed_doubles') {
+            teamData.player2Name = values.player2Name;
+            teamData.genderP1 = values.genderP1;
+            teamData.genderP2 = values.genderP2;
+        } else if (values.type === 'singles') {
+            teamData.genderP1 = values.genderP1;
+        }
         
         if (isEditing) {
             if (!teamToEdit) return;
@@ -381,7 +415,9 @@ export default function AdminView() {
     }
   };
 
-  const TeamFormContent = ({ isEditing }: { isEditing: boolean }) => (
+  const TeamFormContent = ({ isEditing }: { isEditing: boolean }) => {
+    const teamType = teamForm.watch('type');
+    return (
     <Form {...teamForm}>
         <form onSubmit={teamForm.handleSubmit((values) => handleTeamSubmit(values, isEditing))} className="space-y-4">
         <FormField control={teamForm.control} name="type" render={({ field }) => (
@@ -405,13 +441,43 @@ export default function AdminView() {
                 <FormMessage />
             </FormItem>
         )} />
-        <FormField control={teamForm.control} name="player2Name" render={({ field }) => (
-            <FormItem>
-                <FormLabel>Player 2 Name (if doubles)</FormLabel>
-                <FormControl><Input placeholder="Partner's Name" {...field} /></FormControl>
-                <FormMessage />
+        {(teamType === 'singles' || teamType === 'mixed_doubles') && (
+            <FormField control={teamForm.control} name="genderP1" render={({ field }) => (
+                <FormItem>
+                <FormLabel>Player 1 Gender</FormLabel>
+                 <Select onValueChange={field.onChange} defaultValue={field.value}>
+                    <FormControl><SelectTrigger><SelectValue placeholder="Select gender" /></SelectTrigger></FormControl>
+                    <SelectContent>
+                        <SelectItem value="male">Male</SelectItem>
+                        <SelectItem value="female">Female</SelectItem>
+                    </SelectContent>
+                </Select><FormMessage />
             </FormItem>
-        )} />
+            )} />
+        )}
+        {(teamType === 'mens_doubles' || teamType === 'womens_doubles' || teamType === 'mixed_doubles') && (
+            <FormField control={teamForm.control} name="player2Name" render={({ field }) => (
+                <FormItem>
+                    <FormLabel>Player 2 Name</FormLabel>
+                    <FormControl><Input placeholder="Partner's Name" {...field} /></FormControl>
+                    <FormMessage />
+                </FormItem>
+            )} />
+        )}
+         {teamType === 'mixed_doubles' && (
+            <FormField control={teamForm.control} name="genderP2" render={({ field }) => (
+                <FormItem>
+                <FormLabel>Player 2 Gender</FormLabel>
+                 <Select onValueChange={field.onChange} defaultValue={field.value}>
+                    <FormControl><SelectTrigger><SelectValue placeholder="Select gender" /></SelectTrigger></FormControl>
+                    <SelectContent>
+                        <SelectItem value="male">Male</SelectItem>
+                        <SelectItem value="female">Female</SelectItem>
+                    </SelectContent>
+                </Select><FormMessage />
+            </FormItem>
+            )} />
+        )}
         
         <FormField control={teamForm.control} name="organizationId" render={({ field }) => (
             <FormItem>
@@ -428,11 +494,11 @@ export default function AdminView() {
         <FormItem>
           <FormLabel>Team Photo</FormLabel>
           <div className="flex items-center gap-4">
-            <div className="h-24 w-24 bg-muted rounded-full flex items-center justify-center overflow-hidden">
+            <div className="h-20 w-20 bg-muted rounded-md flex items-center justify-center overflow-hidden">
                 <Image 
                     data-ai-hint="badminton duo" 
-                    src={photoPreview || "https://placehold.co/96x96.png"} 
-                    width={96} height={96} 
+                    src={photoPreview || "https://placehold.co/80x80.png"} 
+                    width={80} height={80} 
                     alt="Team photo" 
                     className="object-cover h-full w-full"
                 />
@@ -451,6 +517,7 @@ export default function AdminView() {
         </form>
     </Form>
   )
+  }
 
   return (
     <div className="grid gap-8">
@@ -499,11 +566,11 @@ export default function AdminView() {
                     <TableCell>
                       <Image 
                         data-ai-hint="badminton players"
-                        src={t.photoUrl || 'https://placehold.co/40x40.png'} 
+                        src={t.photoUrl || 'https://placehold.co/80x80.png'} 
                         alt="Team photo" 
-                        width={40} 
-                        height={40} 
-                        className="rounded-full object-cover"
+                        width={80} 
+                        height={80} 
+                        className="rounded-md object-cover"
                       />
                     </TableCell>
                     <TableCell className="font-medium capitalize">{t.type.replace('_', ' ')}</TableCell>

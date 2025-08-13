@@ -42,7 +42,7 @@ export default function DashboardLayout({
 
   return (
     <div className="flex min-h-screen w-full flex-col bg-background">
-      <DashboardHeader />
+      <DashboardHeader user={user} />
       <main className="flex-1 p-4 md:p-8">{children}</main>
     </div>
   );
