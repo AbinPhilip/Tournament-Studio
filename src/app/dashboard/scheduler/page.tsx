@@ -74,7 +74,6 @@ export default function SchedulerPage() {
             const tournamentWithDate = { 
                 ...tournament, 
                 date: tournament.date.toDate(),
-                tournamentType: tournament.tournamentType,
             };
             const generatedMatches = await scheduleMatches({ teams, tournament: tournamentWithDate });
             
