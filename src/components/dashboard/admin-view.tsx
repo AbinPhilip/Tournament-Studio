@@ -350,21 +350,27 @@ export default function AdminView() {
   
   const handleTeamSubmit = async (values: z.infer<typeof teamFormSchema>, isEditing: boolean) => {
     try {
-        const teamData: Omit<Team, 'id'> = {
+        const teamData: Partial<Team> = {
           type: values.type,
           player1Name: values.player1Name,
-          player2Name: values.type !== 'singles' ? values.player2Name : undefined,
-          genderP1: values.type === 'mixed_doubles' ? values.genderP1 : undefined,
-          genderP2: values.type === 'mixed_doubles' ? values.genderP2 : undefined,
           organizationId: values.organizationId,
           photoUrl: values.photoUrl,
         };
+
+        if (values.type !== 'singles') {
+          teamData.player2Name = values.player2Name;
+        }
+
+        if (values.type === 'mixed_doubles') {
+          teamData.genderP1 = values.genderP1;
+          teamData.genderP2 = values.genderP2;
+        }
 
         if (isEditing) {
             if (!teamToEdit) return;
             const teamRef = doc(db, 'teams', teamToEdit.id);
             await updateDoc(teamRef, teamData as { [x: string]: any });
-            setTeams(teams.map(t => t.id === teamToEdit.id ? { ...teamToEdit, ...teamData } : t));
+            setTeams(teams.map(t => t.id === teamToEdit.id ? { ...teamToEdit, ...teamData } as Team : t));
             setIsEditTeamOpen(false);
             setTeamToEdit(null);
             setSuccessModalTitle('Team Updated');
@@ -1025,4 +1031,5 @@ export default function AdminView() {
 
     </div>
   );
-}
+
+    
