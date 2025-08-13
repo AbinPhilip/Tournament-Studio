@@ -21,11 +21,17 @@ export interface AppData {
 export type TeamType = 'singles' | 'mens_doubles' | 'mixed_doubles';
 export type Gender = 'male' | 'female';
 
+export interface Organization {
+  id: string;
+  name: string;
+  location: string;
+}
+
 export interface Team {
     id: string;
     type: TeamType;
     player1Name: string;
     player2Name?: string;
     genderP1?: Gender;
-    organization: string;
+    organizationId: string;
 }

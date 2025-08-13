@@ -1,4 +1,4 @@
-import type { User, AppData, Team } from '@/types';
+import type { User, AppData, Team, Organization } from '@/types';
 
 export const mockUsers: User[] = [
   { id: '1', username: 'individual_user', phoneNumber: '1112223333', role: 'individual', name: 'Alex Doe', email: 'alex.doe@example.com' },
@@ -16,8 +16,14 @@ export const mockAppData: AppData[] = [
     { id: 6, name: 'Active Users', value: '1250', lastUpdated: '2023-10-26T18:00:00Z', updatedBy: 'System', isFlagged: false },
 ];
 
+export const mockOrganizations: Organization[] = [
+    { id: '1', name: 'Legends Club', location: 'Kuala Lumpur, Malaysia' },
+    { id: '2', name: 'Indonesia National Team', location: 'Jakarta, Indonesia' },
+    { id: '3', name: 'Spain National Team', location: 'Madrid, Spain' },
+];
+
 export const mockTeams: Team[] = [
-    { id: '1', type: 'mens_doubles', player1Name: 'Lee Chong Wei', player2Name: 'Lin Dan', organization: 'Legends Club', genderP1: 'male' },
-    { id: '2', type: 'mixed_doubles', player1Name: 'Tontowi Ahmad', player2Name: 'Liliyana Natsir', organization: 'Indonesia National Team', genderP1: 'male' },
-    { id: '3', type: 'singles', player1Name: 'Carolina Marín', organization: 'Spain National Team' },
+    { id: '1', type: 'mens_doubles', player1Name: 'Lee Chong Wei', player2Name: 'Lin Dan', organizationId: '1', genderP1: 'male' },
+    { id: '2', type: 'mixed_doubles', player1Name: 'Tontowi Ahmad', player2Name: 'Liliyana Natsir', organizationId: '2', genderP1: 'male' },
+    { id: '3', type: 'singles', player1Name: 'Carolina Marín', organizationId: '3' },
 ];
