@@ -47,6 +47,7 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
+  AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import {
   Dialog,
@@ -380,8 +381,12 @@ export default function TournamentSettingsPage() {
             setTeamToEdit(null);
             setIsSuccessModalOpen(true);
         } else {
-            const newTeamDoc = await addDoc(collection(db, 'teams'), teamData);
-            const newTeam = { id: newTeamDoc.id, ...teamData };
+            const dataToSave: any = { ...teamData };
+            if (values.lotNumber !== undefined && values.lotNumber !== null && !isNaN(values.lotNumber)) {
+                dataToSave.lotNumber = values.lotNumber;
+            }
+            const newTeamDoc = await addDoc(collection(db, 'teams'), dataToSave);
+            const newTeam = { id: newTeamDoc.id, ...dataToSave };
             setTeams([...teams, newTeam as Team]);
             toast({
               title: 'Team Registered',
@@ -389,7 +394,7 @@ export default function TournamentSettingsPage() {
             });
             setIsAddTeamOpen(false);
         }
-        teamForm.reset();
+        teamForm.reset({ type: 'singles', player1Name: '', player2Name: '', photoUrl: '', lotNumber: undefined });
         setPhotoPreview(null);
     } catch(error) {
         console.error(error);
@@ -450,9 +455,12 @@ export default function TournamentSettingsPage() {
             // Update the original value in state to prevent re-triggers
             setOriginalLotNumbers(prev => ({ ...prev, [teamId]: currentLot }));
             
+            const teamName = team.player2Name ? `${team.player1Name} & ${team.player2Name}` : team.player1Name;
+            const orgName = getOrgName(team.organizationId);
+
             toast({
                 title: 'Lot Number Updated',
-                description: `Lot number for ${team.player1Name} saved.`
+                description: `Lot for ${teamName} (${orgName}) saved.`
             });
         } catch (error) {
             toast({
@@ -547,7 +555,7 @@ export default function TournamentSettingsPage() {
         <FormField control={teamForm.control} name="lotNumber" render={({ field }) => (
             <FormItem>
                 <FormLabel>Lot Number</FormLabel>
-                <FormControl><Input type="number" placeholder="e.g. 1" {...field} /></FormControl>
+                <FormControl><Input type="number" placeholder="e.g. 1" {...field} onChange={e => field.onChange(e.target.value === '' ? '' : Number(e.target.value))} /></FormControl>
                 <FormMessage />
             </FormItem>
         )} />
@@ -728,10 +736,28 @@ export default function TournamentSettingsPage() {
                         Back to Dashboard
                     </Button>
                     {tournamentDocRef && (
-                      <Button type="button" variant="destructive" onClick={() => setIsDeleteDialogOpen(true)}>
-                          <Trash2 className="mr-2 h-4 w-4" />
-                          Delete Tournament
-                      </Button>
+                      <AlertDialog>
+                          <AlertDialogTrigger asChild>
+                               <Button type="button" variant="destructive">
+                                    <Trash2 className="mr-2 h-4 w-4" />
+                                    Delete Tournament
+                                </Button>
+                          </AlertDialogTrigger>
+                          <AlertDialogContent>
+                                <AlertDialogHeader>
+                                    <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                                    <AlertDialogDescription>
+                                    This action cannot be undone. This will permanently delete the tournament and all associated teams, organizations, and matches.
+                                    </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                    <AlertDialogAction onClick={handleDeleteTournament} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                                    Delete
+                                    </AlertDialogAction>
+                                </AlertDialogFooter>
+                          </AlertDialogContent>
+                      </AlertDialog>
                     )}
                 </div>
               </form>
