@@ -497,7 +497,7 @@ export default function AdminView() {
                                 className="rounded-full"
                             />
                         </TableCell>
-                        <TableCell className="font-medium capitalize">{t.type.replace('_', ' ')}</TableCell>
+                        <TableCell className="font-medium capitalize">{t.type.replace(/_/g, ' ')}</TableCell>
                         <TableCell>{t.player1Name}{t.player2Name ? ` & ${t.player2Name}`: ''}</TableCell>
                         <TableCell>{getOrgName(t.organizationId)}</TableCell>
                         <TableCell className="text-right">
@@ -703,5 +703,3 @@ export default function AdminView() {
     </div>
   );
 }
-
-    
