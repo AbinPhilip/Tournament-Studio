@@ -1,7 +1,7 @@
 
 import { Timestamp } from "firebase/firestore";
 
-export type UserRole = 'individual' | 'update' | 'admin' | 'inquiry' | 'super';
+export type UserRole = 'individual' | 'update' | 'admin' | 'inquiry' | 'super' | 'court';
 
 export interface User {
   id: string;
@@ -10,6 +10,7 @@ export interface User {
   role: UserRole;
   name: string;
   email: string;
+  courtName?: string; // For court umpire role
 }
 
 export interface AppData {

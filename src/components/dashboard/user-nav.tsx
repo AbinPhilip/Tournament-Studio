@@ -18,7 +18,7 @@ import {
   DropdownMenuSubContent
 } from '@/components/ui/dropdown-menu';
 import { useRouter } from 'next/navigation';
-import { LogOut, User as UserIcon, Shield, UserCog, UserSearch, ShieldAlert, Monitor, Sun, Moon } from 'lucide-react';
+import { LogOut, User as UserIcon, Shield, UserCog, UserSearch, ShieldAlert, Monitor, Sun, Moon, ShieldCheck } from 'lucide-react';
 import type { UserRole } from '@/types';
 import { useTheme } from 'next-themes';
 
@@ -29,6 +29,8 @@ const RoleAvatar = ({ role, className }: { role: UserRole; className?: string })
       return <Shield {...iconProps} />;
     case 'super':
         return <ShieldAlert {...iconProps} />;
+    case 'court':
+        return <ShieldCheck {...iconProps} />;
     case 'update':
       return <UserCog {...iconProps} />;
     case 'inquiry':
@@ -76,9 +78,11 @@ export function UserNav() {
         <DropdownMenuLabel className="font-normal">
           <div className="flex flex-col space-y-1">
             <p className="text-sm font-medium leading-none">{user.name}</p>
-            <p className="text-xs leading-none text-muted-foreground">
-              {user.email}
-            </p>
+            {user.email && (
+              <p className="text-xs leading-none text-muted-foreground">
+                {user.email}
+              </p>
+            )}
           </div>
         </DropdownMenuLabel>
         <DropdownMenuSeparator />

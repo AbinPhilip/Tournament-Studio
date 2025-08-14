@@ -1,3 +1,4 @@
+
 "use client";
 
 import React, { createContext, useState, useEffect, useCallback } from 'react';
@@ -10,6 +11,7 @@ interface AuthContextType {
   user: User | null;
   loading: boolean;
   login: (username: string, phoneNumber: string) => Promise<User | null>;
+  courtLogin: (courtName: string) => Promise<User | null>;
   logout: () => void;
   updateUserContext: (updatedUser: User) => void;
 }
@@ -61,6 +63,30 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
+  const courtLogin = useCallback(async (courtName: string): Promise<User | null> => {
+    setLoading(true);
+    try {
+      // Create a temporary user object for the court umpire
+      const courtUser: User = {
+        id: `court_${courtName}`,
+        name: `Umpire - ${courtName}`,
+        role: 'court',
+        courtName: courtName,
+        username: courtName,
+        email: '',
+        phoneNumber: '',
+      };
+      sessionStorage.setItem('score_vision_user', JSON.stringify(courtUser));
+      setUser(courtUser);
+      return courtUser;
+    } catch (error) {
+      console.error("Court login error:", error);
+      return null;
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
   const logout = useCallback(() => {
     sessionStorage.removeItem('score_vision_user');
     setUser(null);
@@ -72,7 +98,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, logout, updateUserContext }}>
+    <AuthContext.Provider value={{ user, loading, login, courtLogin, logout, updateUserContext }}>
       {children}
     </AuthContext.Provider>
   );

@@ -1,5 +1,7 @@
+
 import { Logo } from '@/components/logo';
 import { LoginForm } from '@/components/login-form';
+import { CourtUmpireLogin } from '@/components/court-umpire-login';
 
 export default function LoginPage() {
   return (
@@ -9,6 +11,17 @@ export default function LoginPage() {
           <Logo />
         </div>
         <LoginForm />
+        <div className="relative my-6">
+          <div className="absolute inset-0 flex items-center">
+            <span className="w-full border-t" />
+          </div>
+          <div className="relative flex justify-center text-xs uppercase">
+            <span className="bg-background px-2 text-muted-foreground">
+              Or
+            </span>
+          </div>
+        </div>
+        <CourtUmpireLogin />
       </div>
     </div>
   );
