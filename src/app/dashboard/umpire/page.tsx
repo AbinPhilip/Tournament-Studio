@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -21,7 +21,6 @@ import { collection, getDocs, query, orderBy, Timestamp } from 'firebase/firesto
 import type { Match, TeamType } from '@/types';
 import { Loader2, ArrowLeft, Pencil } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import { format } from 'date-fns';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose, DialogDescription } from '@/components/ui/dialog';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
@@ -35,6 +34,11 @@ const scoreFormSchema = z.object({
   winnerId: z.string({ required_error: "Please select a winner." }),
 });
 
+// Function to get the total number of rounds for a knockout tournament
+const getTotalRounds = (teamCount: number) => {
+    if (teamCount < 2) return 0;
+    return Math.ceil(Math.log2(teamCount));
+};
 
 export default function UmpirePage() {
     const { toast } = useToast();
@@ -44,29 +48,67 @@ export default function UmpirePage() {
     const [matches, setMatches] = useState<Match[]>([]);
     const [selectedMatch, setSelectedMatch] = useState<Match | null>(null);
     const [isDialogOpen, setIsDialogOpen] = useState(false);
+    const [teamCounts, setTeamCounts] = useState<Record<TeamType, number>>({
+        singles: 0,
+        mens_doubles: 0,
+        womens_doubles: 0,
+        mixed_doubles: 0,
+    });
 
     const form = useForm<z.infer<typeof scoreFormSchema>>({
         resolver: zodResolver(scoreFormSchema),
     });
+    
+    const getRoundName = useCallback((round: number, eventType: TeamType) => {
+        const totalRounds = getTotalRounds(teamCounts[eventType]);
+        if (totalRounds === 0) return `Round ${round}`;
+    
+        if (round === totalRounds) return 'Final';
+        if (round === totalRounds - 1) return 'Semi-Finals';
+        if (round === totalRounds - 2) return 'Quarter-Finals';
+        
+        // For preliminary rounds if total rounds > 3
+        const preliminaryRounds = totalRounds - 3;
+        if (round <= preliminaryRounds) {
+            return `Round ${round} - Preliminary`;
+        }
+        // This logic handles cases where there are no QF, e.g. a 4-person tournament
+        return `Round ${round} - Knockout`;
 
-    const fetchMatches = async () => {
+    }, [teamCounts]);
+
+
+    const fetchMatchesAndCounts = useCallback(async () => {
         setIsLoading(true);
         try {
-            const matchesQuery = query(collection(db, 'matches'), orderBy('startTime', 'desc'));
-            const matchesSnap = await getDocs(matchesQuery);
-            const matchesData = matchesSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Omit<Match, 'startTime'> & {startTime: Timestamp})).map(m => ({...m, startTime: m.startTime.toDate()}));
+            const [matchesSnap, teamsSnap] = await Promise.all([
+                getDocs(query(collection(db, 'matches'), orderBy('startTime', 'desc'))),
+                getDocs(collection(db, 'teams')),
+            ]);
+
+            const matchesData = matchesSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Omit<Match, 'startTime'> & {startTime: Timestamp})).map(m => ({...m, startTime: m.startTime?.toDate()}));
             setMatches(matchesData as Match[]);
+
+            const counts = { singles: 0, mens_doubles: 0, womens_doubles: 0, mixed_doubles: 0 };
+            teamsSnap.forEach(doc => {
+                const team = doc.data() as { type: TeamType };
+                if (counts[team.type] !== undefined) {
+                    counts[team.type]++;
+                }
+            });
+            setTeamCounts(counts);
+
         } catch (error) {
-            console.error("Error fetching matches:", error);
-            toast({ title: 'Error', description: 'Failed to fetch matches.', variant: 'destructive' });
+            console.error("Error fetching data:", error);
+            toast({ title: 'Error', description: 'Failed to fetch tournament data.', variant: 'destructive' });
         } finally {
             setIsLoading(false);
         }
-    };
+    }, [toast]);
     
     useEffect(() => {
-        fetchMatches();
-    }, []);
+        fetchMatchesAndCounts();
+    }, [fetchMatchesAndCounts]);
     
     useEffect(() => {
         if (selectedMatch) {
@@ -100,7 +142,7 @@ export default function UmpirePage() {
 
             setIsDialogOpen(false);
             setSelectedMatch(null);
-            await fetchMatches(); // Refresh the matches list to show new state and potential new matches
+            await fetchMatchesAndCounts(); // Refresh the matches list to show new state and potential new matches
         } catch (error) {
             console.error(error);
             toast({ title: 'Error', description: 'Failed to record match result.', variant: 'destructive' });
@@ -111,7 +153,7 @@ export default function UmpirePage() {
 
     const groupedMatchesByCourt = useMemo(() => {
         return matches.reduce((acc, match) => {
-            const courtName = match.courtName;
+            const courtName = match.courtName || "Unassigned";
             if (!acc[courtName]) {
                 acc[courtName] = [];
             }
@@ -163,7 +205,7 @@ export default function UmpirePage() {
                                 <Table>
                                     <TableHeader>
                                         <TableRow>
-                                            <TableHead>Time</TableHead>
+                                            <TableHead>Round</TableHead>
                                             <TableHead>Event</TableHead>
                                             <TableHead>Team 1</TableHead>
                                             <TableHead>Team 2</TableHead>
@@ -175,7 +217,7 @@ export default function UmpirePage() {
                                     <TableBody>
                                         {groupedMatchesByCourt[courtName].map(match => (
                                             <TableRow key={match.id} className={match.status === 'IN_PROGRESS' ? 'bg-yellow-50' : ''}>
-                                                <TableCell className="font-medium">{format(match.startTime, 'p')}</TableCell>
+                                                <TableCell className="font-medium">{match.round ? getRoundName(match.round, match.eventType) : 'N/A'}</TableCell>
                                                 <TableCell className="capitalize">{match.eventType.replace(/_/g, ' ')}</TableCell>
                                                 <TableCell className={match.winnerId === match.team1Id ? 'font-bold' : ''}>{match.team1Name}</TableCell>
                                                 <TableCell className={match.winnerId === match.team2Id ? 'font-bold' : ''}>{match.team2Name}</TableCell>

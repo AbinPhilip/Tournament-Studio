@@ -10,8 +10,8 @@
 import { ai } from '@/ai/genkit';
 import { z } from 'zod';
 import { db } from '@/lib/firebase';
-import { collection, doc, getDoc, getDocs, writeBatch, query, where, addDoc, Timestamp } from 'firebase/firestore';
-import type { Match, Tournament, TeamType } from '@/types';
+import { collection, doc, getDoc, getDocs, writeBatch, query, where, Timestamp } from 'firebase/firestore';
+import type { Match, Tournament } from '@/types';
 
 
 const RecordMatchResultInputSchema = z.object({
@@ -24,6 +24,8 @@ export type RecordMatchResultInput = z.infer<typeof RecordMatchResultInputSchema
 async function findAvailableCourt(startTime: Date, courtNames: { name: string }[]): Promise<string | null> {
     const matchesRef = collection(db, 'matches');
     const startTimestamp = Timestamp.fromDate(startTime);
+    
+    // Check for matches starting at the exact same time
     const q = query(matchesRef, where('startTime', '==', startTimestamp));
     const snapshot = await getDocs(q);
 
@@ -79,7 +81,9 @@ const recordMatchResultFlow = ai.defineFlow(
         );
         
         const completedRoundMatchesSnap = await getDocs(q);
-        const winnersInRound = completedRoundMatchesSnap.docs.map(d => d.data().winnerId).filter(Boolean);
+        const winnersInRound = completedRoundMatchesSnap.docs
+            .map(d => d.data().winnerId)
+            .filter((id): id is string => !!id); // Ensure winnerId is not undefined or empty
 
         const currentWinnerId = input.winnerId;
 
@@ -114,16 +118,17 @@ const recordMatchResultFlow = ai.defineFlow(
             const opponentTeam = opponentTeamSnap.data();
 
             // Find an available court and time slot
-            let matchTime = (completedMatch.startTime as Timestamp).toDate();
+            let matchTime = completedMatch.startTime instanceof Timestamp ? completedMatch.startTime.toDate() : new Date();
             let availableCourt: string | null = null;
             let attempts = 0;
-            // Look for a slot in the next 48 hours
-            while (attempts < 48) {
-                matchTime.setHours(matchTime.getHours() + 1); // Check next hour
+            // Look for a slot in the next 48 hours in 15-minute increments
+            while (attempts < (48 * 4)) {
+                matchTime.setMinutes(matchTime.getMinutes() + 15); 
+                
                 // Reset to 9 AM next day if past 8 PM
-                if (matchTime.getHours() > 20) {
+                if (matchTime.getHours() >= 20) {
                     matchTime.setDate(matchTime.getDate() + 1);
-                    matchTime.setHours(9);
+                    matchTime.setHours(9, 0, 0, 0);
                 }
 
                 availableCourt = await findAvailableCourt(matchTime, tournament.courtNames);
@@ -147,6 +152,9 @@ const recordMatchResultFlow = ai.defineFlow(
                     round: completedMatch.round + 1,
                 };
                 batch.set(newMatchRef, newMatchData);
+            } else {
+                 // Fallback or error handling if no court is found
+                console.warn(`Could not find an available court for match in event ${completedMatch.eventType}`);
             }
         }
     }

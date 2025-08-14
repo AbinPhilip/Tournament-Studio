@@ -36,9 +36,15 @@ const TournamentSchema = z.object({
     startedAt: z.string().optional(),
 });
 
+const EventTeamCountSchema = z.object({
+    eventType: z.enum(['singles', 'mens_doubles', 'womens_doubles', 'mixed_doubles']),
+    count: z.number(),
+});
+
 const ScheduleMatchesInputSchema = z.object({
   teams: z.array(TeamSchema),
   tournament: TournamentSchema,
+  teamsCountPerEvent: z.array(EventTeamCountSchema),
 });
 export type ScheduleMatchesInput = z.infer<typeof ScheduleMatchesInputSchema>;
 
@@ -73,6 +79,11 @@ const schedulePrompt = ai.definePrompt({
         - Team ID: {{this.id}}, Players: {{this.player1Name}}{{#if this.player2Name}} & {{this.player2Name}}{{/if}}, Event: {{this.type}}
         {{/each}}
 
+        Here is the count of teams per event category:
+        {{#each teamsCountPerEvent}}
+        - Event: {{this.eventType}}, Count: {{this.count}}
+        {{/each}}
+
         General Rules:
         1.  **Group by Event:** All scheduling must happen independently for each event type (e.g., 'mens_doubles', 'singles'). Matches must only be between teams of the same type.
         2.  **Initial Status:** Set the initial 'status' of all generated matches to 'PENDING'.
@@ -82,7 +93,7 @@ const schedulePrompt = ai.definePrompt({
         **A. If 'tournamentType' is 'knockout':**
 
         Follow this "picking of lots" procedure for EACH event type category:
-        1.  **Identify Teams:** Get the list of all N players/teams for the category.
+        1.  **Identify Teams:** Get the list of all N players/teams for the category using the 'teamsCountPerEvent' data.
         2.  **Calculate Byes:** A "bye" is a pass to the next round. A bye is needed if N is not a power of 2.
             *   Find the next highest power of 2 (P). (e.g., if N=13, P=16).
             *   Number of byes = P - N. (if N=13, byes = 3).
@@ -90,7 +101,7 @@ const schedulePrompt = ai.definePrompt({
             *   Create a list of all N team IDs for the category.
             *   **Shuffle this list randomly.** This is the critical step for a random draw.
         4.  **Assign Byes and Matches:**
-            *   The first (P - N) teams in your shuffled list receive a bye. Do NOT generate a match for them.
+            *   The first (P - N) teams in your shuffled list receive a bye. Do NOT generate a match for them. They are considered winners of round 1 and will play in round 2.
             *   The remaining teams are paired up sequentially for the first round. For example, the next team in the shuffled list plays the one after it, and so on.
         5.  **Set Round Number:** For all generated matches, set the 'round' field to 1.
 
@@ -125,7 +136,8 @@ const scheduleMatchesFlow = ai.defineFlow(
 // Wrapper function to be called from the application
 export async function scheduleMatches(input: {
     teams: Team[],
-    tournament: Omit<Tournament, 'date' | 'startedAt' | 'status'> & { id: string; date: string; status?: string; startedAt?:string; }
+    tournament: Omit<Tournament, 'date' | 'startedAt' | 'status'> & { id: string; date: string; status?: string; startedAt?:string; },
+    teamsCountPerEvent: { eventType: string, count: number }[],
 }): Promise<Omit<Match, 'id'>[]> {
     const result = await scheduleMatchesFlow(input);
     return result.matches;

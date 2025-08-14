@@ -34,7 +34,7 @@ import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import { db } from '@/lib/firebase';
 import { collection, doc, getDocs, setDoc, updateDoc, DocumentReference, deleteDoc, query, Timestamp, addDoc, where, writeBatch } from 'firebase/firestore';
-import type { Tournament, Team, Organization, Gender, Match } from '@/types';
+import type { Tournament, Team, Organization, Gender, Match, TeamType } from '@/types';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useRouter } from 'next/navigation';
 import { format } from 'date-fns';
@@ -249,7 +249,7 @@ export default function TournamentSettingsPage() {
 
   const onTournamentSubmit = async (values: z.infer<typeof tournamentFormSchema>) => {
     try {
-      const dataToSave = {
+      const dataToSave: Partial<Tournament> & { date: Timestamp } = {
         ...values,
         date: Timestamp.fromDate(values.date),
       };
@@ -266,6 +266,7 @@ export default function TournamentSettingsPage() {
         const newDocRef = doc(collection(db, 'tournaments'));
         await setDoc(newDocRef, { ...dataToSave, status: 'PENDING' });
         setTournamentDocRef(newDocRef);
+        setTournament({ id: newDocRef.id, ...values });
       }
       setIsSuccessModalOpen(true);
     } catch (error) {
@@ -280,6 +281,7 @@ export default function TournamentSettingsPage() {
         await deleteDoc(tournamentDocRef);
         toast({ title: 'Success', description: 'Tournament has been deleted.' });
         setTournamentDocRef(null);
+        setTournament(null);
         form.reset({
           location: '',
           date: new Date(),
@@ -446,14 +448,23 @@ export default function TournamentSettingsPage() {
             date: format(tournament.date, 'yyyy-MM-dd'),
             status: tournament.status,
         };
+        
+        const teamsCountPerEvent = (['singles', 'mens_doubles', 'womens_doubles', 'mixed_doubles'] as TeamType[]).map(eventType => ({
+            eventType,
+            count: teams.filter(t => t.type === eventType).length,
+        }));
 
-        const generatedMatches = await scheduleMatches({ teams, tournament: plainTournament });
+        const generatedMatches = await scheduleMatches({ teams, tournament: plainTournament, teamsCountPerEvent });
         
         const saveBatch = writeBatch(db);
         generatedMatches.forEach(match => {
             const matchRef = doc(collection(db, 'matches'));
             saveBatch.set(matchRef, match);
         });
+
+        // Set tournament status to IN_PROGRESS
+        const tourneyRef = doc(db, 'tournaments', tournament.id);
+        saveBatch.update(tourneyRef, { status: 'IN_PROGRESS', startedAt: Timestamp.now() });
 
         await saveBatch.commit();
         toast({ title: 'Pairings Generated!', description: `${generatedMatches.length} matches have been created. Go to the scheduler to assign them.` });
@@ -915,7 +926,7 @@ export default function TournamentSettingsPage() {
                             />
                         </div>
                     </TableCell>
-                    <TableCell className="font-medium capitalize">{t.type.replace('_', ' ')}</TableCell>
+                    <TableCell className="font-medium capitalize">{t.type.replace(/_/g, ' ')}</TableCell>
                     <TableCell>{t.player1Name}{t.player2Name ? ` & ${t.player2Name}`: ''}</TableCell>
                     <TableCell>{getOrgName(t.organizationId)}</TableCell>
                     <TableCell className="text-right">
