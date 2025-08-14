@@ -522,7 +522,7 @@ export default function TeamsPage() {
                   Register Team
                 </Button>
               </DialogTrigger>
-              <DialogContent className="sm:max-w-[425px]">
+              <DialogContent className="sm:max-w-[425px] max-h-[90vh] overflow-y-auto">
                 <DialogHeader>
                   <DialogTitle>Register New Team</DialogTitle>
                   <DialogDescription>Enter the details for the new team.</DialogDescription>
@@ -641,7 +641,7 @@ export default function TeamsPage() {
 
       {/* Edit Team Dialog */}
       <Dialog open={isEditTeamOpen} onOpenChange={setIsEditTeamOpen}>
-          <DialogContent className="sm:max-w-[425px]">
+          <DialogContent className="sm:max-w-[425px] max-h-[90vh] overflow-y-auto">
           <DialogHeader>
               <DialogTitle>Edit Team</DialogTitle>
               <DialogDescription>Update the team details.</DialogDescription>
