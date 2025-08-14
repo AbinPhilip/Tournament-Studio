@@ -22,13 +22,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     try {
-      const storedUser = localStorage.getItem('score_vision_user');
+      const storedUser = sessionStorage.getItem('score_vision_user');
       if (storedUser) {
         setUser(JSON.parse(storedUser));
       }
     } catch (error) {
-      console.error('Failed to parse user from localStorage', error);
-      localStorage.removeItem('score_vision_user');
+      console.error('Failed to parse user from sessionStorage', error);
+      sessionStorage.removeItem('score_vision_user');
     } finally {
       setLoading(false);
     }
@@ -48,7 +48,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (!querySnapshot.empty) {
         const userDoc = querySnapshot.docs[0];
         const foundUser = { id: userDoc.id, ...userDoc.data() } as User;
-        localStorage.setItem('score_vision_user', JSON.stringify(foundUser));
+        sessionStorage.setItem('score_vision_user', JSON.stringify(foundUser));
         setUser(foundUser);
         return foundUser;
       }
@@ -62,13 +62,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const logout = useCallback(() => {
-    localStorage.removeItem('score_vision_user');
+    sessionStorage.removeItem('score_vision_user');
     setUser(null);
   }, []);
   
   const updateUserContext = useCallback((updatedUser: User) => {
     setUser(updatedUser);
-    localStorage.setItem('score_vision_user', JSON.stringify(updatedUser));
+    sessionStorage.setItem('score_vision_user', JSON.stringify(updatedUser));
   }, []);
 
   return (
