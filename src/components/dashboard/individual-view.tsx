@@ -1,125 +1,189 @@
+
 "use client";
 
+import { useState, useEffect } from 'react';
 import { useAuth } from '@/hooks/use-auth';
-import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import * as z from 'zod';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import {
-  Form,
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from '@/components/ui/form';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
-import type { User } from '@/types';
+import type { User, Team, Match, TeamType } from '@/types';
 import { db } from '@/lib/firebase';
-import { doc, updateDoc } from 'firebase/firestore';
-
-const profileFormSchema = z.object({
-  name: z.string().min(2, { message: 'Name must be at least 2 characters.' }),
-  email: z.string().email({ message: 'Please enter a valid email address.' }),
-});
+import { collection, query, where, getDocs, orderBy } from 'firebase/firestore';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Badge } from '@/components/ui/badge';
+import { getRoundName } from '@/lib/utils';
+import { Loader2 } from 'lucide-react';
 
 export default function IndividualView() {
-  const { user, updateUserContext } = useAuth();
+  const { user } = useAuth();
   const { toast } = useToast();
-
-  const form = useForm<z.infer<typeof profileFormSchema>>({
-    resolver: zodResolver(profileFormSchema),
-    defaultValues: {
-      name: user?.name || '',
-      email: user?.email || '',
-    },
+  const [myTeams, setMyTeams] = useState<Team[]>([]);
+  const [myMatches, setMyMatches] = useState<Record<string, Match[]>>({});
+  const [isLoading, setIsLoading] = useState(true);
+  const [teamCounts, setTeamCounts] = useState<Record<TeamType, number>>({
+    singles: 0,
+    mens_doubles: 0,
+    womens_doubles: 0,
+    mixed_doubles: 0,
   });
 
-  async function onSubmit(values: z.infer<typeof profileFormSchema>) {
-    if (user) {
-        try {
-            const userRef = doc(db, 'users', user.id);
-            await updateDoc(userRef, {
-                name: values.name,
-                email: values.email,
-            });
-            const updatedUser: User = { ...user, ...values };
-            updateUserContext(updatedUser);
-            toast({
-              title: 'Profile Updated',
-              description: 'Your information has been successfully updated.',
-            });
-        } catch(error) {
-            toast({
-              title: 'Error',
-              description: 'Failed to update your profile.',
-              variant: 'destructive'
-            });
+  useEffect(() => {
+    if (!user) return;
+    
+    const fetchData = async () => {
+      setIsLoading(true);
+      try {
+        // 1. Find teams the user is part of
+        const teamsQuery = query(
+          collection(db, 'teams'),
+          where('player1Name', '==', user.name)
+        );
+        const teamsSnap = await getDocs(teamsQuery);
+        let userTeams = teamsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Team));
+
+        // Add teams where user is player 2
+        const p2TeamsQuery = query(
+          collection(db, 'teams'),
+          where('player2Name', '==', user.name)
+        );
+        const p2TeamsSnap = await getDocs(p2TeamsQuery);
+        userTeams.push(...p2TeamsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Team)));
+        
+        // Deduplicate teams in case user name was entered in both fields
+        userTeams = userTeams.filter((team, index, self) =>
+            index === self.findIndex((t) => (
+                t.id === team.id
+            ))
+        )
+        setMyTeams(userTeams);
+        
+        // 2. Fetch matches for those teams
+        if (userTeams.length > 0) {
+          const teamIds = userTeams.map(t => t.id);
+          const matchesAsTeam1Query = query(collection(db, 'matches'), where('team1Id', 'in', teamIds));
+          const matchesAsTeam2Query = query(collection(db, 'matches'), where('team2Id', 'in', teamIds));
+
+          const [matches1Snap, matches2Snap] = await Promise.all([
+            getDocs(matchesAsTeam1Query),
+            getDocs(matchesAsTeam2Query)
+          ]);
+          
+          let allMatches = [
+            ...matches1Snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Match)),
+            ...matches2Snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Match)),
+          ];
+          
+          // Deduplicate matches
+          allMatches = allMatches.filter((match, index, self) =>
+            index === self.findIndex((m) => m.id === match.id)
+          );
+          
+          allMatches.sort((a,b) => (a.round || 0) - (b.round || 0));
+
+          const matchesByTeam: Record<string, Match[]> = {};
+          userTeams.forEach(team => {
+            matchesByTeam[team.id] = allMatches.filter(m => m.team1Id === team.id || m.team2Id === team.id);
+          });
+          setMyMatches(matchesByTeam);
         }
-    }
-  }
+        
+        // 3. Get team counts for round name calculation
+         const allTeamsSnap = await getDocs(collection(db, 'teams'));
+         const counts: Record<TeamType, number> = { singles: 0, mens_doubles: 0, womens_doubles: 0, mixed_doubles: 0 };
+         allTeamsSnap.forEach(doc => {
+            const team = doc.data() as { type: TeamType };
+            if (counts[team.type] !== undefined) {
+                counts[team.type]++;
+            }
+         });
+         setTeamCounts(counts);
+
+      } catch (err) {
+        toast({ title: 'Error', description: 'Failed to fetch your match history.', variant: 'destructive' });
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchData();
+  }, [user, toast]);
   
-  if (!user) return null;
+  if (isLoading) {
+      return (
+          <div className="flex h-full w-full items-center justify-center">
+              <Loader2 className="h-12 w-12 animate-spin text-primary" />
+          </div>
+      );
+  }
 
   return (
     <div>
-      <h1 className="text-3xl font-bold mb-2">Welcome, {user.name}</h1>
-      <p className="text-muted-foreground mb-8">Here you can update your personal information.</p>
-      <Card className="max-w-2xl">
-        <CardHeader>
-          <CardTitle>Your Profile</CardTitle>
-          <CardDescription>Update your name and email address.</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
-              <FormField
-                control={form.control}
-                name="name"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Full Name</FormLabel>
-                    <FormControl>
-                      <Input placeholder="Your full name" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="email"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Email Address</FormLabel>
-                    <FormControl>
-                      <Input type="email" placeholder="Your email" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <div className="flex space-x-4">
-                <FormItem className="w-1/2">
-                  <FormLabel>Username</FormLabel>
-                  <FormControl>
-                    <Input disabled value={user.username} />
-                  </FormControl>
-                </FormItem>
-                <FormItem className="w-1/2">
-                  <FormLabel>Phone Number</FormLabel>
-                  <FormControl>
-                    <Input disabled value={user.phoneNumber} />
-                  </FormControl>
-                </FormItem>
-              </div>
-              <Button type="submit">Update Profile</Button>
-            </form>
-          </Form>
-        </CardContent>
-      </Card>
+      <h1 className="text-3xl font-bold mb-2">Welcome, {user?.name}</h1>
+      <p className="text-muted-foreground mb-8">View your registered teams and their match schedules below.</p>
+      
+      {myTeams.length === 0 ? (
+         <Card>
+            <CardContent className="pt-6">
+                <p className="text-center text-muted-foreground">You are not currently registered in any teams.</p>
+            </CardContent>
+        </Card>
+      ) : (
+        <div className="space-y-8">
+            {myTeams.map(team => (
+                <Card key={team.id}>
+                    <CardHeader>
+                        <CardTitle className="capitalize">{team.type.replace(/_/g, ' ')}</CardTitle>
+                        <CardDescription>
+                           Team: {team.player1Name} {team.player2Name && `& ${team.player2Name}`}
+                        </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                        <Table>
+                            <TableHeader>
+                                <TableRow>
+                                    <TableHead>Round</TableHead>
+                                    <TableHead>Opponent</TableHead>
+                                    <TableHead>Status</TableHead>
+                                    <TableHead>Court</TableHead>
+                                    <TableHead>Result</TableHead>
+                                </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                               {myMatches[team.id]?.length > 0 ? (
+                                    myMatches[team.id].map(match => {
+                                        const opponentName = match.team1Id === team.id ? match.team2Name : match.team1Name;
+                                        const isWinner = match.winnerId === team.id;
+                                        return (
+                                            <TableRow key={match.id}>
+                                                <TableCell>{getRoundName(match.round || 0, match.eventType, teamCounts[match.eventType])}</TableCell>
+                                                <TableCell>{opponentName}</TableCell>
+                                                <TableCell>
+                                                     <Badge variant={match.status === 'COMPLETED' ? 'default' : (match.status === 'IN_PROGRESS' || match.status === 'SCHEDULED') ? 'secondary' : 'outline'}>
+                                                        {match.status}
+                                                     </Badge>
+                                                </TableCell>
+                                                <TableCell>{match.courtName || 'N/A'}</TableCell>
+                                                <TableCell>
+                                                    {match.status === 'COMPLETED' && (
+                                                        <Badge variant={isWinner ? 'default' : 'destructive'}>
+                                                            {isWinner ? `Won (${match.score})` : `Lost (${match.score})`}
+                                                        </Badge>
+                                                    )}
+                                                </TableCell>
+                                            </TableRow>
+                                        )
+                                    })
+                               ) : (
+                                 <TableRow>
+                                    <TableCell colSpan={5} className="text-center text-muted-foreground">No matches scheduled for this team yet.</TableCell>
+                                 </TableRow>
+                               )}
+                            </TableBody>
+                        </Table>
+                    </CardContent>
+                </Card>
+            ))}
+        </div>
+      )}
     </div>
   );
 }

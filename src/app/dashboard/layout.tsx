@@ -51,7 +51,7 @@ export default function DashboardLayout({
     <div className="flex min-h-screen w-full flex-col bg-background">
       <DashboardHeader user={user} />
       <div className="flex flex-1">
-        {isAdmin && <MainNav />}
+        <MainNav user={user} />
         <main className={`flex-1 p-4 md:p-8 ${isAdmin ? 'lg:ml-64' : ''}`}>
           {children}
         </main>

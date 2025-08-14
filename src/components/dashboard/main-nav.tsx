@@ -4,17 +4,28 @@
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { cn } from "@/lib/utils"
-import { LayoutDashboard, ListOrdered, Shield, Cog, Settings, Database } from "lucide-react"
+import { LayoutDashboard, ListOrdered, Shield, Cog, Settings, Trophy } from "lucide-react"
+import type { User } from "@/types"
 
-export function MainNav() {
+export function MainNav({ user }: { user: User | null }) {
   const pathname = usePathname()
-  const navItems = [
+  
+  const adminNavItems = [
     { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
     { href: "/dashboard/tournament", label: "Tournament Setup", icon: Cog },
     { href: "/dashboard/scheduler", label: "Scheduler", icon: ListOrdered },
     { href: "/dashboard/umpire", label: "Umpire View", icon: Shield },
+    { href: "/dashboard/standings", label: "Standings", icon: Trophy },
     { href: "/dashboard/settings", label: "System Settings", icon: Settings },
   ]
+  
+  const userNavItems = [
+     { href: "/dashboard", label: "My Dashboard", icon: LayoutDashboard },
+     { href: "/dashboard/standings", label: "Standings", icon: Trophy },
+  ]
+  
+  const navItems = user?.role === 'admin' || user?.role === 'super' ? adminNavItems : userNavItems;
+
   return (
     <aside className="fixed inset-y-0 left-0 z-30 hidden w-64 flex-col border-r bg-background lg:flex">
       <nav className="flex flex-col gap-2 p-4">
