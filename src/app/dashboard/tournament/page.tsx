@@ -216,38 +216,6 @@ export default function TournamentSettingsPage() {
 
         const generatedMatches = await scheduleMatches(scheduleInput);
         
-        // Add byes for knockout tournament
-        if (tournament.tournamentType === 'knockout') {
-            for (const event of teamsCountPerEvent) {
-                const teamCount = event.count;
-                const nextPowerOf2 = Math.pow(2, Math.ceil(Math.log2(teamCount)));
-                const byes = nextPowerOf2 - teamCount;
-                if (byes > 0 && byes < teamCount) { // Byes are only needed if teams are not a power of 2
-                     const eventTeams = teams.filter(t => t.type === event.eventType);
-                     // Find teams that were NOT included in the generated matches for round 1
-                     const scheduledTeamIds = new Set(generatedMatches.flatMap(m => [m.team1Id, m.team2Id]));
-                     const byeTeams = eventTeams.filter(t => !scheduledTeamIds.has(t.id));
-
-                     for(const byeTeam of byeTeams) {
-                         const byeMatchRef = doc(collection(db, 'matches'));
-                         batch.set(byeMatchRef, {
-                            team1Id: byeTeam.id,
-                            team2Id: 'BYE',
-                            team1Name: byeTeam.player1Name + (byeTeam.player2Name ? ` & ${byeTeam.player2Name}` : ''),
-                            team2Name: 'BYE',
-                            team1OrgName: organizations.find(o => o.id === byeTeam.organizationId)?.name || '',
-                            team2OrgName: '',
-                            eventType: byeTeam.type,
-                            status: 'COMPLETED',
-                            winnerId: byeTeam.id,
-                            score: 'BYE',
-                            round: 1,
-                         });
-                     }
-                }
-            }
-        }
-
         generatedMatches.forEach(match => {
             const matchRef = doc(collection(db, 'matches'));
             batch.set(matchRef, { ...match, courtName: '', startTime: Timestamp.now() });
@@ -450,5 +418,7 @@ export default function TournamentSettingsPage() {
     </div>
   );
 }
+
+    
 
     
