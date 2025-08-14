@@ -12,10 +12,10 @@ import { MainNav } from "./main-nav";
 import { cn } from "@/lib/utils";
 
 export function DashboardHeader({ user, onToggleCollapse, isCollapsed }: { user: User | null, onToggleCollapse: () => void, isCollapsed: boolean }) {
-
+  const isCourtUmpire = user?.role === 'court';
   return (
     <header className={cn("sticky top-0 z-40 w-full border-b bg-background/80 backdrop-blur-sm", )}>
-      <div className={cn("flex h-16 items-center space-x-4 sm:justify-between sm:space-x-0 transition-all duration-300", isCollapsed ? "pl-4 lg:pl-24" : "pl-4 lg:pl-4")}>
+      <div className={cn("flex h-16 items-center space-x-4 sm:justify-between sm:space-x-0 transition-all duration-300", !isCourtUmpire && (isCollapsed ? "lg:pl-24" : "lg:pl-4"))}>
          <div className="lg:hidden">
             <Sheet>
                 <SheetTrigger asChild>
@@ -36,11 +36,13 @@ export function DashboardHeader({ user, onToggleCollapse, isCollapsed }: { user:
          </div>
 
         <div className="hidden lg:flex items-center gap-4">
-            <Button variant="ghost" size="icon" onClick={onToggleCollapse} className="hidden lg:flex">
-              {isCollapsed ? <PanelLeftClose /> : <PanelLeftOpen />}
-              <span className="sr-only">Toggle Sidebar</span>
-            </Button>
-             <Link href="/dashboard" className={cn(isCollapsed && 'hidden')}>
+            {!isCourtUmpire && (
+                 <Button variant="ghost" size="icon" onClick={onToggleCollapse}>
+                    {isCollapsed ? <PanelRightClose /> : <PanelLeftClose />}
+                    <span className="sr-only">Toggle Sidebar</span>
+                </Button>
+            )}
+             <Link href="/dashboard" className={cn(isCollapsed && !isCourtUmpire && 'hidden')}>
                 <Logo />
             </Link>
         </div>

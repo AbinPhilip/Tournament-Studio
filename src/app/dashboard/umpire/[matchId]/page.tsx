@@ -49,11 +49,13 @@ export default function LiveScorerPage() {
                         team1Points: 0,
                         team2Points: 0,
                         servingTeamId: matchData.team1Id,
-                        currentSet: currentSetNumber,
+                        currentSet: 1,
                     };
-                } else if (matchData.live.currentSet !== currentSetNumber) {
-                    matchData.live.currentSet = currentSetNumber;
                 }
+                
+                // Always ensure current set number is accurate
+                matchData.live.currentSet = currentSetNumber;
+
                 setMatch(matchData);
             } else {
                 toast({ title: "Error", description: "Match not found.", variant: 'destructive' });

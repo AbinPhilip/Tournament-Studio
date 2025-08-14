@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import {
   Table,
@@ -14,7 +14,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
 import { db } from '@/lib/firebase';
-import { collection, getDocs, query, where, Timestamp } from 'firebase/firestore';
+import { collection, onSnapshot, query, where, Timestamp } from 'firebase/firestore';
 import type { Match, TeamType } from '@/types';
 import { Loader2, Gamepad2, ShieldCheck } from 'lucide-react';
 import { useRouter } from 'next/navigation';
@@ -34,41 +34,52 @@ export default function CourtUmpireView() {
 
   const courtName = user?.courtName;
 
-  const fetchMatches = useCallback(async () => {
-    if (!courtName) return;
-    setIsLoading(true);
-    try {
-      const [matchesSnap, teamsSnap] = await Promise.all([
-        getDocs(query(collection(db, 'matches'), where('courtName', '==', courtName))),
-        getDocs(collection(db, 'teams')),
-      ]);
-
-      const matchesData = matchesSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Omit<Match, 'startTime'> & {startTime: Timestamp})).map(m => ({...m, startTime: m.startTime?.toDate()}));
-      
-      // Sort on the client side
-      matchesData.sort((a, b) => (b.startTime?.getTime() || 0) - (a.startTime?.getTime() || 0));
-      
-      setMatches(matchesData as Match[]);
-
-      const counts: Record<TeamType, number> = { singles: 0, mens_doubles: 0, womens_doubles: 0, mixed_doubles: 0 };
-      teamsSnap.forEach(doc => {
-        const team = doc.data() as { type: TeamType };
-        if (counts[team.type] !== undefined) {
-          counts[team.type]++;
-        }
-      });
-      setTeamCounts(counts);
-    } catch (error) {
-      console.error("Error fetching data:", error);
-      toast({ title: 'Error', description: 'Failed to fetch match data.', variant: 'destructive' });
-    } finally {
-      setIsLoading(false);
-    }
-  }, [courtName, toast]);
-
   useEffect(() => {
-    fetchMatches();
-  }, [fetchMatches]);
+    if (!courtName) {
+        setIsLoading(false);
+        return;
+    };
+
+    setIsLoading(true);
+
+    const matchesQuery = query(collection(db, 'matches'), where('courtName', '==', courtName));
+    
+    const unsubscribeMatches = onSnapshot(matchesQuery, (snapshot) => {
+        const matchesData = snapshot.docs.map(doc => ({ 
+            id: doc.id, 
+            ...doc.data(),
+            startTime: (doc.data().startTime as Timestamp)?.toDate() 
+        } as Match));
+        
+        matchesData.sort((a, b) => (b.startTime?.getTime() || 0) - (a.startTime?.getTime() || 0));
+        setMatches(matchesData);
+        setIsLoading(false);
+    }, (error) => {
+        console.error("Error fetching matches:", error);
+        toast({ title: 'Error', description: 'Failed to fetch match data in real-time.', variant: 'destructive' });
+        setIsLoading(false);
+    });
+    
+    const unsubscribeTeams = onSnapshot(collection(db, 'teams'), (snapshot) => {
+        const counts: Record<TeamType, number> = { singles: 0, mens_doubles: 0, womens_doubles: 0, mixed_doubles: 0 };
+        snapshot.forEach(doc => {
+            const team = doc.data() as { type: TeamType };
+            if (counts[team.type] !== undefined) {
+            counts[team.type]++;
+            }
+        });
+        setTeamCounts(counts);
+    }, (error) => {
+         console.error("Error fetching team counts:", error);
+        toast({ title: 'Error', description: 'Failed to fetch team counts.', variant: 'destructive' });
+    });
+
+
+    return () => {
+        unsubscribeMatches();
+        unsubscribeTeams();
+    };
+  }, [courtName, toast]);
 
   const handleScorerClick = (match: Match) => {
     if (match.status === 'COMPLETED') {
@@ -147,5 +158,3 @@ export default function CourtUmpireView() {
     </Card>
   );
 }
-
-    

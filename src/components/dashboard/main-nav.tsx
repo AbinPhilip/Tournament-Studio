@@ -114,7 +114,7 @@ export function MainNav({ user, isMobile = false, isCollapsed = false }: { user:
 
   return (
       <nav className={cn("flex flex-col gap-2", isMobile ? "p-0" : "p-4")}>
-        {!isMobile && (
+        {!isMobile && !isCollapsed && (
             <div className="flex items-center pl-3 mb-2 h-10">
                 <Link href="/dashboard">
                     <Logo />

@@ -5,7 +5,7 @@ import { useAuth } from '@/hooks/use-auth';
 import { Loader2 } from 'lucide-react';
 import dynamic from 'next/dynamic';
 
-const AdminView = dynamic(() => import('@/app/dashboard/admin-view'), { loading: () => <Loader2 className="h-12 w-12 animate-spin" /> });
+const AdminView = dynamic(() => import('@/components/dashboard/admin-view'), { loading: () => <Loader2 className="h-12 w-12 animate-spin" /> });
 const IndividualView = dynamic(() => import('@/components/dashboard/individual-view'), { loading: () => <Loader2 className="h-12 w-12 animate-spin" /> });
 const InquiryView = dynamic(() => import('@/components/dashboard/inquiry-view'), { loading: () => <Loader2 className="h-12 w-12 animate-spin" /> });
 const UpdateUserView = dynamic(() => import('@/components/dashboard/update-user-view'), { loading: () => <Loader2 className="h-12 w-12 animate-spin" /> });
