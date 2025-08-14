@@ -16,27 +16,37 @@ import {
   SortableContext,
   useSortable,
   verticalListSortingStrategy,
-  arrayMove,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { GripVertical, ArrowLeft, Loader2, Users } from 'lucide-react';
+import { GripVertical, ArrowLeft, Loader2, Users, XCircle } from 'lucide-react';
 import type { Match, Tournament } from '@/types';
 import { db } from '@/lib/firebase';
-import { collection, getDocs, doc, writeBatch, query, where, Timestamp } from 'firebase/firestore';
+import { collection, getDocs, doc, writeBatch, query, Timestamp, deleteDoc } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
 import { useRouter } from 'next/navigation';
 import { Skeleton } from '@/components/ui/skeleton';
+import { cn } from '@/lib/utils';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog"
 
 const MatchCard = ({ match, isOverlay }: { match: Match; isOverlay?: boolean }) => {
     return (
-        <Card className={`p-4 mb-2 touch-none ${isOverlay ? 'shadow-lg' : 'shadow-sm'}`}>
+        <Card className={cn('p-4 mb-2 touch-none', isOverlay ? 'shadow-lg' : 'shadow-sm')}>
             <div className="flex items-center justify-between">
                 <div className="flex-grow">
                     <p className="font-semibold text-sm">{match.team1Name} vs {match.team2Name}</p>
-                    <p className="text-xs text-muted-foreground capitalize">{match.eventType.replace('_', ' ')}</p>
+                    <p className="text-xs text-muted-foreground capitalize">{match.eventType.replace(/_/g, ' ')}</p>
                 </div>
                 <GripVertical className="h-5 w-5 text-muted-foreground" />
             </div>
@@ -67,11 +77,11 @@ const SortableMatchCard = ({ match }: { match: Match }) => {
   );
 };
 
-const CourtColumn = ({ courtName, matches }: { courtName: string; matches: Match[] }) => {
-    const { setNodeRef } = useSortable({ id: courtName });
+const CourtColumn = ({ courtName, matches, isOccupied }: { courtName: string; matches: Match[], isOccupied: boolean }) => {
+    const { setNodeRef } = useSortable({ id: courtName, data: { type: 'court' } });
   
     return (
-        <Card ref={setNodeRef} className="flex-1 min-w-[300px] bg-muted/50">
+        <Card ref={setNodeRef} className={cn("flex-1 min-w-[300px] transition-colors", isOccupied ? 'bg-red-100 dark:bg-red-900/50' : 'bg-green-100 dark:bg-green-900/50')}>
             <CardHeader>
                 <CardTitle className="text-lg capitalize">{courtName}</CardTitle>
             </CardHeader>
@@ -101,33 +111,37 @@ export default function SchedulerPage() {
 
     const sensors = useSensors(useSensor(PointerSensor));
 
-    useEffect(() => {
-        const fetchData = async () => {
-            setIsLoading(true);
-            try {
-                const [tournamentSnap, matchesSnap] = await Promise.all([
-                    getDocs(collection(db, 'tournaments')),
-                    getDocs(collection(db, 'matches')),
-                ]);
+    const fetchAndSetData = async () => {
+        setIsLoading(true);
+        try {
+            const [tournamentSnap, matchesSnap] = await Promise.all([
+                getDocs(collection(db, 'tournaments')),
+                getDocs(query(collection(db, 'matches'))),
+            ]);
 
-                if (!tournamentSnap.empty) {
-                    const tourneyData = tournamentSnap.docs[0].data() as Omit<Tournament, 'id'|'date'> & { date: Timestamp };
-                    setTournament({id: tournamentSnap.docs[0].id, ...tourneyData, date: tourneyData.date.toDate()});
-                } else {
-                     toast({ title: 'No Tournament Found', description: 'Please configure a tournament first.', variant: 'destructive'});
-                     router.push('/dashboard/tournament');
-                }
-
-                setMatches(matchesSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Match)));
-            } catch (error) {
-                console.error("Error fetching data:", error);
-                toast({ title: 'Error', description: 'Failed to fetch tournament data.', variant: 'destructive' });
-            } finally {
-                setIsLoading(false);
+            if (!tournamentSnap.empty) {
+                const tourneyData = tournamentSnap.docs[0].data() as Omit<Tournament, 'id'|'date'> & { date: Timestamp };
+                setTournament({id: tournamentSnap.docs[0].id, ...tourneyData, date: tourneyData.date.toDate()});
+            } else {
+                 toast({ title: 'No Tournament Found', description: 'Please configure a tournament first.', variant: 'destructive'});
+                 router.push('/dashboard/tournament');
+                 return; // Stop execution if no tournament
             }
-        };
-        fetchData();
-    }, [toast, router]);
+
+            const allMatches = matchesSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Match));
+            setMatches(allMatches);
+
+        } catch (error) {
+            console.error("Error fetching data:", error);
+            toast({ title: 'Error', description: 'Failed to fetch tournament data.', variant: 'destructive' });
+        } finally {
+            setIsLoading(false);
+        }
+    };
+    
+    useEffect(() => {
+        fetchAndSetData();
+    }, []);
 
     const { unassignedMatches, courtAssignments } = useMemo(() => {
         const unassigned: Match[] = [];
@@ -140,9 +154,12 @@ export default function SchedulerPage() {
         matches.forEach(match => {
             if (match.status === 'PENDING') {
                 unassigned.push(match);
-            } else if (match.status === 'SCHEDULED' && match.courtName) {
+            } else if ((match.status === 'SCHEDULED' || match.status === 'IN_PROGRESS') && match.courtName) {
                 if (assignments[match.courtName]) {
                     assignments[match.courtName].push(match);
+                } else {
+                    // If a match is assigned to a court that no longer exists, treat it as unassigned
+                    unassigned.push(match);
                 }
             }
         });
@@ -166,30 +183,36 @@ export default function SchedulerPage() {
         const activeMatchId = active.id as string;
         const targetContainerId = over.id as string;
 
-        // Ensure we are dropping onto a court or back to the unassigned list
+        // Check if dropping on a court
         const isCourtDrop = tournament?.courtNames.some(c => c.name === targetContainerId);
-        if (!isCourtDrop && targetContainerId !== 'unassigned') return;
-        
-        // Find the match being dragged
-        const draggedMatch = matches.find(m => m.id === activeMatchId);
-        if (!draggedMatch) return;
-        
-        // Prevent dropping on a court that is already occupied
-        if (isCourtDrop && courtAssignments[targetContainerId].length > 0) {
-            toast({ title: 'Court Occupied', description: `Court ${targetContainerId} already has a match.`, variant: 'destructive' });
-            return;
-        }
 
-        setMatches(prev => prev.map(m => {
-            if (m.id === activeMatchId) {
-                if (isCourtDrop) {
-                     return { ...m, courtName: targetContainerId, status: 'SCHEDULED', startTime: new Date() };
-                } else { // Dropped back to unassigned
-                     return { ...m, courtName: undefined, status: 'PENDING', startTime: undefined };
-                }
+        if (isCourtDrop) {
+             // Prevent dropping on a court that is already occupied
+            if (courtAssignments[targetContainerId] && courtAssignments[targetContainerId].length > 0) {
+                toast({
+                    title: 'Court Occupied',
+                    description: `Court ${targetContainerId} already has a match.`,
+                    variant: 'destructive',
+                });
+                return;
             }
-            return m;
-        }));
+
+            setMatches(prev => prev.map(m => {
+                if (m.id === activeMatchId) {
+                    return { ...m, courtName: targetContainerId, status: 'SCHEDULED', startTime: new Date() };
+                }
+                return m;
+            }));
+        } else if (targetContainerId === 'unassigned') {
+             // Logic to handle dropping back to the unassigned list
+             setMatches(prev => prev.map(m => {
+                if (m.id === activeMatchId) {
+                    const { courtName, startTime, ...rest } = m;
+                    return { ...rest, status: 'PENDING' };
+                }
+                return m;
+            }));
+        }
     };
     
     const handleSaveSchedule = async () => {
@@ -202,11 +225,15 @@ export default function SchedulerPage() {
                     status: match.status,
                     courtName: match.courtName || undefined,
                 };
-                if (match.startTime && match.status === 'SCHEDULED') {
-                    dataToUpdate.startTime = Timestamp.fromDate(match.startTime as Date);
-                } else {
+                 if (match.status === 'SCHEDULED') {
+                    // Only set startTime if it doesn't exist, to avoid overwriting
+                    dataToUpdate.startTime = match.startTime || Timestamp.fromDate(new Date());
+                 } else if (match.status === 'PENDING') {
+                    // Firestore cannot store `undefined`, so we don't set the field
                     dataToUpdate.startTime = undefined;
-                }
+                    dataToUpdate.courtName = undefined;
+                 }
+                
                 batch.update(matchRef, dataToUpdate as any);
             });
             await batch.commit();
@@ -219,6 +246,21 @@ export default function SchedulerPage() {
             setIsSaving(false);
         }
     }
+    
+    const handleClearSchedule = async () => {
+        try {
+            const batch = writeBatch(db);
+            const matchesQuery = await getDocs(collection(db, 'matches'));
+            matchesQuery.forEach(doc => {
+                batch.delete(doc.ref);
+            });
+            await batch.commit();
+            toast({ title: 'Schedule Cleared', description: 'All matches have been deleted.' });
+            setMatches([]);
+        } catch (error) {
+            toast({ title: 'Error', description: 'Could not clear schedule.', variant: 'destructive' });
+        }
+    };
 
     if (isLoading) {
         return (
@@ -241,15 +283,35 @@ export default function SchedulerPage() {
             onDragEnd={handleDragEnd}
         >
             <div className="space-y-4 p-4 md:p-8">
-                <div className="flex justify-between items-start">
+                <div className="flex justify-between items-start flex-wrap gap-4">
                     <div>
-                        <h1 className="text-3xl font-bold mb-2">Assign Matches</h1>
+                        <h1 className="text-3xl font-bold mb-2">Assign Matches to Courts</h1>
                         <p className="text-muted-foreground">Drag unassigned matches to an available court to start them.</p>
                     </div>
-                    <div className="flex gap-2">
+                    <div className="flex gap-2 flex-wrap">
                          <Button variant="outline" onClick={() => router.push('/dashboard')}>
                             <ArrowLeft /> Back
                         </Button>
+                        <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                                <Button variant="destructive">
+                                    <XCircle className="mr-2" /> Clear All
+                                </Button>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent>
+                                <AlertDialogHeader>
+                                <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+                                <AlertDialogDescription>
+                                    This will permanently delete all generated matches. You will have to regenerate them from the tournament page.
+                                </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                <AlertDialogAction onClick={handleClearSchedule}>Clear Schedule</AlertDialogAction>
+                                </AlertDialogFooter>
+                            </AlertDialogContent>
+                        </AlertDialog>
+
                         <Button onClick={handleSaveSchedule} disabled={isSaving}>
                             {isSaving ? <Loader2 className="animate-spin" /> : <Users />}
                             Go to Umpire View
@@ -278,14 +340,19 @@ export default function SchedulerPage() {
 
                     {/* Court Columns */}
                     <div className="flex-grow grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                        {tournament?.courtNames.map(court => (
-                             <SortableContext key={court.name} id={court.name} items={courtAssignments[court.name]?.map(m => ({id: m.id})) || []}>
+                        {tournament?.courtNames.map(court => {
+                            const courtMatches = courtAssignments[court.name] || [];
+                            const isOccupied = courtMatches.length > 0;
+                            return (
+                             <SortableContext key={court.name} id={court.name} items={[]}>
                                 <CourtColumn
                                     courtName={court.name}
-                                    matches={courtAssignments[court.name] || []}
+                                    matches={courtMatches}
+                                    isOccupied={isOccupied}
                                 />
                              </SortableContext>
-                        ))}
+                            )
+                        })}
                     </div>
                 </div>
             </div>
@@ -295,3 +362,5 @@ export default function SchedulerPage() {
         </DndContext>
     );
 }
+
+    
