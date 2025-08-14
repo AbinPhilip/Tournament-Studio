@@ -27,13 +27,22 @@ export function MainNav({ user }: { user: User | null }) {
   useEffect(() => {
     const fetchPermissions = async () => {
         if (user?.role) {
-            const permDocRef = doc(db, 'rolePermissions', user.role);
-            const permDocSnap = await getDoc(permDocRef);
-            if (permDocSnap.exists()) {
-                setAllowedModules(permDocSnap.data().modules);
-            } else {
-                // Fallback for safety, super admins see all, others see basics
-                if (user.role === 'super' || user.role === 'admin') {
+            try {
+                const permDocRef = doc(db, 'rolePermissions', user.role);
+                const permDocSnap = await getDoc(permDocRef);
+                if (permDocSnap.exists()) {
+                    setAllowedModules(permDocSnap.data().modules);
+                } else {
+                    // Fallback for safety, super admins see all, others see basics
+                    if (user.role === 'super' || user.role === 'admin') {
+                        setAllowedModules(allNavItems.map(item => item.id));
+                    } else {
+                        setAllowedModules(['dashboard', 'standings']);
+                    }
+                }
+            } catch (error) {
+                console.error("Failed to fetch permissions, using fallback.", error);
+                 if (user.role === 'super' || user.role === 'admin') {
                     setAllowedModules(allNavItems.map(item => item.id));
                 } else {
                     setAllowedModules(['dashboard', 'standings']);
