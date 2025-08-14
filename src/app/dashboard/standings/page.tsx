@@ -124,8 +124,8 @@ export default function StandingsPage() {
                                     <TableHeader>
                                         <TableRow>
                                             <TableHead>Round</TableHead>
-                                            <TableHead>Winning Team</TableHead>
-                                            <TableHead>Losing Team</TableHead>
+                                            <TableHead>Victor</TableHead>
+                                            <TableHead>Runner-up</TableHead>
                                             <TableHead>Score</TableHead>
                                         </TableRow>
                                     </TableHeader>
