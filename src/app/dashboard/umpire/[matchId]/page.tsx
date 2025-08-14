@@ -53,13 +53,16 @@ export default function LiveScorerPage() {
                 unsubscribe = onSnapshot(matchRef, (docSnap) => {
                     if (docSnap.exists()) {
                         const matchData = { id: docSnap.id, ...docSnap.data() } as Match;
+                        const currentSetNumber = (matchData.scores?.length || 0) + 1;
                         if (!matchData.live) {
                             matchData.live = {
                                 team1Points: 0,
                                 team2Points: 0,
                                 servingTeamId: matchData.team1Id,
-                                currentSet: (matchData.scores?.length || 0) + 1,
+                                currentSet: currentSetNumber,
                             };
+                        } else {
+                            matchData.live.currentSet = currentSetNumber;
                         }
                         setMatch(matchData);
                     } else {
@@ -124,6 +127,7 @@ export default function LiveScorerPage() {
 
     const handleFinalizeSet = async () => {
         if (!match?.live) return;
+        const setToFinalize = match.live.currentSet;
         setIsSubmitting(true);
         try {
             const newScores = [...(match.scores || [])];
@@ -143,7 +147,7 @@ export default function LiveScorerPage() {
                 servingTeamId: match.team1Id, // Reset service to team 1 for simplicity
             });
 
-            toast({ title: "Set Finalized", description: `Set ${match.live.currentSet} score has been recorded.` });
+            toast({ title: "Set Finalized", description: `Set ${setToFinalize} score has been recorded.` });
 
         } catch (error) {
             toast({ title: "Error", description: "Could not finalize set.", variant: "destructive" });
