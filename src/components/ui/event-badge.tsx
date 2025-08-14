@@ -10,16 +10,16 @@ type EventBadgeProps = {
 
 export function EventBadge({ eventType, className }: EventBadgeProps) {
   const eventStyles: Record<TeamType, string> = {
-    singles: "bg-sky-100 text-sky-800 border-sky-300 dark:bg-sky-900/60 dark:text-sky-200 dark:border-sky-700",
-    mens_doubles: "bg-emerald-100 text-emerald-800 border-emerald-300 dark:bg-emerald-900/60 dark:text-emerald-200 dark:border-emerald-700",
-    womens_doubles: "bg-rose-100 text-rose-800 border-rose-300 dark:bg-rose-900/60 dark:text-rose-200 dark:border-rose-700",
-    mixed_doubles: "bg-fuchsia-100 text-fuchsia-800 border-fuchsia-300 dark:bg-fuchsia-900/60 dark:text-fuchsia-200 dark:border-fuchsia-700",
+    singles: "bg-blue-500 hover:bg-blue-600 border-transparent text-white",
+    mens_doubles: "bg-green-600 hover:bg-green-700 border-transparent text-white",
+    womens_doubles: "bg-pink-500 hover:bg-pink-600 border-transparent text-white",
+    mixed_doubles: "bg-purple-600 hover:bg-purple-700 border-transparent text-white",
   };
   
   const text = eventType.replace(/_/g, ' ');
 
   return (
-    <Badge className={cn("capitalize font-semibold text-sm py-1 px-3", eventStyles[eventType], className)}>
+    <Badge variant="default" className={cn("capitalize font-semibold text-sm py-1 px-3", eventStyles[eventType], className)}>
         {text}
     </Badge>
   );
