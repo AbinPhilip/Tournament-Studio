@@ -39,7 +39,7 @@ const TournamentSchema = z.object({
 const OrganizationSchema = z.object({
     id: z.string(),
     name: z.string(),
-    location: z.string(),
+    location: z.string().optional(),
 });
 
 const EventTeamCountSchema = z.object({

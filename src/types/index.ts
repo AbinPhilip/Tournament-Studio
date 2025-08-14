@@ -28,7 +28,7 @@ export type Gender = 'male' | 'female';
 export interface Organization {
   id: string;
   name: string;
-  location: string;
+  location?: string;
 }
 
 export interface Team {
