@@ -30,8 +30,8 @@ export default function AdminView() {
             <Button variant="outline" onClick={() => router.push('/dashboard/scheduler')}>
                 <ListOrdered className="mr-2"/> Court Scheduler
             </Button>
-            <Button variant="outline" onClick={() => router.push('/dashboard/umpire')}>
-                <Shield className="mr-2"/> Go to Umpire View
+            <Button variant="outline" onClick={() => router.push('/dashboard/court-view')}>
+                <Shield className="mr-2"/> Go to Court View
             </Button>
         </CardContent>
       </Card>

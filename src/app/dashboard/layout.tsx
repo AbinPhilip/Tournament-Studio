@@ -44,15 +44,15 @@ export default function DashboardLayout({
       </div>
     );
   }
-  
-  const isAdmin = user.role === 'admin' || user.role === 'super';
 
   return (
     <div className="flex min-h-screen w-full flex-col bg-background">
       <DashboardHeader user={user} />
       <div className="flex flex-1">
-        <MainNav user={user} />
-        <main className={`flex-1 p-4 md:p-8 ${isAdmin ? 'lg:ml-64' : ''}`}>
+        <aside className="fixed inset-y-0 left-0 z-30 hidden w-64 flex-col border-r bg-background lg:flex">
+          <MainNav user={user} />
+        </aside>
+        <main className="flex-1 p-4 pt-20 md:p-8 lg:ml-64">
           {children}
         </main>
       </div>

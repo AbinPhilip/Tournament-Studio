@@ -22,7 +22,7 @@ import { Badge } from '@/components/ui/badge';
 import { getRoundName } from '@/lib/utils';
 
 
-export default function UmpirePage() {
+export default function CourtViewPage() {
     const { toast } = useToast();
     const router = useRouter();
     const [isLoading, setIsLoading] = useState(false);
@@ -105,9 +105,9 @@ export default function UmpirePage() {
     return (
         <Card>
             <CardHeader>
-                <div className="flex justify-between items-start">
+                <div className="flex justify-between items-start flex-wrap gap-2">
                     <div>
-                        <CardTitle>Umpire View</CardTitle>
+                        <CardTitle>Court View</CardTitle>
                         <CardDescription>
                             View matches by court. Click the scorer icon to start live scoring.
                         </CardDescription>
@@ -133,7 +133,7 @@ export default function UmpirePage() {
                                 <h3 className="text-xl font-bold mb-4 capitalize">
                                     {courtName}
                                 </h3>
-                                <div className="border rounded-md">
+                                <div className="border rounded-md overflow-x-auto">
                                 <Table>
                                     <TableHeader>
                                         <TableRow>
@@ -149,8 +149,8 @@ export default function UmpirePage() {
                                     <TableBody>
                                         {groupedMatchesByCourt[courtName].map(match => (
                                             <TableRow key={match.id} className={match.status === 'IN_PROGRESS' ? 'bg-yellow-50 dark:bg-yellow-900/20' : ''}>
-                                                <TableCell className="font-medium">{getRoundName(match.round || 0, match.eventType, teamCounts[match.eventType])}</TableCell>
-                                                <TableCell className="capitalize">{match.eventType.replace(/_/g, ' ')}</TableCell>
+                                                <TableCell className="font-medium whitespace-nowrap">{getRoundName(match.round || 0, match.eventType, teamCounts[match.eventType])}</TableCell>
+                                                <TableCell className="capitalize whitespace-nowrap">{match.eventType.replace(/_/g, ' ')}</TableCell>
                                                 <TableCell className={match.winnerId === match.team1Id ? 'font-bold' : ''}>{match.team1Name}</TableCell>
                                                 <TableCell className={match.winnerId === match.team2Id ? 'font-bold' : ''}>{match.team2Name}</TableCell>
                                                 <TableCell>{match.score || 'N/A'}</TableCell>

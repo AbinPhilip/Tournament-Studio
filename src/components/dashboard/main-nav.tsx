@@ -14,13 +14,13 @@ const allNavItems = [
     { id: "dashboard", href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
     { id: "tournament", href: "/dashboard/tournament", label: "Tournament Setup", icon: Cog },
     { id: "scheduler", href: "/dashboard/scheduler", label: "Scheduler", icon: ListOrdered },
-    { id: "umpire", href: "/dashboard/umpire", label: "Umpire View", icon: Shield },
+    { id: "court-view", href: "/dashboard/court-view", label: "Court View", icon: Shield },
     { id: "standings", href: "/dashboard/standings", label: "Standings", icon: Trophy },
     { id: "settings", href: "/dashboard/settings", label: "System Settings", icon: Settings },
 ];
 
 
-export function MainNav({ user }: { user: User | null }) {
+export function MainNav({ user, isMobile = false }: { user: User | null, isMobile?: boolean }) {
   const pathname = usePathname();
   const [allowedModules, setAllowedModules] = useState<string[] | null>(null);
 
@@ -55,16 +55,15 @@ export function MainNav({ user }: { user: User | null }) {
 
   if (allowedModules === null) {
     return (
-        <aside className="fixed inset-y-0 left-0 z-30 hidden w-64 flex-col border-r bg-background lg:flex items-center justify-center">
+        <div className={cn("flex items-center justify-center", isMobile ? "h-full" : "w-64")}>
             <Loader2 className="h-8 w-8 animate-spin" />
-        </aside>
+        </div>
     );
   }
 
   const navItems = allNavItems.filter(item => allowedModules.includes(item.id));
 
   return (
-    <aside className="fixed inset-y-0 left-0 z-30 hidden w-64 flex-col border-r bg-background lg:flex">
       <nav className="flex flex-col gap-2 p-4">
         {navItems.map(item => (
             <Link 
@@ -81,6 +80,5 @@ export function MainNav({ user }: { user: User | null }) {
             </Link>
         ))}
       </nav>
-    </aside>
   )
 }
