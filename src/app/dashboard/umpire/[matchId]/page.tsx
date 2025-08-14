@@ -272,13 +272,10 @@ export default function LiveScorerPage() {
 
 
 function TeamScorePanel({ teamName, points, setsWon, isServing, onPointChange }: { teamName: string, points: number, setsWon: number, isServing: boolean, onPointChange: (delta: 1 | -1) => void }) {
-    const players = teamName.split(' & ');
     return (
         <div className={`p-6 rounded-lg border-4 transition-all ${isServing ? 'border-primary shadow-lg' : 'border-muted'}`}>
-            <div className="text-xl font-semibold mb-2 truncate min-h-[56px]">
-                {players.map((player, index) => (
-                    <div key={index}>{player}</div>
-                ))}
+            <div className="text-xl font-semibold mb-2 truncate min-h-[56px] flex items-center justify-center">
+                {teamName}
             </div>
             <p className="text-sm font-bold text-muted-foreground mb-2">Sets Won: {setsWon}</p>
             <p className="text-7xl font-bold mb-4">{points}</p>
