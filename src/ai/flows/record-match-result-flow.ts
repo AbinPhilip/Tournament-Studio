@@ -136,8 +136,15 @@ const recordMatchResultFlow = ai.defineFlow(
         );
         const currentRoundSnap = await getDocs(currentRoundQuery);
         
+        // Create a map of the current state of matches in the round
+        const roundMatchesMap = new Map(currentRoundSnap.docs.map(doc => [doc.id, doc.data() as Match]));
+        // Apply the current update to our map so it's up-to-date
+        roundMatchesMap.set(input.matchId, { ...completedMatch, ...updates });
+
         // Check if all matches in this round are completed
-        const allMatchesInRoundCompleted = currentRoundSnap.docs.every(doc => doc.data().status === 'COMPLETED' || doc.id === input.matchId);
+        const allMatchesInRoundCompleted = Array.from(roundMatchesMap.values()).every(
+            match => match.status === 'COMPLETED'
+        );
 
         if (!allMatchesInRoundCompleted) {
             // Not all matches in the current round are finished, so don't schedule the next round yet.
@@ -146,14 +153,7 @@ const recordMatchResultFlow = ai.defineFlow(
         }
 
         // All matches in the round are complete, proceed to find pairs for the next round.
-        const completedRoundMatches = currentRoundSnap.docs.map(doc => doc.data() as Match);
-        if(completedMatch.id === input.matchId) { // The current match update needs to be reflected
-            const index = completedRoundMatches.findIndex(m => m.id === input.matchId);
-            if(index > -1) completedRoundMatches[index] = { ...completedMatch, ...updates };
-            else completedRoundMatches.push({ ...completedMatch, ...updates });
-        }
-        
-        const winners = completedRoundMatches
+        const winners = Array.from(roundMatchesMap.values())
             .map(match => match.winnerId)
             .filter((id): id is string => !!id && id !== 'BYE');
 
