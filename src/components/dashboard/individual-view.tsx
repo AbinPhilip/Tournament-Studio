@@ -1,13 +1,13 @@
 
 "use client";
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect } from 'react';
 import { useAuth } from '@/hooks/use-auth';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
-import type { User, Team, Match, TeamType, Organization } from '@/types';
+import type { Team, Match, TeamType, Organization } from '@/types';
 import { db } from '@/lib/firebase';
-import { collection, query, where, getDocs, orderBy } from 'firebase/firestore';
+import { collection, query, where, getDocs } from 'firebase/firestore';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { getRoundName } from '@/lib/utils';
@@ -38,7 +38,9 @@ export default function IndividualView() {
           getDocs(collection(db, 'teams'))
         ]);
         
-        setOrganizations(orgsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Organization)));
+        const orgsData = orgsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Organization))
+        setOrganizations(orgsData);
+        const orgNameMap = new Map(orgsData.map(o => [o.id, o.name]));
         
         const allTeams = teamsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Team));
 
@@ -99,17 +101,6 @@ export default function IndividualView() {
 
     fetchData();
   }, [user, toast]);
-
-  const orgNameMap = useMemo(() => {
-    return new Map(organizations.map(org => [org.id, org.name]));
-  }, [organizations]);
-  
-  const getOpponentOrgName = (match: Match, myTeamId: string) => {
-    const opponentTeamId = match.team1Id === myTeamId ? match.team2Id : match.team1Id;
-    const team = myTeams.find(t => t.id === opponentTeamId);
-    // Fallback to match data if team not in `myTeams` (which it shouldn't be)
-    return team ? orgNameMap.get(team.organizationId) : (match.team1Id === myTeamId ? match.team2OrgName : match.team1OrgName) || 'N/A';
-  };
   
   if (isLoading) {
       return (
@@ -118,6 +109,8 @@ export default function IndividualView() {
           </div>
       );
   }
+
+  const orgNameMap = new Map(organizations.map(o => [o.id, o.name]));
 
   return (
     <div>
@@ -137,7 +130,8 @@ export default function IndividualView() {
                     <CardHeader>
                         <CardTitle className="capitalize">{team.type.replace(/_/g, ' ')}</CardTitle>
                         <CardDescription>
-                           Team: {team.player1Name} {team.player2Name && `& ${team.player2Name}`} ({orgNameMap.get(team.organizationId)})
+                           Team: {team.player1Name} {team.player2Name && `& ${team.player2Name}`} 
+                           <span className="font-bold block">({orgNameMap.get(team.organizationId) || 'N/A'})</span>
                         </CardDescription>
                     </CardHeader>
                     <CardContent>
@@ -156,6 +150,7 @@ export default function IndividualView() {
                                     myMatches[team.id].map(match => {
                                         const opponentIsTeam1 = match.team1Id !== team.id;
                                         const opponentName = opponentIsTeam1 ? match.team1Name : match.team2Name;
+                                        const opponentOrgName = opponentIsTeam1 ? match.team1OrgName : match.team2OrgName;
                                         const isWinner = match.winnerId === team.id;
                                         return (
                                             <TableRow key={match.id}>
@@ -163,7 +158,7 @@ export default function IndividualView() {
                                                 <TableCell>
                                                     <div>
                                                         <span>{opponentName}</span>
-                                                        <p className="font-bold">{getOpponentOrgName(match, team.id)}</p>
+                                                        <p className="font-bold">{opponentOrgName || 'N/A'}</p>
                                                     </div>
                                                 </TableCell>
                                                 <TableCell>

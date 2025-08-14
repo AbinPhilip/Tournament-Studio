@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { useToast } from '@/hooks/use-toast';
 import { db } from '@/lib/firebase';
 import { collection, getDocs, query, Timestamp } from 'firebase/firestore';
-import type { Match, Team, TeamType, Organization } from '@/types';
+import type { Match, Team, TeamType } from '@/types';
 import { Loader2 } from 'lucide-react';
 import { getRoundName } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
@@ -19,18 +19,16 @@ export default function DrawPage() {
     const [isLoading, setIsLoading] = useState(true);
     const [matches, setMatches] = useState<Match[]>([]);
     const [teams, setTeams] = useState<Team[]>([]);
-    const [organizations, setOrganizations] = useState<Organization[]>([]);
     const [tournamentType, setTournamentType] = useState<'knockout' | 'round-robin'>('knockout');
 
     useEffect(() => {
         const fetchData = async () => {
             setIsLoading(true);
             try {
-                const [matchesSnap, teamsSnap, tournamentSnap, orgsSnap] = await Promise.all([
+                const [matchesSnap, teamsSnap, tournamentSnap] = await Promise.all([
                     getDocs(query(collection(db, 'matches'))),
                     getDocs(collection(db, 'teams')),
                     getDocs(collection(db, 'tournaments')),
-                    getDocs(collection(db, 'organizations')),
                 ]);
 
                 const matchesData = matchesSnap.docs.map(doc => {
@@ -41,8 +39,6 @@ export default function DrawPage() {
                 
                 const teamsData = teamsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Team));
                 setTeams(teamsData);
-
-                setOrganizations(orgsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Organization)));
 
                 if (!tournamentSnap.empty) {
                     setTournamentType(tournamentSnap.docs[0].data().tournamentType);
@@ -58,15 +54,6 @@ export default function DrawPage() {
 
         fetchData();
     }, [toast]);
-    
-    const orgNameMap = useMemo(() => {
-        return new Map(organizations.map(org => [org.id, org.name]));
-    }, [organizations]);
-
-    const getOrgName = (teamId: string) => {
-        const team = teams.find(t => t.id === teamId);
-        return team ? orgNameMap.get(team.organizationId) || 'N/A' : 'N/A';
-    };
 
     const teamCounts = useMemo(() => {
         return teams.reduce((acc, team) => {
@@ -181,7 +168,7 @@ export default function DrawPage() {
                                                                     <div key={match.id} className="border-2 rounded-xl p-4 text-base bg-background shadow-md transition-all hover:shadow-lg">
                                                                         <div className={`flex flex-col ${match.winnerId === match.team1Id ? 'font-extrabold text-foreground' : 'text-muted-foreground'}`}>
                                                                             <span className="text-lg">{match.team1Name}</span>
-                                                                            <span className="text-sm font-bold">{getOrgName(match.team1Id)}</span>
+                                                                            <span className="text-sm font-bold">{match.team1OrgName || 'N/A'}</span>
                                                                         </div>
                                                                         <div className="flex items-center my-3">
                                                                             <div className="flex-grow border-t border-dashed"></div>
@@ -190,7 +177,7 @@ export default function DrawPage() {
                                                                         </div>
                                                                         <div className={`flex flex-col ${match.winnerId === match.team2Id ? 'font-extrabold text-foreground' : 'text-muted-foreground'}`}>
                                                                              <span className="text-lg">{match.team2Name}</span>
-                                                                             <span className="text-sm font-bold">{getOrgName(match.team2Id)}</span>
+                                                                             <span className="text-sm font-bold">{match.team2OrgName || 'N/A'}</span>
                                                                         </div>
                                                                         {match.status === 'COMPLETED' && (
                                                                              <div className="text-center mt-3 pt-3 border-t">

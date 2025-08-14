@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import {
   Table,
@@ -14,7 +14,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
 import { db } from '@/lib/firebase';
-import { collection, getDocs, query, orderBy, Timestamp, onSnapshot } from 'firebase/firestore';
+import { collection, query, onSnapshot, Timestamp } from 'firebase/firestore';
 import type { Match, TeamType } from '@/types';
 import { Loader2, ArrowLeft, Gamepad2 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
@@ -39,8 +39,9 @@ export default function CourtViewPage() {
     useEffect(() => {
         setIsLoading(true);
         const matchesQuery = query(collection(db, 'matches'));
+        const teamsQuery = query(collection(db, 'teams'));
 
-        const unsubscribe = onSnapshot(matchesQuery, async (querySnapshot) => {
+        const unsubscribeMatches = onSnapshot(matchesQuery, (querySnapshot) => {
             const matchesData = querySnapshot.docs.map(doc => {
                  const data = doc.data() as Omit<Match, 'startTime'> & {startTime: Timestamp | null};
                  return { id: doc.id, ...data, startTime: data.startTime?.toDate() ?? new Date() } as Match;
@@ -48,31 +49,31 @@ export default function CourtViewPage() {
             matchesData.sort((a,b) => (a.courtName || 'ZZZ').localeCompare(b.courtName || 'ZZZ') || (b.startTime?.getTime() || 0) - (a.startTime?.getTime() || 0));
 
             setMatches(matchesData);
-
-             try {
-                const teamsSnap = await getDocs(collection(db, 'teams'));
-                const counts: Record<TeamType, number> = { singles: 0, mens_doubles: 0, womens_doubles: 0, mixed_doubles: 0 };
-                teamsSnap.forEach(doc => {
-                    const team = doc.data() as { type: TeamType };
-                    if (counts[team.type] !== undefined) {
-                        counts[team.type]++;
-                    }
-                });
-                setTeamCounts(counts);
-            } catch (error) {
-                 console.error("Error fetching team counts:", error);
-                 toast({ title: 'Error', description: 'Failed to fetch team data.', variant: 'destructive' });
-            } finally {
-                setIsLoading(false);
-            }
-
+            setIsLoading(false);
         }, (error) => {
             console.error("Error fetching matches:", error);
             toast({ title: 'Error', description: 'Failed to fetch match data.', variant: 'destructive' });
             setIsLoading(false);
         });
 
-        return () => unsubscribe();
+        const unsubscribeTeams = onSnapshot(teamsQuery, (snapshot) => {
+            const counts: Record<TeamType, number> = { singles: 0, mens_doubles: 0, womens_doubles: 0, mixed_doubles: 0 };
+            snapshot.forEach(doc => {
+                const team = doc.data() as { type: TeamType };
+                if (counts[team.type] !== undefined) {
+                    counts[team.type]++;
+                }
+            });
+            setTeamCounts(counts);
+        }, (error) => {
+            console.error("Error fetching team counts:", error);
+            toast({ title: 'Error', description: 'Failed to fetch team counts.', variant: 'destructive' });
+        });
+
+        return () => {
+            unsubscribeMatches();
+            unsubscribeTeams();
+        };
     }, [toast]);
 
     const handleScorerClick = (match: Match) => {
@@ -163,12 +164,12 @@ export default function CourtViewPage() {
                                                 <TableCell className="min-w-[250px]">
                                                     <div className={match.winnerId === match.team1Id ? 'font-bold' : ''}>
                                                         <span>{match.team1Name}</span>
-                                                        <p className="font-bold">{match.team1OrgName}</p>
+                                                        <p className="font-bold">{match.team1OrgName || 'N/A'}</p>
                                                     </div>
                                                     <div className="text-muted-foreground my-1">vs</div>
                                                     <div className={match.winnerId === match.team2Id ? 'font-bold' : ''}>
                                                         <span>{match.team2Name}</span>
-                                                        <p className="font-bold">{match.team2OrgName}</p>
+                                                        <p className="font-bold">{match.team2OrgName || 'N/A'}</p>
                                                     </div>
                                                 </TableCell>
                                                 <TableCell>{match.score || 'N/A'}</TableCell>

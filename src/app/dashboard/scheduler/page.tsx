@@ -5,7 +5,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft, Loader2, Play, XCircle } from 'lucide-react';
-import type { Match, Tournament, Team } from '@/types';
+import type { Match, Tournament } from '@/types';
 import { db } from '@/lib/firebase';
 import { collection, getDocs, doc, writeBatch, query, Timestamp } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
@@ -222,12 +222,12 @@ export default function SchedulerPage() {
                                         <TableCell>
                                             <div>
                                                 <span>{match.team1Name}</span>
-                                                <p className="font-bold">{match.team1OrgName}</p>
+                                                <p className="font-bold">{match.team1OrgName || 'N/A'}</p>
                                             </div>
                                             <p className="text-muted-foreground my-1">vs</p>
                                             <div>
                                                 <span>{match.team2Name}</span>
-                                                <p className="font-bold">{match.team2OrgName}</p>
+                                                <p className="font-bold">{match.team2OrgName || 'N/A'}</p>
                                             </div>
                                         </TableCell>
                                         <TableCell>
