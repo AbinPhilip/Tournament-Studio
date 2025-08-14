@@ -35,6 +35,7 @@ export default function UmpireLayout({
     );
   }
   
+  // Ensure that only authorized roles can see this layout
   if (user.role !== 'update' && user.role !== 'admin' && user.role !== 'super') {
     return (
       <div className="flex h-screen w-full items-center justify-center bg-background">
