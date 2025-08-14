@@ -94,7 +94,8 @@ export default function SchedulerPage() {
                     ...m, 
                     courtName: courtName,
                     status: courtName ? 'SCHEDULED' : 'PENDING',
-                    startTime: courtName ? Timestamp.now().toDate() : m.startTime,
+                    // Set a new start time when scheduled, revert if unscheduled
+                    startTime: courtName ? new Date() : m.startTime,
                 };
             }
             return m;
@@ -109,6 +110,7 @@ export default function SchedulerPage() {
 
             if (matchesToUpdate.length === 0) {
                 toast({ title: 'No changes to save', description: 'No matches have been assigned to courts.' });
+                setIsSaving(false);
                 return;
             }
 
@@ -117,7 +119,7 @@ export default function SchedulerPage() {
                 batch.update(matchRef, {
                     status: 'SCHEDULED',
                     courtName: match.courtName,
-                    startTime: Timestamp.fromDate(new Date(match.startTime))
+                    startTime: match.startTime // This will now be a valid Date object
                 });
             });
             await batch.commit();
