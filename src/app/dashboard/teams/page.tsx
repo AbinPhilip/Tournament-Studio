@@ -52,6 +52,7 @@ import {
 import Image from 'next/image';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { EventBadge } from '@/components/ui/event-badge';
 
 
 const teamFormSchema = z.object({
@@ -547,7 +548,7 @@ export default function TeamsPage() {
                     <TableCell>
                       <Input type="number" className="w-20" value={t.lotNumber ?? ''}
                         onChange={(e) => handleLotNumberChange(t.id, e.target.value)}
-                        onBlur={() => handleLotNumberBlur(t.id)} placeholder="N/A"
+                        onBlur={() => handleLotNumberBlur(t.id)} placeholder=""
                       />
                     </TableCell>
                     <TableCell>
@@ -559,7 +560,7 @@ export default function TeamsPage() {
                            <Input type="file" className="hidden" ref={el => (inlineFileInputRefs.current[t.id] = el)} onChange={(e) => handleInlinePhotoChange(e, t.id)} accept="image/*" />
                         </div>
                     </TableCell>
-                    <TableCell className="font-medium capitalize">{t.type.replace(/_/g, ' ')}</TableCell>
+                    <TableCell><EventBadge eventType={t.type} /></TableCell>
                     <TableCell>{t.player1Name}{t.player2Name ? ` & ${t.player2Name}`: ''}</TableCell>
                     <TableCell>{getOrgName(t.organizationId)}</TableCell>
                     <TableCell className="text-right">

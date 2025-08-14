@@ -12,6 +12,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Badge } from '@/components/ui/badge';
 import { getRoundName } from '@/lib/utils';
 import { Loader2 } from 'lucide-react';
+import { EventBadge } from '@/components/ui/event-badge';
 
 export default function IndividualView() {
   const { user } = useAuth();
@@ -128,7 +129,7 @@ export default function IndividualView() {
             {myTeams.map(team => (
                 <Card key={team.id}>
                     <CardHeader>
-                        <CardTitle className="capitalize">{team.type.replace(/_/g, ' ')}</CardTitle>
+                        <CardTitle><EventBadge eventType={team.type} /></CardTitle>
                         <CardDescription>
                            Team: {team.player1Name} {team.player2Name && `& ${team.player2Name}`} 
                            <span className="font-bold block">({orgNameMap.get(team.organizationId)})</span>
@@ -158,7 +159,7 @@ export default function IndividualView() {
                                                 <TableCell>
                                                     <div>
                                                         <span>{opponentName}</span>
-                                                        <p className="font-bold">{opponentOrgName}</p>
+                                                        <p className="text-sm text-muted-foreground">{opponentOrgName}</p>
                                                     </div>
                                                 </TableCell>
                                                 <TableCell>
@@ -166,7 +167,7 @@ export default function IndividualView() {
                                                         {match.status}
                                                      </Badge>
                                                 </TableCell>
-                                                <TableCell>{match.courtName || 'N/A'}</TableCell>
+                                                <TableCell>{match.courtName || ''}</TableCell>
                                                 <TableCell>
                                                     {match.status === 'COMPLETED' && (
                                                         <Badge variant={isWinner ? 'default' : 'destructive'}>

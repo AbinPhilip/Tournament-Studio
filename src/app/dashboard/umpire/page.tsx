@@ -20,6 +20,7 @@ import { Loader2, ArrowLeft, Gamepad2 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { Badge } from '@/components/ui/badge';
 import { getRoundName } from '@/lib/utils';
+import { EventBadge } from '@/components/ui/event-badge';
 
 
 export default function CourtViewPage() {
@@ -148,8 +149,8 @@ export default function CourtViewPage() {
                                 <Table>
                                     <TableHeader>
                                         <TableRow>
-                                            <TableHead>Round</TableHead>
                                             <TableHead>Event</TableHead>
+                                            <TableHead>Round</TableHead>
                                             <TableHead>Match</TableHead>
                                             <TableHead>Score</TableHead>
                                             <TableHead>Status</TableHead>
@@ -159,20 +160,20 @@ export default function CourtViewPage() {
                                     <TableBody>
                                         {groupedMatchesByCourt[courtName].map(match => (
                                             <TableRow key={match.id} className={match.status === 'IN_PROGRESS' ? 'bg-yellow-50 dark:bg-yellow-900/20' : ''}>
+                                                <TableCell><EventBadge eventType={match.eventType} /></TableCell>
                                                 <TableCell className="font-medium whitespace-nowrap">{getRoundName(match.round || 0, match.eventType, teamCounts[match.eventType])}</TableCell>
-                                                <TableCell className="capitalize whitespace-nowrap">{match.eventType.replace(/_/g, ' ')}</TableCell>
                                                 <TableCell className="min-w-[250px]">
                                                     <div className={match.winnerId === match.team1Id ? 'font-bold' : ''}>
                                                         <span>{match.team1Name}</span>
-                                                        <p className="font-bold">{match.team1OrgName}</p>
+                                                        <p className="text-sm text-muted-foreground">{match.team1OrgName}</p>
                                                     </div>
                                                     <div className="text-muted-foreground my-1">vs</div>
                                                     <div className={match.winnerId === match.team2Id ? 'font-bold' : ''}>
                                                         <span>{match.team2Name}</span>
-                                                        <p className="font-bold">{match.team2OrgName}</p>
+                                                        <p className="text-sm text-muted-foreground">{match.team2OrgName}</p>
                                                     </div>
                                                 </TableCell>
-                                                <TableCell>{match.score || 'N/A'}</TableCell>
+                                                <TableCell>{match.score || ''}</TableCell>
                                                 <TableCell>
                                                     <Badge variant={match.status === 'COMPLETED' ? 'default' : (match.status === 'IN_PROGRESS' || match.status === 'SCHEDULED') ? 'secondary' : 'outline'}>
                                                         {match.status}

@@ -12,6 +12,7 @@ import { getRoundName } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { EventBadge } from '@/components/ui/event-badge';
 
 
 export default function DrawPage() {

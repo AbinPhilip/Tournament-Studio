@@ -17,6 +17,7 @@ import { collection, getDocs, query, where } from 'firebase/firestore';
 import type { Match, TeamType } from '@/types';
 import { Loader2 } from 'lucide-react';
 import { getRoundName } from '@/lib/utils';
+import { EventBadge } from '@/components/ui/event-badge';
 
 export default function MatchHistoryPage() {
     const { toast } = useToast();
@@ -114,7 +115,7 @@ export default function MatchHistoryPage() {
                     return (
                         <Card key={eventType}>
                             <CardHeader>
-                                <CardTitle className="capitalize">{eventType.replace(/_/g, ' ')}</CardTitle>
+                                <CardTitle><EventBadge eventType={eventType} /></CardTitle>
                                 <CardDescription>Completed matches for this event.</CardDescription>
                             </CardHeader>
                             <CardContent>
@@ -141,16 +142,16 @@ export default function MatchHistoryPage() {
                                                     <TableCell>
                                                         <div>
                                                           <span>{winnerName}</span>
-                                                          <p className="font-bold">{winnerOrg}</p>
+                                                          <p className="text-sm text-muted-foreground">{winnerOrg}</p>
                                                         </div>
                                                     </TableCell>
                                                     <TableCell>
                                                         <div>
                                                             <span>{loserName}</span>
-                                                            <p className="font-bold">{loserOrg}</p>
+                                                            <p className="text-sm text-muted-foreground">{loserOrg}</p>
                                                         </div>
                                                     </TableCell>
-                                                    <TableCell>{match.score || 'N/A'}</TableCell>
+                                                    <TableCell>{match.score || ''}</TableCell>
                                                 </TableRow>
                                             )
                                         })}

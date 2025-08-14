@@ -20,7 +20,6 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-  AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import {
@@ -30,6 +29,7 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select';
+import { EventBadge } from '@/components/ui/event-badge';
 
 export default function SchedulerPage() {
     const [tournament, setTournament] = useState<Tournament | null>(null);
@@ -218,16 +218,16 @@ export default function SchedulerPage() {
                             <TableBody>
                                 {unassignedMatches.map((match) => (
                                     <TableRow key={match.id}>
-                                        <TableCell className="capitalize">{match.eventType.replace(/_/g, ' ')}</TableCell>
+                                        <TableCell><EventBadge eventType={match.eventType} /></TableCell>
                                         <TableCell>
                                             <div>
                                                 <span>{match.team1Name}</span>
-                                                <p className="font-bold">{match.team1OrgName}</p>
+                                                <p className="text-sm text-muted-foreground">{match.team1OrgName}</p>
                                             </div>
                                             <p className="text-muted-foreground my-1">vs</p>
                                             <div>
                                                 <span>{match.team2Name}</span>
-                                                <p className="font-bold">{match.team2OrgName}</p>
+                                                <p className="text-sm text-muted-foreground">{match.team2OrgName}</p>
                                             </div>
                                         </TableCell>
                                         <TableCell>
