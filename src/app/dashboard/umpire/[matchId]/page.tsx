@@ -163,7 +163,6 @@ export default function LiveScorerPage() {
          setIsSubmitting(true);
          try {
             let finalScores = [...(match.scores || [])];
-            // Add the current set's score if it hasn't been added yet and it's not a forfeit
             if (!isForfeited && match.live && (match.live.team1Points > 0 || match.live.team2Points > 0)) {
                  finalScores.push({ team1: match.live.team1Points, team2: match.live.team2Points });
             }
@@ -178,6 +177,7 @@ export default function LiveScorerPage() {
              toast({ title: "Match Finalized!", description: "The final result has been recorded." });
              router.push('/dashboard/umpire');
          } catch(e) {
+             console.error("Finalization error:", e);
              toast({ title: "Error", description: "Could not finalize match.", variant: "destructive" });
          } finally {
              setIsSubmitting(false);
