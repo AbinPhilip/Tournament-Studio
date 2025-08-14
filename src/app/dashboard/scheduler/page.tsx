@@ -23,7 +23,7 @@ import { Button } from '@/components/ui/button';
 import { GripVertical, ArrowLeft, Loader2, Users, XCircle } from 'lucide-react';
 import type { Match, Tournament } from '@/types';
 import { db } from '@/lib/firebase';
-import { collection, getDocs, doc, writeBatch, query, Timestamp, deleteDoc } from 'firebase/firestore';
+import { collection, getDocs, doc, writeBatch, query, Timestamp, deleteDoc, where } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
 import { useRouter } from 'next/navigation';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -118,7 +118,7 @@ export default function SchedulerPage() {
         try {
             const [tournamentSnap, matchesSnap] = await Promise.all([
                 getDocs(collection(db, 'tournaments')),
-                getDocs(query(collection(db, 'matches'))),
+                getDocs(query(collection(db, 'matches'), where('status', 'in', ['PENDING', 'SCHEDULED']))),
             ]);
 
             if (!tournamentSnap.empty) {

@@ -14,7 +14,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
 import { db } from '@/lib/firebase';
-import { collection, getDocs, query, where, Timestamp } from 'firebase/firestore';
+import { collection, getDocs, query, where, Timestamp, orderBy } from 'firebase/firestore';
 import type { Match, TeamType } from '@/types';
 import { Loader2, Gamepad2, ShieldCheck } from 'lucide-react';
 import { useRouter } from 'next/navigation';
@@ -39,7 +39,7 @@ export default function CourtUmpireView() {
     setIsLoading(true);
     try {
       const [matchesSnap, teamsSnap] = await Promise.all([
-        getDocs(query(collection(db, 'matches'), where('courtName', '==', courtName))),
+        getDocs(query(collection(db, 'matches'), where('courtName', '==', courtName), orderBy('startTime', 'desc'))),
         getDocs(collection(db, 'teams')),
       ]);
 
