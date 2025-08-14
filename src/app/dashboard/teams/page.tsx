@@ -27,9 +27,8 @@ import { MoreHorizontal, Trash2, Edit, CheckCircle, Users } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import { db } from '@/lib/firebase';
-import { collection, doc, getDocs, setDoc, updateDoc, addDoc, deleteDoc, query } from 'firebase/firestore';
+import { collection, doc, getDocs, setDoc, updateDoc, addDoc, deleteDoc, query, where } from 'firebase/firestore';
 import type { Team, Organization } from '@/types';
-import { useRouter } from 'next/navigation';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -91,10 +90,143 @@ const teamFormSchema = z.object({
 });
 
 
+// New Reusable Team Form Component
+const TeamForm = ({
+    form,
+    onSubmit,
+    isEditing,
+    organizations,
+    playersByOrg,
+    photoPreview,
+    handlePhotoChange,
+    fileInputRef,
+}: {
+    form: any;
+    onSubmit: (values: z.infer<typeof teamFormSchema>) => void;
+    isEditing: boolean;
+    organizations: Organization[];
+    playersByOrg: Record<string, string[]>;
+    photoPreview: string | null;
+    handlePhotoChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
+    fileInputRef: React.RefObject<HTMLInputElement>;
+}) => {
+    const teamType = form.watch('type');
+    const orgId = form.watch('organizationId');
+    const availablePlayers = playersByOrg[orgId] || [];
+
+    return (
+        <Form {...form}>
+            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+                <FormField control={form.control} name="organizationId" render={({ field }) => (
+                    <FormItem>
+                        <FormLabel>Organization</FormLabel>
+                        <Select onValueChange={field.onChange} defaultValue={field.value}>
+                            <FormControl><SelectTrigger><SelectValue placeholder="Select an organization" /></SelectTrigger></FormControl>
+                            <SelectContent>
+                                {organizations.map(org => <SelectItem key={org.id} value={org.id}>{org.name}</SelectItem>)}
+                            </SelectContent>
+                        </Select><FormMessage />
+                    </FormItem>
+                )} />
+                <FormField control={form.control} name="type" render={({ field }) => (
+                    <FormItem>
+                        <FormLabel>Event Type</FormLabel>
+                        <Select onValueChange={field.onChange} defaultValue={field.value}>
+                            <FormControl><SelectTrigger><SelectValue placeholder="Select an event type" /></SelectTrigger></FormControl>
+                            <SelectContent>
+                                <SelectItem value="singles">Singles</SelectItem>
+                                <SelectItem value="mens_doubles">Men's Doubles</SelectItem>
+                                <SelectItem value="womens_doubles">Women's Doubles</SelectItem>
+                                <SelectItem value="mixed_doubles">Mixed Doubles</SelectItem>
+                            </SelectContent>
+                        </Select><FormMessage />
+                    </FormItem>
+                )} />
+
+                <datalist id="player-list">
+                    {availablePlayers.map(p => <option key={p} value={p} />)}
+                </datalist>
+
+                <FormField control={form.control} name="player1Name" render={({ field }) => (
+                    <FormItem>
+                        <FormLabel>Player 1 Name</FormLabel>
+                        <FormControl><Input placeholder="John Doe" {...field} list="player-list" /></FormControl>
+                        <FormMessage />
+                    </FormItem>
+                )} />
+
+                {(teamType === 'singles' || teamType === 'mixed_doubles') && (
+                    <FormField control={form.control} name="genderP1" render={({ field }) => (
+                        <FormItem><FormLabel>Player 1 Gender</FormLabel>
+                            <Select onValueChange={field.onChange} defaultValue={field.value}>
+                                <FormControl><SelectTrigger><SelectValue placeholder="Select gender" /></SelectTrigger></FormControl>
+                                <SelectContent>
+                                    <SelectItem value="male">Male</SelectItem>
+                                    <SelectItem value="female">Female</SelectItem>
+                                </SelectContent>
+                            </Select><FormMessage />
+                        </FormItem>
+                    )} />
+                )}
+                {(teamType === 'mens_doubles' || teamType === 'womens_doubles' || teamType === 'mixed_doubles') && (
+                    <FormField control={form.control} name="player2Name" render={({ field }) => (
+                        <FormItem>
+                            <FormLabel>Player 2 Name</FormLabel>
+                            <FormControl><Input placeholder="Partner's Name" {...field} list="player-list"/></FormControl>
+                            <FormMessage />
+                        </FormItem>
+                    )} />
+                )}
+                {teamType === 'mixed_doubles' && (
+                    <FormField control={form.control} name="genderP2" render={({ field }) => (
+                        <FormItem><FormLabel>Player 2 Gender</FormLabel>
+                            <Select onValueChange={field.onChange} defaultValue={field.value}>
+                                <FormControl><SelectTrigger><SelectValue placeholder="Select gender" /></SelectTrigger></FormControl>
+                                <SelectContent>
+                                    <SelectItem value="male">Male</SelectItem>
+                                    <SelectItem value="female">Female</SelectItem>
+                                </SelectContent>
+                            </Select><FormMessage />
+                        </FormItem>
+                    )} />
+                )}
+
+                <FormField control={form.control} name="lotNumber" render={({ field }) => (
+                    <FormItem>
+                        <FormLabel>Lot Number</FormLabel>
+                        <FormControl><Input type="number" placeholder="e.g. 1" {...field} onChange={e => field.onChange(e.target.value === '' ? '' : Number(e.target.value))} /></FormControl>
+                        <FormMessage />
+                    </FormItem>
+                )} />
+
+                <FormItem>
+                    <FormLabel>Team Photo</FormLabel>
+                    <div className="flex items-center gap-4">
+                        <div className="h-20 w-20 bg-muted rounded-md flex items-center justify-center overflow-hidden">
+                            <Image data-ai-hint="badminton duo" src={photoPreview || "https://placehold.co/80x80.png"} width={80} height={80} alt="Team photo" className="object-cover h-full w-full" />
+                        </div>
+                        <Button type="button" variant="outline" onClick={() => fileInputRef.current?.click()}>
+                            Upload
+                        </Button>
+                        <Input type="file" ref={fileInputRef} onChange={handlePhotoChange} className="hidden" accept="image/*" capture="environment" />
+                    </div>
+                    <FormMessage />
+                </FormItem>
+                <DialogFooter>
+                    <DialogClose asChild><Button type="button" variant="secondary">Cancel</Button></DialogClose>
+                    <Button type="submit">{isEditing ? 'Save Changes' : 'Register Team'}</Button>
+                </DialogFooter>
+            </form>
+        </Form>
+    )
+}
+
+
 export default function TeamsPage() {
   const { toast } = useToast();
   const [teams, setTeams] = useState<Team[]>([]);
   const [organizations, setOrganizations] = useState<Organization[]>([]);
+  const [playersByOrg, setPlayersByOrg] = useState<Record<string, string[]>>({});
   const [teamToDelete, setTeamToDelete] = useState<Team | null>(null);
   const [teamToEdit, setTeamToEdit] = useState<Team | null>(null);
   const [isAddTeamOpen, setIsAddTeamOpen] = useState(false);
@@ -120,11 +252,27 @@ export default function TeamsPage() {
         
         const fetchedTeams = teamsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Team));
         setTeams(fetchedTeams);
+
         const lotNumberMap: Record<string, number | undefined> = {};
+        const playersMap: Record<string, Set<string>> = {};
+
         fetchedTeams.forEach(team => {
             lotNumberMap[team.id] = team.lotNumber;
+            if (!playersMap[team.organizationId]) {
+                playersMap[team.organizationId] = new Set();
+            }
+            playersMap[team.organizationId].add(team.player1Name);
+            if (team.player2Name) {
+                playersMap[team.organizationId].add(team.player2Name);
+            }
         });
         setOriginalLotNumbers(lotNumberMap);
+        
+        const finalPlayersByOrg: Record<string, string[]> = {};
+        for(const orgId in playersMap) {
+            finalPlayersByOrg[orgId] = Array.from(playersMap[orgId]).sort();
+        }
+        setPlayersByOrg(finalPlayersByOrg);
 
         setOrganizations(orgsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Organization)));
         
@@ -135,7 +283,6 @@ export default function TeamsPage() {
     fetchData();
   }, [toast]);
   
-  // Effects for edit dialogs
   useEffect(() => {
     if (teamToEdit) {
         teamForm.reset(teamToEdit);
@@ -154,30 +301,50 @@ export default function TeamsPage() {
     }
   }, [isAddTeamOpen, isEditTeamOpen, teamForm]);
   
-  const handleTeamSubmit = async (values: z.infer<typeof teamFormSchema>, isEditing: boolean) => {
+  const handleTeamSubmit = async (values: z.infer<typeof teamFormSchema>) => {
     try {
+        const { player1Name, player2Name, organizationId } = values;
+
+        // Check for duplicates
+        const teamsRef = collection(db, 'teams');
+        const q = query(teamsRef, 
+            where('organizationId', '==', organizationId),
+            where('player1Name', '==', player1Name),
+            where('player2Name', '==', (player2Name || null)) // Firestore needs null for non-existence
+        );
+        
+        const querySnapshot = await getDocs(q);
+        if (!querySnapshot.empty) {
+            const existingTeam = querySnapshot.docs[0].data();
+            // If we are editing, we need to make sure the found team is not the team we are currently editing
+            if (!teamToEdit || querySnapshot.docs[0].id !== teamToEdit.id) {
+               toast({ title: 'Duplicate Team', description: 'A team with these players from this organization already exists.', variant: 'destructive' });
+               return;
+            }
+        }
+
+
         const teamData: Partial<Omit<Team, 'id'>> = {
             type: values.type,
             player1Name: values.player1Name,
             organizationId: values.organizationId,
+            player2Name: values.player2Name || '', // Ensure it's not undefined
         };
         
         if (values.photoUrl) teamData.photoUrl = values.photoUrl;
 
         if (values.type === 'mens_doubles') {
-            teamData.player2Name = values.player2Name;
             teamData.genderP1 = 'male';
             teamData.genderP2 = 'male';
         } else if (values.type === 'womens_doubles') {
-            teamData.player2Name = values.player2Name;
             teamData.genderP1 = 'female';
             teamData.genderP2 = 'female';
         } else if (values.type === 'mixed_doubles') {
-            teamData.player2Name = values.player2Name;
             teamData.genderP1 = values.genderP1;
             teamData.genderP2 = values.genderP2;
         } else if (values.type === 'singles') {
             teamData.genderP1 = values.genderP1;
+            teamData.player2Name = ''; // explicitly clear player2 name for singles
         }
         
         const dataToSave: any = { ...teamData };
@@ -185,8 +352,7 @@ export default function TeamsPage() {
             dataToSave.lotNumber = values.lotNumber;
         }
 
-        if (isEditing) {
-            if (!teamToEdit) return;
+        if (teamToEdit) {
             const teamRef = doc(db, 'teams', teamToEdit.id);
             await updateDoc(teamRef, dataToSave as { [x: string]: any });
             setTeams(teams.map(t => t.id === teamToEdit.id ? { ...teamToEdit, ...dataToSave } as Team : t));
@@ -207,7 +373,7 @@ export default function TeamsPage() {
         setPhotoPreview(null);
     } catch(error) {
         console.error(error);
-        toast({ title: 'Error', description: `Failed to ${isEditing ? 'update' : 'register'} team.`, variant: 'destructive' });
+        toast({ title: 'Error', description: `Failed to ${teamToEdit ? 'update' : 'register'} team.`, variant: 'destructive' });
     }
   };
 
@@ -303,118 +469,6 @@ export default function TeamsPage() {
   };
 
 
-  const TeamFormContent = ({ isEditing }: { isEditing: boolean }) => {
-    const teamType = teamForm.watch('type');
-    return (
-    <Form {...teamForm}>
-        <form onSubmit={teamForm.handleSubmit((values) => handleTeamSubmit(values, isEditing))} className="space-y-4">
-        <FormField control={teamForm.control} name="type" render={({ field }) => (
-            <FormItem>
-                <FormLabel>Event Type</FormLabel>
-                <Select onValueChange={field.onChange} defaultValue={field.value}>
-                    <FormControl><SelectTrigger><SelectValue placeholder="Select an event type" /></SelectTrigger></FormControl>
-                    <SelectContent>
-                        <SelectItem value="singles">Singles</SelectItem>
-                        <SelectItem value="mens_doubles">Men's Doubles</SelectItem>
-                        <SelectItem value="womens_doubles">Women's Doubles</SelectItem>
-                        <SelectItem value="mixed_doubles">Mixed Doubles</SelectItem>
-                    </SelectContent>
-                </Select><FormMessage />
-            </FormItem>
-        )} />
-        <FormField control={teamForm.control} name="player1Name" render={({ field }) => (
-            <FormItem>
-                <FormLabel>Player 1 Name</FormLabel>
-                <FormControl><Input placeholder="John Doe" {...field} /></FormControl>
-                <FormMessage />
-            </FormItem>
-        )} />
-        {(teamType === 'singles' || teamType === 'mixed_doubles') && (
-            <FormField control={teamForm.control} name="genderP1" render={({ field }) => (
-                <FormItem>
-                <FormLabel>Player 1 Gender</FormLabel>
-                 <Select onValueChange={field.onChange} defaultValue={field.value}>
-                    <FormControl><SelectTrigger><SelectValue placeholder="Select gender" /></SelectTrigger></FormControl>
-                    <SelectContent>
-                        <SelectItem value="male">Male</SelectItem>
-                        <SelectItem value="female">Female</SelectItem>
-                    </SelectContent>
-                </Select><FormMessage />
-            </FormItem>
-            )} />
-        )}
-        {(teamType === 'mens_doubles' || teamType === 'womens_doubles' || teamType === 'mixed_doubles') && (
-            <FormField control={teamForm.control} name="player2Name" render={({ field }) => (
-                <FormItem>
-                    <FormLabel>Player 2 Name</FormLabel>
-                    <FormControl><Input placeholder="Partner's Name" {...field} /></FormControl>
-                    <FormMessage />
-                </FormItem>
-            )} />
-        )}
-         {teamType === 'mixed_doubles' && (
-            <FormField control={teamForm.control} name="genderP2" render={({ field }) => (
-                <FormItem>
-                <FormLabel>Player 2 Gender</FormLabel>
-                 <Select onValueChange={field.onChange} defaultValue={field.value}>
-                    <FormControl><SelectTrigger><SelectValue placeholder="Select gender" /></SelectTrigger></FormControl>
-                    <SelectContent>
-                        <SelectItem value="male">Male</SelectItem>
-                        <SelectItem value="female">Female</SelectItem>
-                    </SelectContent>
-                </Select><FormMessage />
-            </FormItem>
-            )} />
-        )}
-        
-        <FormField control={teamForm.control} name="organizationId" render={({ field }) => (
-            <FormItem>
-                <FormLabel>Organization</FormLabel>
-                <Select onValueChange={field.onChange} defaultValue={field.value}>
-                    <FormControl><SelectTrigger><SelectValue placeholder="Select an organization" /></SelectTrigger></FormControl>
-                    <SelectContent>
-                        {organizations.map(org => <SelectItem key={org.id} value={org.id}>{org.name}</SelectItem>)}
-                    </SelectContent>
-                </Select><FormMessage />
-            </FormItem>
-        )} />
-        
-        <FormField control={teamForm.control} name="lotNumber" render={({ field }) => (
-            <FormItem>
-                <FormLabel>Lot Number</FormLabel>
-                <FormControl><Input type="number" placeholder="e.g. 1" {...field} onChange={e => field.onChange(e.target.value === '' ? '' : Number(e.target.value))} /></FormControl>
-                <FormMessage />
-            </FormItem>
-        )} />
-
-        <FormItem>
-          <FormLabel>Team Photo</FormLabel>
-          <div className="flex items-center gap-4">
-            <div className="h-20 w-20 bg-muted rounded-md flex items-center justify-center overflow-hidden">
-                <Image 
-                    data-ai-hint="badminton duo" 
-                    src={photoPreview || "https://placehold.co/80x80.png"} 
-                    width={80} height={80} 
-                    alt="Team photo" 
-                    className="object-cover h-full w-full"
-                />
-            </div>
-            <Button type="button" variant="outline" onClick={() => fileInputRef.current?.click()}>
-              Upload
-            </Button>
-            <Input type="file" ref={fileInputRef} onChange={handlePhotoChange} className="hidden" accept="image/*" capture="environment" />
-          </div>
-          <FormMessage />
-        </FormItem>
-        <DialogFooter>
-            <DialogClose asChild><Button type="button" variant="secondary">Cancel</Button></DialogClose>
-            <Button type="submit">{isEditing ? 'Save Changes' : 'Register Team'}</Button>
-        </DialogFooter>
-        </form>
-    </Form>
-  )
-  }
-
   return (
     <div className="space-y-8 p-4 md:p-8">
       <Card>
@@ -437,7 +491,16 @@ export default function TeamsPage() {
                   <DialogTitle>Register New Team</DialogTitle>
                   <DialogDescription>Enter the details for the new team.</DialogDescription>
                 </DialogHeader>
-                <TeamFormContent isEditing={false} />
+                <TeamForm
+                    form={teamForm}
+                    onSubmit={(values) => handleTeamSubmit(values)}
+                    isEditing={false}
+                    organizations={organizations}
+                    playersByOrg={playersByOrg}
+                    photoPreview={photoPreview}
+                    handlePhotoChange={handlePhotoChange}
+                    fileInputRef={fileInputRef}
+                />
               </DialogContent>
             </Dialog>
           </CardHeader>
@@ -532,7 +595,16 @@ export default function TeamsPage() {
               <DialogTitle>Edit Team</DialogTitle>
               <DialogDescription>Update the team details.</DialogDescription>
           </DialogHeader>
-          <TeamFormContent isEditing={true} />
+           <TeamForm
+                form={teamForm}
+                onSubmit={(values) => handleTeamSubmit(values)}
+                isEditing={true}
+                organizations={organizations}
+                playersByOrg={playersByOrg}
+                photoPreview={photoPreview}
+                handlePhotoChange={handlePhotoChange}
+                fileInputRef={fileInputRef}
+            />
           </DialogContent>
       </Dialog>
       
@@ -556,5 +628,3 @@ export default function TeamsPage() {
     </div>
   );
 }
-
-    
