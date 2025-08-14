@@ -322,5 +322,3 @@ function TeamScorePanel({ teamName, points, setsWon, isServing, onPointChange }:
         </div>
     );
 }
-
-    

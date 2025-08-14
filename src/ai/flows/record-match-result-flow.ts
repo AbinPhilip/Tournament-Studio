@@ -82,8 +82,8 @@ const recordMatchResultFlow = ai.defineFlow(
                 else team2Sets++;
             });
             scoreSummary = `${team1Sets}-${team2Sets}`;
-             // Trust the winnerId from the input if it's provided for completed matches
-            if (!input.winnerId) {
+             // Trust the winnerId from the input for completed matches
+            if (!finalWinnerId) {
                 finalWinnerId = team1Sets > team2Sets ? completedMatch.team1Id : completedMatch.team2Id;
             }
         }
@@ -147,7 +147,9 @@ const recordMatchResultFlow = ai.defineFlow(
             
             const [winnerTeamSnap, opponentTeamSnap] = await Promise.all([getDoc(winnerTeamRef), getDoc(opponentTeamRef)]);
             if (!winnerTeamSnap.exists() || !opponentTeamSnap.exists()) {
-                 throw new Error("Could not find winning teams to schedule next round.")
+                 console.warn("Could not find winning teams to schedule next round. Committing partial results.");
+                 await batch.commit();
+                 return;
             }
             const winnerTeam = winnerTeamSnap.data();
             const opponentTeam = opponentTeamSnap.data();
@@ -204,5 +206,3 @@ const recordMatchResultFlow = ai.defineFlow(
 export async function recordMatchResult(input: RecordMatchResultInput): Promise<void> {
     await recordMatchResultFlow(input);
 }
-
-    
