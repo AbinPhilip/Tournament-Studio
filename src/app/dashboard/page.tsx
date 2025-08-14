@@ -2,16 +2,24 @@
 "use client";
 
 import { useAuth } from '@/hooks/use-auth';
-import AdminView from '@/app/dashboard/admin-view';
-import IndividualView from '@/components/dashboard/individual-view';
-import InquiryView from '@/components/dashboard/inquiry-view';
-import UpdateUserView from '@/components/dashboard/update-user-view';
-import CourtUmpireView from '@/app/dashboard/court-umpire-view';
+import { Loader2 } from 'lucide-react';
+import dynamic from 'next/dynamic';
+
+const AdminView = dynamic(() => import('@/app/dashboard/admin-view'), { loading: () => <Loader2 className="h-12 w-12 animate-spin" /> });
+const IndividualView = dynamic(() => import('@/components/dashboard/individual-view'), { loading: () => <Loader2 className="h-12 w-12 animate-spin" /> });
+const InquiryView = dynamic(() => import('@/components/dashboard/inquiry-view'), { loading: () => <Loader2 className="h-12 w-12 animate-spin" /> });
+const UpdateUserView = dynamic(() => import('@/components/dashboard/update-user-view'), { loading: () => <Loader2 className="h-12 w-12 animate-spin" /> });
+const CourtUmpireView = dynamic(() => import('@/app/dashboard/court-umpire-view'), { loading: () => <Loader2 className="h-12 w-12 animate-spin" /> });
+
 
 export default function DashboardPage() {
   const { user } = useAuth();
 
   const renderDashboardByRole = () => {
+    if (!user) {
+        return <div className="flex h-full w-full items-center justify-center"><Loader2 className="h-12 w-12 animate-spin text-primary" /></div>;
+    }
+    
     switch (user?.role) {
       case 'admin':
       case 'super':
@@ -29,5 +37,5 @@ export default function DashboardPage() {
     }
   };
 
-  return <div className="container mx-auto">{renderDashboardByRole()}</div>;
+  return <div className="container mx-auto h-full">{renderDashboardByRole()}</div>;
 }

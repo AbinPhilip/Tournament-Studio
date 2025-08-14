@@ -23,15 +23,15 @@ export default function AdminView() {
             <CardTitle>Tournament Actions</CardTitle>
             <CardDescription>Configure, schedule, and manage the tournament.</CardDescription>
         </CardHeader>
-        <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <CardContent className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             <Button variant="outline" onClick={() => router.push('/dashboard/tournament')}>
                 <Cog className="mr-2"/> Tournament Setup
             </Button>
             <Button variant="outline" onClick={() => router.push('/dashboard/scheduler')}>
-                <ListOrdered className="mr-2"/> Court Scheduler
+                <ListOrdered className="mr-2"/> Scheduler
             </Button>
-            <Button variant="outline" onClick={() => router.push('/dashboard/court-view')}>
-                <Shield className="mr-2"/> Go to Court View
+            <Button variant="outline" onClick={() => router.push('/dashboard/umpire')}>
+                <Shield className="mr-2"/> Court View
             </Button>
         </CardContent>
       </Card>
@@ -40,7 +40,7 @@ export default function AdminView() {
           <CardHeader>
             <CardTitle>System Management</CardTitle>
             <CardDescription>Manage application-wide settings, including users and the database.</CardDescription>
-          </CardHeader>
+          </Header>
           <CardContent>
              <Button onClick={() => router.push('/dashboard/settings')}>
                 <Settings className="mr-2" />
