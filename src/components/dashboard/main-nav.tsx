@@ -16,7 +16,7 @@ const allNavItems = [
     { id: "organizations", href: "/dashboard/organizations", label: "Organizations", icon: Building },
     { id: "teams", href: "/dashboard/teams", label: "Teams", icon: Users },
     { id: "scheduler", href: "/dashboard/scheduler", label: "Scheduler", icon: ListOrdered },
-    { id: "court-view", href: "/dashboard/umpire", label: "Court View", icon: Shield },
+    { id: "umpire", href: "/dashboard/umpire", label: "Umpire View", icon: Shield },
     { id: "match-history", href: "/dashboard/match-history", label: "Match History", icon: Trophy },
     { id: "settings", href: "/dashboard/settings", label: "System Settings", icon: Settings },
 ];
@@ -41,7 +41,7 @@ export function MainNav({ user, isMobile = false }: { user: User | null, isMobil
                         return;
                     }
                     const defaultPerms: any = {
-                        update: ['dashboard', 'court-view', 'match-history'],
+                        update: ['dashboard', 'umpire', 'match-history'],
                         inquiry: ['dashboard', 'match-history'],
                         individual: ['dashboard', 'match-history'],
                     };
@@ -78,8 +78,15 @@ export function MainNav({ user, isMobile = false }: { user: User | null, isMobil
   }
 
   const navItems = allNavItems.filter(item => {
-    if (item.id === 'standings') return false; // Hide old standings link
+    // Hide old standings link if it exists
+    if (item.id === 'standings') return false; 
+    
+    // Remap 'court-view' to 'umpire' for permission checking
+    if (item.id === 'umpire') return allowedModules?.includes('court-view') || allowedModules?.includes('umpire');
+    
+    // Remap 'match-history' to check for 'standings' for backward compatibility
     if (item.id === 'match-history') return allowedModules?.includes('standings') || allowedModules?.includes('match-history');
+    
     return allowedModules?.includes(item.id)
   });
 

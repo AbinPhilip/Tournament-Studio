@@ -14,7 +14,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
 import { db } from '@/lib/firebase';
-import { collection, getDocs, query, orderBy, Timestamp } from 'firebase/firestore';
+import { collection, getDocs, query, orderBy, Timestamp, onSnapshot } from 'firebase/firestore';
 import type { Match, TeamType } from '@/types';
 import { Loader2, ArrowLeft, Gamepad2 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
@@ -25,7 +25,7 @@ import { getRoundName } from '@/lib/utils';
 export default function CourtViewPage() {
     const { toast } = useToast();
     const router = useRouter();
-    const [isLoading, setIsLoading] = useState(false);
+    const [isLoading, setIsLoading] = useState(true);
     const [matches, setMatches] = useState<Match[]>([]);
     
     const [teamCounts, setTeamCounts] = useState<Record<TeamType, number>>({
@@ -36,37 +36,42 @@ export default function CourtViewPage() {
     });
 
 
-    const fetchMatchesAndCounts = useCallback(async () => {
-        setIsLoading(true);
-        try {
-            const [matchesSnap, teamsSnap] = await Promise.all([
-                getDocs(query(collection(db, 'matches'), orderBy('startTime', 'desc'))),
-                getDocs(collection(db, 'teams')),
-            ]);
-
-            const matchesData = matchesSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Omit<Match, 'startTime'> & {startTime: Timestamp})).map(m => ({...m, startTime: m.startTime?.toDate()}));
-            setMatches(matchesData as Match[]);
-
-            const counts: Record<TeamType, number> = { singles: 0, mens_doubles: 0, womens_doubles: 0, mixed_doubles: 0 };
-            teamsSnap.forEach(doc => {
-                const team = doc.data() as { type: TeamType };
-                if (counts[team.type] !== undefined) {
-                    counts[team.type]++;
-                }
-            });
-            setTeamCounts(counts);
-
-        } catch (error) {
-            console.error("Error fetching data:", error);
-            toast({ title: 'Error', description: 'Failed to fetch tournament data.', variant: 'destructive' });
-        } finally {
-            setIsLoading(false);
-        }
-    }, [toast]);
-    
     useEffect(() => {
-        fetchMatchesAndCounts();
-    }, [fetchMatchesAndCounts]);
+        setIsLoading(true);
+        const matchesQuery = query(collection(db, 'matches'), orderBy('courtName'), orderBy('startTime', 'desc'));
+
+        const unsubscribe = onSnapshot(matchesQuery, async (querySnapshot) => {
+            const matchesData = querySnapshot.docs.map(doc => {
+                 const data = doc.data() as Omit<Match, 'startTime'> & {startTime: Timestamp | null};
+                 return { id: doc.id, ...data, startTime: data.startTime?.toDate() ?? new Date() } as Match;
+            });
+            setMatches(matchesData);
+
+             try {
+                const teamsSnap = await getDocs(collection(db, 'teams'));
+                const counts: Record<TeamType, number> = { singles: 0, mens_doubles: 0, womens_doubles: 0, mixed_doubles: 0 };
+                teamsSnap.forEach(doc => {
+                    const team = doc.data() as { type: TeamType };
+                    if (counts[team.type] !== undefined) {
+                        counts[team.type]++;
+                    }
+                });
+                setTeamCounts(counts);
+            } catch (error) {
+                 console.error("Error fetching team counts:", error);
+                 toast({ title: 'Error', description: 'Failed to fetch team data.', variant: 'destructive' });
+            } finally {
+                setIsLoading(false);
+            }
+
+        }, (error) => {
+            console.error("Error fetching matches:", error);
+            toast({ title: 'Error', description: 'Failed to fetch match data.', variant: 'destructive' });
+            setIsLoading(false);
+        });
+
+        return () => unsubscribe();
+    }, [toast]);
 
     const handleScorerClick = (match: Match) => {
         if (match.status === 'COMPLETED') {
@@ -91,7 +96,14 @@ export default function CourtViewPage() {
         }, {} as Record<string, Match[]>);
     }, [matches]);
 
-    const courtNames = useMemo(() => Object.keys(groupedMatchesByCourt).sort(), [groupedMatchesByCourt]);
+    const courtNames = useMemo(() => {
+        const sortedNames = Object.keys(groupedMatchesByCourt).sort((a, b) => {
+            if (a === 'Unassigned') return 1;
+            if (b === 'Unassigned') return -1;
+            return a.localeCompare(b);
+        });
+        return sortedNames;
+    }, [groupedMatchesByCourt]);
 
 
     if (isLoading) {
@@ -107,9 +119,9 @@ export default function CourtViewPage() {
             <CardHeader>
                 <div className="flex justify-between items-start flex-wrap gap-2">
                     <div>
-                        <CardTitle>Court View</CardTitle>
+                        <CardTitle>Umpire Court View</CardTitle>
                         <CardDescription>
-                            View matches by court. Click the scorer icon to start live scoring.
+                            View all matches organized by court. Click the scorer icon to begin live scoring for a match.
                         </CardDescription>
                     </div>
                     <Button variant="outline" onClick={() => router.push('/dashboard')}>
