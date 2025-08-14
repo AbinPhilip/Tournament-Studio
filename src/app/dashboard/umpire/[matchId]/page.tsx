@@ -4,8 +4,8 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { db } from '@/lib/firebase';
-import { doc, onSnapshot, Unsubscribe } from 'firebase/firestore';
-import type { Match } from '@/types';
+import { doc, onSnapshot, getDoc, collection, getDocs, Unsubscribe } from 'firebase/firestore';
+import type { Match, Tournament } from '@/types';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2, ArrowLeft, Send, Repeat, CheckCircle } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -32,34 +32,57 @@ export default function LiveScorerPage() {
     const matchId = params.matchId as string;
 
     const [match, setMatch] = useState<Match | null>(null);
+    const [tournament, setTournament] = useState<Tournament | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [isSubmitting, setIsSubmitting] = useState(false);
     
     // Subscribe to live match updates
     useEffect(() => {
         if (!matchId) return;
-        const matchRef = doc(db, 'matches', matchId);
-        const unsubscribe = onSnapshot(matchRef, (doc) => {
-            if (doc.exists()) {
-                const matchData = { id: doc.id, ...doc.data() } as Match;
-                 // Initialize live data if it doesn't exist
-                if (!matchData.live) {
-                    matchData.live = {
-                        team1Points: 0,
-                        team2Points: 0,
-                        servingTeamId: matchData.team1Id,
-                        currentSet: (matchData.scores?.length || 0) + 1,
-                    };
-                }
-                setMatch(matchData);
-            } else {
-                toast({ title: "Error", description: "Match not found.", variant: 'destructive' });
-                router.push('/dashboard/umpire');
-            }
-            setIsLoading(false);
-        });
+        
+        let unsubscribe: Unsubscribe | undefined;
 
-        return () => unsubscribe();
+        const fetchInitialData = async () => {
+             try {
+                const tournamentSnap = await getDocs(collection(db, 'tournaments'));
+                if (!tournamentSnap.empty) {
+                    setTournament(tournamentSnap.docs[0].data() as Tournament);
+                }
+
+                const matchRef = doc(db, 'matches', matchId);
+                unsubscribe = onSnapshot(matchRef, (docSnap) => {
+                    if (docSnap.exists()) {
+                        const matchData = { id: docSnap.id, ...docSnap.data() } as Match;
+                        if (!matchData.live) {
+                            matchData.live = {
+                                team1Points: 0,
+                                team2Points: 0,
+                                servingTeamId: matchData.team1Id,
+                                currentSet: (matchData.scores?.length || 0) + 1,
+                            };
+                        }
+                        setMatch(matchData);
+                    } else {
+                        toast({ title: "Error", description: "Match not found.", variant: 'destructive' });
+                        router.push('/dashboard/umpire');
+                    }
+                    setIsLoading(false);
+                });
+
+            } catch (error) {
+                console.error("Error fetching initial data: ", error);
+                toast({ title: "Error", description: "Could not load match data.", variant: "destructive"});
+                setIsLoading(false);
+            }
+        }
+
+        fetchInitialData();
+
+        return () => {
+            if (unsubscribe) {
+                unsubscribe();
+            }
+        };
     }, [matchId, router, toast]);
 
     const handlePointChange = async (team: 'team1' | 'team2', delta: 1 | -1) => {
@@ -155,36 +178,59 @@ export default function LiveScorerPage() {
          }
     };
     
+    const pointsToWinSet = tournament?.pointsPerSet || 21;
+    
     // Game logic calculations
     const { isDeuce, team1MatchPoint, team2MatchPoint } = useMemo(() => {
         if (!match?.live) return { isDeuce: false, team1MatchPoint: false, team2MatchPoint: false };
         const { team1Points, team2Points } = match.live;
-        const deuce = team1Points >= 20 && team1Points === team2Points;
+        const deucePoint = pointsToWinSet - 1;
+        
+        const deuce = team1Points >= deucePoint && team1Points === team2Points;
         const matchPoint = (points: number, otherPoints: number) => {
-            if (points < 20) return false;
-            if (points === 29 && otherPoints === 29) return true;
-            if (points >= 20 && otherPoints >= 20) return points === otherPoints + 1;
-            return points === 20; // Reaching 21 first
+            if (points < deucePoint) return false;
+            // The score is 29-29 in a 30-point game, or (pointsToWinSet-1) in others
+            if (points === (pointsToWinSet > 21 ? 29 : deucePoint) && points === otherPoints) return true;
+            if (points >= deucePoint && otherPoints >= deucePoint) return points === otherPoints + 1;
+            return points === deucePoint; // Reaching win-point first
         };
         return {
             isDeuce: deuce,
             team1MatchPoint: matchPoint(team1Points, team2Points),
             team2MatchPoint: matchPoint(team2Points, team1Points)
         };
-    }, [match]);
+    }, [match, pointsToWinSet]);
     
     const canFinalizeSet = useMemo(() => {
         if (!match?.live) return false;
         const { team1Points, team2Points } = match.live;
         const p1 = Math.max(team1Points, team2Points);
         const p2 = Math.min(team1Points, team2Points);
+        
+        // For standard 21 point games, win cap is 30. We can generalize this.
+        const cap = pointsToWinSet > 21 ? 30 : pointsToWinSet + 9; 
 
-        if (p1 >= 30) return true; // Game ends at 30
-        if (p1 >= 21 && (p1 - p2 >= 2)) return true; // Win by 2 points
+        if (p1 >= cap) return true; // Win by reaching cap
+        if (p1 >= pointsToWinSet && (p1 - p2 >= 2)) return true; // Win by 2 points
         return false;
-    }, [match]);
+    }, [match, pointsToWinSet]);
+    
+    const canFinalizeMatch = useMemo(() => {
+        if (!match || !tournament?.bestOf) return false;
+        const setsToWin = Math.ceil(tournament.bestOf / 2);
+        
+        let team1Sets = 0;
+        let team2Sets = 0;
+        (match.scores || []).forEach(set => {
+            if (set.team1 > set.team2) team1Sets++;
+            else team2Sets++;
+        });
 
-    if (isLoading || !match) {
+        return team1Sets >= setsToWin || team2Sets >= setsToWin;
+    }, [match, tournament]);
+
+
+    if (isLoading || !match || !tournament) {
         return <div className="flex h-screen w-full items-center justify-center"><Loader2 className="h-16 w-16 animate-spin" /></div>;
     }
 
@@ -195,7 +241,7 @@ export default function LiveScorerPage() {
                     <div className="flex justify-between items-start flex-wrap gap-4">
                         <div>
                             <CardTitle className="text-2xl md:text-3xl">Live Scorer</CardTitle>
-                            <CardDescription>Court: {match.courtName}</CardDescription>
+                            <CardDescription>Court: {match.courtName} / Best of {tournament.bestOf} sets / {pointsToWinSet} points per set</CardDescription>
                         </div>
                          <Button variant="outline" onClick={() => router.push('/dashboard/umpire')}>
                             <ArrowLeft /> Back to Umpire View
@@ -241,17 +287,17 @@ export default function LiveScorerPage() {
                     {/* Controls */}
                     <div className="border-t pt-6 space-y-4">
                         <div className="flex flex-wrap gap-4 justify-center">
-                             <Button variant="secondary" onClick={handleServiceChange} disabled={isSubmitting}>
+                             <Button variant="secondary" onClick={handleServiceChange} disabled={isSubmitting || canFinalizeMatch}>
                                 <Repeat className="mr-2"/> Change Service
                             </Button>
-                            <Button variant="default" onClick={handleFinalizeSet} disabled={!canFinalizeSet || isSubmitting}>
+                            <Button variant="default" onClick={handleFinalizeSet} disabled={!canFinalizeSet || isSubmitting || canFinalizeMatch}>
                                 <Send className="mr-2"/> Finalize Set {match.live?.currentSet}
                             </Button>
                         </div>
                         
                          <AlertDialog>
                             <AlertDialogTrigger asChild>
-                                <Button variant="destructive" className="w-full" disabled={isSubmitting}>Finalize Match</Button>
+                                <Button variant="destructive" className="w-full" disabled={isSubmitting || !canFinalizeMatch}>Finalize Match</Button>
                             </AlertDialogTrigger>
                             <AlertDialogContent>
                                 <AlertDialogHeader>

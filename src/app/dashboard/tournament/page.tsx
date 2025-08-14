@@ -69,6 +69,8 @@ const tournamentFormSchema = z.object({
   tournamentType: z.enum(['round-robin', 'knockout'], { required_error: 'Tournament type is required.' }),
   numberOfCourts: z.coerce.number().min(1, { message: 'There must be at least 1 court.' }).max(50, { message: "Cannot exceed 50 courts."}),
   courtNames: z.array(z.object({ name: z.string().min(1, {message: 'Court name cannot be empty.'}) })),
+  bestOf: z.coerce.number().int().min(1, "Must be at least 1 set.").max(9, "Cannot exceed 9 sets.").refine(val => val % 2 !== 0, { message: "Number of sets must be an odd number." }),
+  pointsPerSet: z.coerce.number().int().min(1, "Points must be at least 1.").max(100, "Cannot exceed 100 points."),
 });
 
 const organizationFormSchema = z.object({
@@ -142,9 +144,11 @@ export default function TournamentSettingsPage() {
     defaultValues: {
       location: '',
       date: new Date(),
-      tournamentType: 'round-robin',
+      tournamentType: 'knockout',
       numberOfCourts: 4,
       courtNames: Array.from({ length: 4 }, () => ({ name: '' })),
+      bestOf: 3,
+      pointsPerSet: 21,
     },
   });
   
@@ -194,6 +198,8 @@ export default function TournamentSettingsPage() {
           form.reset({
             ...data,
             date: data.date.toDate(),
+            bestOf: data.bestOf || 3,
+            pointsPerSet: data.pointsPerSet || 21,
           });
         } else {
             setTournamentDocRef(null);
@@ -420,7 +426,6 @@ export default function TournamentSettingsPage() {
         const existingMatchesQuery = await getDocs(collection(db, 'matches'));
         existingMatchesQuery.forEach(doc => batch.delete(doc.ref));
         
-        const generatedMatches: Omit<Match, 'id'>[] = [];
         const eventTypes: TeamType[] = ['singles', 'mens_doubles', 'womens_doubles', 'mixed_doubles'];
 
         for (const eventType of eventTypes) {
@@ -779,27 +784,56 @@ export default function TournamentSettingsPage() {
                         />
                     </div>
                     
-                     <FormField
-                        control={form.control}
-                        name="tournamentType"
-                        render={({ field }) => (
-                            <FormItem>
-                            <FormLabel>Tournament Type</FormLabel>
-                             <Select onValueChange={field.onChange} defaultValue={field.value}>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+                        <FormField
+                            control={form.control}
+                            name="tournamentType"
+                            render={({ field }) => (
+                                <FormItem>
+                                <FormLabel>Tournament Type</FormLabel>
+                                <Select onValueChange={field.onChange} defaultValue={field.value}>
+                                    <FormControl>
+                                    <SelectTrigger>
+                                        <SelectValue placeholder="Select a tournament format" />
+                                    </SelectTrigger>
+                                    </FormControl>
+                                    <SelectContent>
+                                    <SelectItem value="round-robin">Round Robin</SelectItem>
+                                    <SelectItem value="knockout">Knockout</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                                <FormMessage />
+                                </FormItem>
+                            )}
+                        />
+                         <FormField
+                            control={form.control}
+                            name="bestOf"
+                            render={({ field }) => (
+                                <FormItem>
+                                <FormLabel>Best of Sets</FormLabel>
                                 <FormControl>
-                                <SelectTrigger>
-                                    <SelectValue placeholder="Select a tournament format" />
-                                </SelectTrigger>
+                                    <Input type="number" min="1" step="2" {...field} />
                                 </FormControl>
-                                <SelectContent>
-                                <SelectItem value="round-robin">Round Robin</SelectItem>
-                                <SelectItem value="knockout">Knockout</SelectItem>
-                                </SelectContent>
-                            </Select>
-                            <FormMessage />
-                            </FormItem>
-                        )}
-                    />
+                                <FormMessage />
+                                </FormItem>
+                            )}
+                        />
+                        <FormField
+                            control={form.control}
+                            name="pointsPerSet"
+                            render={({ field }) => (
+                                <FormItem>
+                                <FormLabel>Points per Set</FormLabel>
+                                <FormControl>
+                                    <Input type="number" min="1" {...field} />
+                                </FormControl>
+                                <FormMessage />
+                                </FormItem>
+                            )}
+                        />
+                    </div>
+                    
 
                     <FormField
                       control={form.control}
