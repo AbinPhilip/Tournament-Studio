@@ -14,7 +14,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
 import { db } from '@/lib/firebase';
-import { collection, getDocs, query, where, Timestamp, orderBy } from 'firebase/firestore';
+import { collection, getDocs, query, where, Timestamp } from 'firebase/firestore';
 import type { Match, TeamType } from '@/types';
 import { Loader2, Gamepad2, ShieldCheck } from 'lucide-react';
 import { useRouter } from 'next/navigation';
@@ -39,11 +39,15 @@ export default function CourtUmpireView() {
     setIsLoading(true);
     try {
       const [matchesSnap, teamsSnap] = await Promise.all([
-        getDocs(query(collection(db, 'matches'), where('courtName', '==', courtName), orderBy('startTime', 'desc'))),
+        getDocs(query(collection(db, 'matches'), where('courtName', '==', courtName))),
         getDocs(collection(db, 'teams')),
       ]);
 
       const matchesData = matchesSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Omit<Match, 'startTime'> & {startTime: Timestamp})).map(m => ({...m, startTime: m.startTime?.toDate()}));
+      
+      // Sort on the client side
+      matchesData.sort((a, b) => (b.startTime?.getTime() || 0) - (a.startTime?.getTime() || 0));
+      
       setMatches(matchesData as Match[]);
 
       const counts: Record<TeamType, number> = { singles: 0, mens_doubles: 0, womens_doubles: 0, mixed_doubles: 0 };
