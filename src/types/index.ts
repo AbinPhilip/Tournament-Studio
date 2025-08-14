@@ -73,4 +73,11 @@ export interface Match {
     scores?: { team1: number, team2: number }[]; // Array of scores per set
     forfeitedById?: string;
     round?: number; // For knockout tournaments
+    // Live scoring fields
+    live?: {
+        team1Points: number;
+        team2Points: number;
+        servingTeamId: string;
+        currentSet: number;
+    }
 }

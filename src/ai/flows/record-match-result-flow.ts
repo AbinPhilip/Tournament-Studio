@@ -20,8 +20,9 @@ const RecordMatchResultInputSchema = z.object({
       team1: z.coerce.number().int().min(0),
       team2: z.coerce.number().int().min(0),
   })).optional(),
-  winnerId: z.string(),
+  winnerId: z.string().optional(),
   isForfeited: z.boolean().optional(),
+  status: z.enum(['IN_PROGRESS', 'COMPLETED']).optional(),
 });
 export type RecordMatchResultInput = z.infer<typeof RecordMatchResultInputSchema>;
 
@@ -52,37 +53,53 @@ const recordMatchResultFlow = ai.defineFlow(
   async (input) => {
     const batch = writeBatch(db);
 
-    // 1. Update the completed match
+    // 1. Update the match
     const matchRef = doc(db, 'matches', input.matchId);
     const matchSnap = await getDoc(matchRef);
     if (!matchSnap.exists()) {
         throw new Error('Match not found');
     }
     const completedMatch = matchSnap.data() as Match;
+    
+    const updates: Partial<Match> & { 'live.currentSet'?: number } = {};
 
-    let scoreSummary = '';
-    if (input.isForfeited) {
-        scoreSummary = 'Forfeited';
-    } else if (input.scores && input.scores.length > 0) {
-        let team1Sets = 0;
-        let team2Sets = 0;
-        input.scores.forEach(set => {
-            if(set.team1 > set.team2) team1Sets++;
-            else team2Sets++;
-        });
-        scoreSummary = `${team1Sets}-${team2Sets}`;
+    if (input.scores) {
+        updates.scores = input.scores;
+        updates['live.currentSet'] = input.scores.length + 1;
     }
 
+    if (input.status === 'COMPLETED') {
+        let scoreSummary = '';
+        if (input.isForfeited) {
+            scoreSummary = 'Forfeited';
+        } else if (input.scores && input.scores.length > 0) {
+            let team1Sets = 0;
+            let team2Sets = 0;
+            input.scores.forEach(set => {
+                if(set.team1 > set.team2) team1Sets++;
+                else team2Sets++;
+            });
+            scoreSummary = `${team1Sets}-${team2Sets}`;
+        }
+        updates.score = scoreSummary;
+        updates.winnerId = input.winnerId;
+        updates.status = 'COMPLETED';
+        updates.forfeitedById = input.isForfeited ? (input.winnerId === completedMatch.team1Id ? completedMatch.team2Id : completedMatch.team1Id) : undefined;
+    } else {
+        updates.status = 'IN_PROGRESS';
+    }
+    
+    batch.update(matchRef, updates as any);
 
-    batch.update(matchRef, {
-        scores: input.scores || [],
-        score: scoreSummary,
-        winnerId: input.winnerId,
-        status: 'COMPLETED',
-        forfeitedById: input.isForfeited ? (input.winnerId === completedMatch.team1Id ? completedMatch.team2Id : completedMatch.team1Id) : null,
-    });
 
-    // 2. Check if this was a knockout match and if we need to schedule the next round
+    // 2. If match is COMPLETED, check if it was a knockout match and if we need to schedule the next round
+    if (input.status !== 'COMPLETED' || !input.winnerId) {
+        await batch.commit();
+        return;
+    }
+    const currentWinnerId = input.winnerId;
+
+
     const tournamentSnap = await getDocs(collection(db, 'tournaments'));
     if (tournamentSnap.empty) {
         throw new Error('Tournament not found');
@@ -92,22 +109,26 @@ const recordMatchResultFlow = ai.defineFlow(
     if (tournament.tournamentType === 'knockout' && completedMatch.round) {
         const matchesRef = collection(db, 'matches');
         
-        // Find other completed matches in the same round to find a potential opponent
-        const q = query(
+        // Find all completed matches in the same round to find a potential opponent
+        const completedRoundMatchesQuery = query(
             matchesRef,
             where('eventType', '==', completedMatch.eventType),
             where('round', '==', completedMatch.round),
             where('status', '==', 'COMPLETED')
         );
         
-        const completedRoundMatchesSnap = await getDocs(q);
-        const winnersInRound = completedRoundMatchesSnap.docs
+        const completedRoundMatchesSnap = await getDocs(completedRoundMatchesQuery);
+        
+        // Combine the already completed winners with the winner of the current match
+        const allWinnerIdsInRound = completedRoundMatchesSnap.docs
             .map(d => d.data().winnerId)
             .filter((id): id is string => !!id && id !== 'BYE'); // Ensure winnerId is not undefined, empty, or a BYE
+        
+        if (!allWinnerIdsInRound.includes(currentWinnerId)) {
+             allWinnerIdsInRound.push(currentWinnerId);
+        }
 
-        const currentWinnerId = input.winnerId;
-
-        // Check if the current winner is already scheduled in the next round
+        // Check which winners are already scheduled in the next round
         const nextRoundQuery = query(
             matchesRef,
             where('round', '==', completedMatch.round + 1),
@@ -122,8 +143,9 @@ const recordMatchResultFlow = ai.defineFlow(
             return;
         }
 
-        // Find an opponent who is also a winner and is not yet scheduled for the next round
-        const opponentWinnerId = winnersInRound.find(id => id !== currentWinnerId && !scheduledNextRoundIds.has(id));
+        // Find an opponent who is also a winner from this round and is not yet scheduled
+        const availableWinners = allWinnerIdsInRound.filter(id => !scheduledNextRoundIds.has(id));
+        const opponentWinnerId = availableWinners.find(id => id !== currentWinnerId);
 
         if (opponentWinnerId) {
             // We have a pair! Schedule the next match.
@@ -141,13 +163,16 @@ const recordMatchResultFlow = ai.defineFlow(
             let matchTime = completedMatch.startTime instanceof Timestamp ? completedMatch.startTime.toDate() : new Date();
             let availableCourt: string | null = null;
             let attempts = 0;
-            // Look for a slot in the next 48 hours in 15-minute increments
-            while (attempts < (48 * 4)) {
+            const maxAttempts = 48 * 4; // Look for a slot in the next 48 hours in 15-minute increments
+            
+            while (attempts < maxAttempts) {
                 matchTime.setMinutes(matchTime.getMinutes() + 15); 
                 
-                // Reset to 9 AM next day if past 8 PM
-                if (matchTime.getHours() >= 20) {
+                if (matchTime.getHours() >= 20) { // If past 8 PM
                     matchTime.setDate(matchTime.getDate() + 1);
+                    matchTime.setHours(9, 0, 0, 0); // Reset to 9 AM next day
+                }
+                 if (matchTime.getHours() < 9) { // If before 9 AM
                     matchTime.setHours(9, 0, 0, 0);
                 }
 
@@ -166,15 +191,14 @@ const recordMatchResultFlow = ai.defineFlow(
                     team1Name: winnerTeam.player1Name + (winnerTeam.player2Name ? ` & ${winnerTeam.player2Name}` : ''),
                     team2Name: opponentTeam.player1Name + (opponentTeam.player2Name ? ` & ${opponentTeam.player2Name}` : ''),
                     eventType: completedMatch.eventType,
-                    courtName: availableCourt,
+                    courtName: '', // Unassigned initially
                     startTime: Timestamp.fromDate(matchTime),
-                    status: 'SCHEDULED',
+                    status: 'PENDING',
                     round: completedMatch.round + 1,
                 };
                 batch.set(newMatchRef, newMatchData);
             } else {
-                 // Fallback or error handling if no court is found
-                console.warn(`Could not find an available court for match in event ${completedMatch.eventType}`);
+                 console.warn(`Could not find an available court for match in event ${completedMatch.eventType}, round ${completedMatch.round + 1}.`);
             }
         }
     }
