@@ -1,3 +1,4 @@
+
 export function Logo() {
   return (
     <div className="flex items-center gap-2">
@@ -20,7 +21,7 @@ export function Logo() {
         <path d="M4 14.5h7" />
         <path d="M4 9.5h7" />
       </svg>
-      <span className="text-lg font-semibold text-primary">Score Vision</span>
+      <span className="text-lg font-semibold text-primary">Battledore</span>
     </div>
   );
 }
