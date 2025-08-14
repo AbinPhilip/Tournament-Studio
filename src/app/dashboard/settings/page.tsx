@@ -98,7 +98,7 @@ const appModules = [
     { id: 'tournament', label: 'Tournament Setup' },
     { id: 'scheduler', label: 'Scheduler' },
     { id: 'umpire', label: 'Umpire View' },
-    { id: 'standings', label: 'Standings' },
+    { id: 'match-history', label: 'Match History' },
     { id: 'settings', label: 'System Settings' },
 ];
 
@@ -144,11 +144,11 @@ export default function SettingsPage() {
     } else {
         // Set default permissions if none found
         const defaultPerms: RolePermissions = {
-            super: ['dashboard', 'tournament', 'scheduler', 'umpire', 'standings', 'settings'],
-            admin: ['dashboard', 'tournament', 'scheduler', 'umpire', 'standings', 'settings'],
-            update: ['dashboard', 'umpire', 'standings'],
-            inquiry: ['dashboard', 'standings'],
-            individual: ['dashboard', 'standings'],
+            super: ['dashboard', 'tournament', 'scheduler', 'umpire', 'match-history', 'settings'],
+            admin: ['dashboard', 'tournament', 'scheduler', 'umpire', 'match-history', 'settings'],
+            update: ['dashboard', 'umpire', 'match-history'],
+            inquiry: ['dashboard', 'match-history'],
+            individual: ['dashboard', 'match-history'],
         };
         setPermissions(defaultPerms);
         // Optionally, save these defaults to Firestore

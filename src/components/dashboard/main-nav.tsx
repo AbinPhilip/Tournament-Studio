@@ -77,7 +77,11 @@ export function MainNav({ user, isMobile = false }: { user: User | null, isMobil
     );
   }
 
-  const navItems = allNavItems.filter(item => allowedModules?.includes(item.id));
+  const navItems = allNavItems.filter(item => {
+    if (item.id === 'standings') return false; // Hide old standings link
+    if (item.id === 'match-history') return allowedModules?.includes('standings') || allowedModules?.includes('match-history');
+    return allowedModules?.includes(item.id)
+  });
 
   return (
       <nav className="flex flex-col gap-2 p-4">
