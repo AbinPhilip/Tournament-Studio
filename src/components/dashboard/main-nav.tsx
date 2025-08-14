@@ -4,7 +4,7 @@
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { cn } from "@/lib/utils"
-import { LayoutDashboard, ListOrdered, Shield, Cog, Settings, Trophy, Users, Building } from "lucide-react"
+import { LayoutDashboard, ListOrdered, Shield, Cog, Settings, Trophy, Users, Building, GitBranch } from "lucide-react"
 import type { User, UserRole } from "@/types"
 import { useState, useEffect } from "react"
 import { db } from "@/lib/firebase"
@@ -26,6 +26,7 @@ const allNavItems: NavItem[] = [
     { id: "teams", href: "/dashboard/teams", label: "Teams", icon: Users },
     { id: "scheduler", href: "/dashboard/scheduler", label: "Scheduler", icon: ListOrdered },
     { id: "umpire", href: "/dashboard/umpire", label: "Umpire View", icon: Shield },
+    { id: "draw", href: "/dashboard/draw", label: "Tournament Draw", icon: GitBranch },
     { id: "match-history", href: "/dashboard/match-history", label: "Match History", icon: Trophy },
     { id: "settings", href: "/dashboard/settings", label: "System Settings", icon: Settings },
 ];
@@ -33,11 +34,11 @@ const allNavItems: NavItem[] = [
 type RolePermissions = Record<UserRole, string[]>;
 
 const defaultPermissions: RolePermissions = {
-    super: ['dashboard', 'tournament', 'organizations', 'teams', 'scheduler', 'umpire', 'match-history', 'settings'],
-    admin: ['dashboard', 'tournament', 'organizations', 'teams', 'scheduler', 'umpire', 'match-history', 'settings'],
-    update: ['dashboard', 'umpire', 'match-history'],
-    inquiry: ['dashboard', 'match-history'],
-    individual: ['dashboard', 'match-history'],
+    super: ['dashboard', 'tournament', 'organizations', 'teams', 'scheduler', 'umpire', 'draw', 'match-history', 'settings'],
+    admin: ['dashboard', 'tournament', 'organizations', 'teams', 'scheduler', 'umpire', 'draw', 'match-history', 'settings'],
+    update: ['dashboard', 'umpire', 'draw', 'match-history'],
+    inquiry: ['dashboard', 'draw', 'match-history'],
+    individual: ['dashboard', 'draw', 'match-history'],
     court: [],
 };
 

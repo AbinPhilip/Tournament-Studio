@@ -5,7 +5,7 @@ import { useAuth } from '@/hooks/use-auth';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { useRouter } from 'next/navigation';
-import { ListOrdered, Cog, Shield, Settings, Users, Building, Trophy } from 'lucide-react';
+import { ListOrdered, Cog, Shield, Settings, Users, Building, Trophy, GitBranch } from 'lucide-react';
 
 export default function AdminView() {
   const { user } = useAuth();
@@ -17,6 +17,7 @@ export default function AdminView() {
     { label: "Teams", href: "/dashboard/teams", icon: Users },
     { label: "Scheduler", href: "/dashboard/scheduler", icon: ListOrdered },
     { label: "Umpire View", href: "/dashboard/umpire", icon: Shield },
+    { label: "Tournament Draw", href: "/dashboard/draw", icon: GitBranch },
     { label: "Match History", href: "/dashboard/match-history", icon: Trophy },
   ];
 
