@@ -226,7 +226,11 @@ export default function SchedulerPage() {
                                 {unassignedMatches.map((match) => (
                                     <TableRow key={match.id}>
                                         <TableCell className="capitalize">{match.eventType.replace(/_/g, ' ')}</TableCell>
-                                        <TableCell>{match.team1Name} vs {match.team2Name}</TableCell>
+                                        <TableCell>
+                                            {match.team1Name} <span className="font-bold">({match.team1OrgName || 'N/A'})</span>
+                                            <span className="mx-2">vs</span>
+                                            {match.team2Name} <span className="font-bold">({match.team2OrgName || 'N/A'})</span>
+                                        </TableCell>
                                         <TableCell>
                                              <Select onValueChange={(value) => handleCourtChange(match.id, value)}>
                                                 <SelectTrigger className="w-[180px]">

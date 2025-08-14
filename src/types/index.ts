@@ -65,6 +65,8 @@ export interface Match {
     team2Id: string;
     team1Name: string;
     team2Name: string;
+    team1OrgName?: string;
+    team2OrgName?: string;
     eventType: TeamType;
     courtName: string;
     startTime: Date | Timestamp;

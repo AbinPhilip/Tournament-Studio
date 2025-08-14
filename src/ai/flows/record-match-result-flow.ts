@@ -11,7 +11,7 @@ import { ai } from '@/ai/genkit';
 import { z } from 'zod';
 import { db } from '@/lib/firebase';
 import { collection, doc, getDoc, getDocs, writeBatch, query, where, Timestamp } from 'firebase/firestore';
-import type { Match, Tournament } from '@/types';
+import type { Match, Tournament, Organization } from '@/types';
 
 
 const RecordMatchResultInputSchema = z.object({
@@ -169,6 +169,10 @@ const recordMatchResultFlow = ai.defineFlow(
             const winnerTeam = winnerTeamSnap.data();
             const opponentTeam = opponentTeamSnap.data();
 
+             const orgsCollection = await getDocs(collection(db, 'organizations'));
+            const organizations = orgsCollection.docs.map(doc => ({ id: doc.id, ...doc.data() } as Organization));
+            const getOrgName = (orgId: string) => organizations.find(o => o.id === orgId)?.name || 'N/A';
+
             // Find an available court and time slot
             let matchTime = completedMatch.startTime instanceof Timestamp ? completedMatch.startTime.toDate() : new Date();
             let availableCourt: string | null = null;
@@ -200,6 +204,8 @@ const recordMatchResultFlow = ai.defineFlow(
                     team2Id: opponentWinnerId!,
                     team1Name: winnerTeam.player1Name + (winnerTeam.player2Name ? ` & ${winnerTeam.player2Name}` : ''),
                     team2Name: opponentTeam.player1Name + (opponentTeam.player2Name ? ` & ${opponentTeam.player2Name}` : ''),
+                    team1OrgName: getOrgName(winnerTeam.organizationId),
+                    team2OrgName: getOrgName(opponentTeam.organizationId),
                     eventType: completedMatch.eventType,
                     courtName: '', // Unassigned initially
                     startTime: Timestamp.fromDate(matchTime),

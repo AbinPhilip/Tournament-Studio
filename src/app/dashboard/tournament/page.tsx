@@ -34,7 +34,7 @@ import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import { db } from '@/lib/firebase';
 import { collection, doc, getDocs, setDoc, updateDoc, DocumentReference, query, Timestamp, where, writeBatch } from 'firebase/firestore';
-import type { Tournament, Team, TeamType } from '@/types';
+import type { Tournament, Team, TeamType, Organization } from '@/types';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useRouter } from 'next/navigation';
 import { format } from 'date-fns';
@@ -68,6 +68,7 @@ export default function TournamentSettingsPage() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [isSuccessModalOpen, setIsSuccessModalOpen] = useState(false);
   const [teams, setTeams] = useState<Team[]>([]);
+  const [organizations, setOrganizations] = useState<Organization[]>([]);
 
   const form = useForm<z.infer<typeof tournamentFormSchema>>({
     resolver: zodResolver(tournamentFormSchema),
@@ -102,9 +103,10 @@ export default function TournamentSettingsPage() {
     const fetchData = async () => {
       setIsLoading(true);
       try {
-        const [tournamentSnap, teamsSnap] = await Promise.all([
+        const [tournamentSnap, teamsSnap, orgsSnap] = await Promise.all([
           getDocs(collection(db, 'tournaments')),
           getDocs(collection(db, 'teams')),
+          getDocs(collection(db, 'organizations')),
         ]);
         
         if (!tournamentSnap.empty) {
@@ -123,6 +125,7 @@ export default function TournamentSettingsPage() {
         }
         
         setTeams(teamsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Team)));
+        setOrganizations(orgsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Organization)));
         
       } catch (error) {
         toast({ title: 'Error', description: 'Failed to fetch data.', variant: 'destructive' });
@@ -162,6 +165,7 @@ export default function TournamentSettingsPage() {
     }
   };
   
+ const getOrgName = (orgId: string) => organizations.find(o => o.id === orgId)?.name || 'N/A';
 
  const handleGenerateSchedule = async () => {
     if (!tournament) {
@@ -206,6 +210,8 @@ export default function TournamentSettingsPage() {
                         team2Id: 'BYE',
                         team1Name: byeTeam.player1Name + (byeTeam.player2Name ? ` & ${byeTeam.player2Name}` : ''),
                         team2Name: 'BYE',
+                        team1OrgName: getOrgName(byeTeam.organizationId),
+                        team2OrgName: '',
                         eventType: eventType,
                         status: 'COMPLETED',
                         winnerId: byeTeam.id,
@@ -223,6 +229,8 @@ export default function TournamentSettingsPage() {
                         team2Id: team2.id,
                         team1Name: team1.player1Name + (team1.player2Name ? ` & ${team1.player2Name}` : ''),
                         team2Name: team2.player1Name + (team2.player2Name ? ` & ${team2.player2Name}` : ''),
+                        team1OrgName: getOrgName(team1.organizationId),
+                        team2OrgName: getOrgName(team2.organizationId),
                         eventType: eventType,
                         status: 'PENDING',
                         round: 1,
@@ -241,6 +249,8 @@ export default function TournamentSettingsPage() {
                             team2Id: team2.id,
                             team1Name: team1.player1Name + (team1.player2Name ? ` & ${team1.player2Name}` : ''),
                             team2Name: team2.player1Name + (team2.player2Name ? ` & ${team2.player2Name}` : ''),
+                            team1OrgName: getOrgName(team1.organizationId),
+                            team2OrgName: getOrgName(team2.organizationId),
                             eventType: eventType,
                             status: 'PENDING',
                             courtName: '',
