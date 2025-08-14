@@ -168,7 +168,7 @@ export default function DrawPage() {
                                                                     <div key={match.id} className="border-2 rounded-xl p-4 text-base bg-background shadow-md transition-all hover:shadow-lg">
                                                                         <div className={`flex flex-col ${match.winnerId === match.team1Id ? 'font-extrabold text-foreground' : 'text-muted-foreground'}`}>
                                                                             <span className="text-lg">{match.team1Name}</span>
-                                                                            <span className={`text-sm ${match.winnerId === match.team1Id ? 'font-bold' : ''}`}>{match.team1OrgName}</span>
+                                                                            <span className="text-sm font-bold">{match.team1OrgName}</span>
                                                                         </div>
                                                                         <div className="flex items-center my-3">
                                                                             <div className="flex-grow border-t border-dashed"></div>
@@ -177,7 +177,7 @@ export default function DrawPage() {
                                                                         </div>
                                                                         <div className={`flex flex-col ${match.winnerId === match.team2Id ? 'font-extrabold text-foreground' : 'text-muted-foreground'}`}>
                                                                              <span className="text-lg">{match.team2Name}</span>
-                                                                             <span className={`text-sm ${match.winnerId === match.team2Id ? 'font-bold' : ''}`}>{match.team2OrgName}</span>
+                                                                             <span className="text-sm font-bold">{match.team2OrgName}</span>
                                                                         </div>
                                                                         {match.status === 'COMPLETED' && (
                                                                              <div className="text-center mt-3 pt-3 border-t">
@@ -203,5 +203,3 @@ export default function DrawPage() {
         </div>
     )
 }
-
-    
