@@ -5,7 +5,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft, Loader2, Play, XCircle } from 'lucide-react';
-import type { Match, Tournament } from '@/types';
+import type { Match, Team, TeamType, Tournament } from '@/types';
 import { db } from '@/lib/firebase';
 import { collection, getDocs, doc, writeBatch, query, Timestamp } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
@@ -31,12 +31,16 @@ import {
     SelectValue,
 } from '@/components/ui/select';
 import { EventBadge } from '@/components/ui/event-badge';
+import { getRoundName } from '@/lib/utils';
 
 export default function SchedulerPage() {
     const [tournament, setTournament] = useState<Tournament | null>(null);
     const [matches, setMatches] = useState<Match[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [isSaving, setIsSaving] = useState(false);
+    const [teamCounts, setTeamCounts] = useState<Record<TeamType, number>>({
+        singles: 0, mens_doubles: 0, womens_doubles: 0, mixed_doubles: 0,
+    });
     const { toast } = useToast();
     const router = useRouter();
 
@@ -44,9 +48,10 @@ export default function SchedulerPage() {
         const fetchAndSetData = async () => {
             setIsLoading(true);
             try {
-                const [tournamentSnap, matchesSnap] = await Promise.all([
+                const [tournamentSnap, matchesSnap, teamsSnap] = await Promise.all([
                     getDocs(collection(db, 'tournaments')),
                     getDocs(query(collection(db, 'matches'))),
+                    getDocs(collection(db, 'teams')),
                 ]);
 
                 if (!tournamentSnap.empty) {
@@ -66,6 +71,15 @@ export default function SchedulerPage() {
                 });
                 setMatches(allMatches);
 
+                const counts: Record<TeamType, number> = { singles: 0, mens_doubles: 0, womens_doubles: 0, mixed_doubles: 0 };
+                teamsSnap.forEach(doc => {
+                    const team = doc.data() as { type: TeamType };
+                    if (counts[team.type] !== undefined) {
+                        counts[team.type]++;
+                    }
+                });
+                setTeamCounts(counts);
+
             } catch (error) {
                 console.error("Error fetching data:", error);
                 toast({ title: 'Error', description: 'Failed to fetch tournament data.', variant: 'destructive' });
@@ -78,6 +92,7 @@ export default function SchedulerPage() {
 
     const { unassignedMatches, busyCourts } = useMemo(() => {
         const unassigned = matches.filter(m => m.status === 'PENDING');
+        unassigned.sort((a, b) => (a.round || 0) - (b.round || 0));
         const busy = new Set(matches
             .filter(m => m.status === 'SCHEDULED' || m.status === 'IN_PROGRESS')
             .map(m => m.courtName)
@@ -212,6 +227,7 @@ export default function SchedulerPage() {
                             <TableHeader>
                                 <TableRow>
                                     <TableHead>Event</TableHead>
+                                    <TableHead>Round</TableHead>
                                     <TableHead>Match</TableHead>
                                     <TableHead>Assign Court</TableHead>
                                 </TableRow>
@@ -220,6 +236,7 @@ export default function SchedulerPage() {
                                 {unassignedMatches.map((match) => (
                                     <TableRow key={match.id}>
                                         <TableCell><EventBadge eventType={match.eventType} /></TableCell>
+                                        <TableCell className="font-medium whitespace-nowrap">{getRoundName(match.round || 0, match.eventType, teamCounts[match.eventType])}</TableCell>
                                         <TableCell>
                                             <div>
                                                 <span>{match.team1Name}</span>
@@ -257,3 +274,5 @@ export default function SchedulerPage() {
         </div>
     );
 }
+
+    
