@@ -62,7 +62,7 @@ const teamFormSchema = z.object({
   genderP2: z.enum(['male', 'female']).optional(),
   organizationId: z.string({ required_error: "Organization is required." }),
   photoUrl: z.string().optional(),
-  lotNumber: z.coerce.number().optional(),
+  lotNumber: z.coerce.number().int().positive("Lot number must be a positive number.").optional(),
 }).refine(data => {
     if (data.type === 'mens_doubles' || data.type === 'womens_doubles' || data.type === 'mixed_doubles') {
         return !!data.player2Name && data.player2Name.length >= 2;
@@ -304,26 +304,36 @@ export default function TeamsPage() {
   
   const handleTeamSubmit = async (values: z.infer<typeof teamFormSchema>) => {
     try {
-        const { player1Name, player2Name, organizationId } = values;
+        const { player1Name, player2Name, organizationId, type, lotNumber } = values;
 
-        // Check for duplicates
+        // Check for duplicate players
         const teamsRef = collection(db, 'teams');
-        const q = query(teamsRef, 
+        const qPlayers = query(teamsRef, 
             where('organizationId', '==', organizationId),
             where('player1Name', '==', player1Name),
             where('player2Name', '==', (player2Name || '')) 
         );
         
-        const querySnapshot = await getDocs(q);
-        if (!querySnapshot.empty) {
-            const existingTeam = querySnapshot.docs[0].data();
-            // If we are editing, we need to make sure the found team is not the team we are currently editing
-            if (!teamToEdit || querySnapshot.docs[0].id !== teamToEdit.id) {
+        const playerSnapshot = await getDocs(qPlayers);
+        if (!playerSnapshot.empty) {
+            if (!teamToEdit || playerSnapshot.docs[0].id !== teamToEdit.id) {
                toast({ title: 'Duplicate Team', description: 'A team with these players from this organization already exists.', variant: 'destructive' });
                return;
             }
         }
 
+        // Check for duplicate lot number within the same category
+        if (lotNumber) {
+            const qLot = query(teamsRef, where('type', '==', type), where('lotNumber', '==', lotNumber));
+            const lotSnapshot = await getDocs(qLot);
+            if (!lotSnapshot.empty) {
+                const existingTeam = lotSnapshot.docs[0].data() as Team;
+                if (!teamToEdit || lotSnapshot.docs[0].id !== teamToEdit.id) {
+                    toast({ title: 'Duplicate Lot Number', description: `Lot number ${lotNumber} is already taken by "${existingTeam.player1Name}" in the ${type} event.`, variant: 'destructive' });
+                    return;
+                }
+            }
+        }
 
         const teamData: Partial<Omit<Team, 'id'>> = {
             type: values.type,
@@ -429,7 +439,7 @@ export default function TeamsPage() {
   
   const handleLotNumberChange = (teamId: string, value: string) => {
     const newLotNumber = value === '' ? undefined : parseInt(value, 10);
-    if (value !== '' && isNaN(newLotNumber)) return; // Prevent non-numeric input
+    if (value !== '' && (isNaN(newLotNumber) || newLotNumber < 1)) return; // Prevent non-numeric or non-positive input
 
     setTeams(prevTeams => prevTeams.map(t => 
         t.id === teamId ? { ...t, lotNumber: newLotNumber } : t
@@ -443,6 +453,20 @@ export default function TeamsPage() {
     const originalLot = originalLotNumbers[teamId];
     const currentLot = team.lotNumber;
     
+    // Check for uniqueness before saving
+    if (currentLot && teams.some(t => t.id !== teamId && t.type === team.type && t.lotNumber === currentLot)) {
+        toast({
+            title: 'Duplicate Lot Number',
+            description: `Lot number ${currentLot} is already used in the ${team.type.replace(/_/g, ' ')} event.`,
+            variant: 'destructive',
+        });
+        // Revert to original value
+        setTeams(prevTeams => prevTeams.map(t => 
+            t.id === teamId ? { ...t, lotNumber: originalLot } : t
+        ));
+        return;
+    }
+
     if (originalLot !== currentLot) {
         try {
             const teamRef = doc(db, 'teams', teamId);
