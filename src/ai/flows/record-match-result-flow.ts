@@ -61,23 +61,20 @@ const recordMatchResultFlow = ai.defineFlow(
     }
     const completedMatch = matchSnap.data() as Match;
     
-    const updates: Partial<Match> & { 'live.currentSet'?: number } = {};
+    const updates: Partial<Match> = {};
     let finalWinnerId = input.winnerId;
-
-    if (input.scores) {
-        updates.scores = input.scores;
-        updates['live.currentSet'] = input.scores.length + 1;
-    }
 
     if (input.status === 'COMPLETED') {
         let scoreSummary = '';
+        updates.scores = input.scores || [];
+
         if (input.isForfeited) {
             scoreSummary = 'Forfeited';
             updates.forfeitedById = input.winnerId === completedMatch.team1Id ? completedMatch.team2Id : completedMatch.team1Id;
-        } else if (input.scores && input.scores.length > 0) {
+        } else if (updates.scores.length > 0) {
             let team1Sets = 0;
             let team2Sets = 0;
-            input.scores.forEach(set => {
+            updates.scores.forEach(set => {
                 if(set.team1 > set.team2) team1Sets++;
                 else team2Sets++;
             });
@@ -90,8 +87,14 @@ const recordMatchResultFlow = ai.defineFlow(
         updates.score = scoreSummary;
         updates.winnerId = finalWinnerId;
         updates.status = 'COMPLETED';
-    } else {
+
+    } else { // Handle 'IN_PROGRESS' updates (e.g., finalizing a set)
         updates.status = 'IN_PROGRESS';
+        if (input.scores) {
+          updates.scores = input.scores;
+          // This part updates the live object, but should only happen for IN_PROGRESS
+          updates['live.currentSet'] = input.scores.length + 1;
+        }
     }
     
     batch.update(matchRef, updates as any);
