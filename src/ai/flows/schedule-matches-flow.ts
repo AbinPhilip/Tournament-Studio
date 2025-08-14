@@ -38,6 +38,12 @@ const TournamentSchema = z.object({
     startedAt: z.string().optional(),
 });
 
+const OrganizationSchema = z.object({
+    id: z.string(),
+    name: z.string(),
+    location: z.string(),
+});
+
 const EventTeamCountSchema = z.object({
     eventType: z.enum(['singles', 'mens_doubles', 'womens_doubles', 'mixed_doubles']),
     count: z.number(),
@@ -47,6 +53,7 @@ const ScheduleMatchesInputSchema = z.object({
   teams: z.array(TeamSchema),
   tournament: TournamentSchema,
   teamsCountPerEvent: z.array(EventTeamCountSchema),
+  organizations: z.array(OrganizationSchema),
 });
 export type ScheduleMatchesInput = z.infer<typeof ScheduleMatchesInputSchema>;
 
@@ -81,6 +88,11 @@ const schedulePrompt = ai.definePrompt({
         Here is the list of all registered teams, which you must group by their 'type' for scheduling:
         {{#each teams}}
         - Team ID: {{this.id}}, Players: {{this.player1Name}}{{#if this.player2Name}} & {{this.player2Name}}{{/if}}, Event: {{this.type}}, OrgID: {{this.organizationId}}
+        {{/each}}
+        
+        Here is the list of all organizations. Use this to find the organization name from an organizationId.
+        {{#each organizations}}
+        - Org ID: {{this.id}}, Name: {{this.name}}
         {{/each}}
 
         Here is the count of teams per event category:
@@ -130,24 +142,22 @@ const scheduleMatchesFlow = ai.defineFlow(
     outputSchema: ScheduleMatchesOutputSchema,
   },
   async (input) => {
-    
-    const orgsCollection = await getDocs(collection(db, 'organizations'));
-    const organizations = orgsCollection.docs.map(doc => ({ id: doc.id, ...doc.data() } as Organization));
-    const getOrgName = (orgId: string) => organizations.find(o => o.id === orgId)?.name || 'N/A';
-
     const { output } = await schedulePrompt(input);
     if (!output) {
       throw new Error('Failed to generate a schedule.');
     }
+    
+    // Create a map for quick org name lookup
+    const orgNameMap = new Map(input.organizations.map(org => [org.id, org.name]));
 
-    // Augment the output with organization names
+    // Augment the output with organization names to ensure correctness
     const augmentedMatches = output.matches.map(match => {
         const team1 = input.teams.find(t => t.id === match.team1Id);
         const team2 = input.teams.find(t => t.id === match.team2Id);
         return {
             ...match,
-            team1OrgName: team1 ? getOrgName(team1.organizationId) : 'N/A',
-            team2OrgName: team2 ? getOrgName(team2.organizationId) : 'N/A',
+            team1OrgName: team1 ? orgNameMap.get(team1.organizationId) || 'N/A' : 'N/A',
+            team2OrgName: team2 ? orgNameMap.get(team2.organizationId) || 'N/A' : 'N/A',
         };
     });
 
@@ -160,9 +170,8 @@ export async function scheduleMatches(input: {
     teams: Team[],
     tournament: Omit<Tournament, 'date' | 'startedAt' | 'status'> & { id: string; date: string; status?: string; startedAt?:string; },
     teamsCountPerEvent: { eventType: string, count: number }[],
+    organizations: Organization[],
 }): Promise<Omit<Match, 'id'>[]> {
     const result = await scheduleMatchesFlow(input);
     return result.matches;
 }
-
-    

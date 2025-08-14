@@ -48,6 +48,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import { scheduleMatches } from '@/ai/flows/schedule-matches-flow';
 
 
 const tournamentFormSchema = z.object({
@@ -165,8 +166,6 @@ export default function TournamentSettingsPage() {
     }
   };
   
- const getOrgName = (orgId: string) => organizations.find(o => o.id === orgId)?.name || 'N/A';
-
  const handleGenerateSchedule = async () => {
     if (!tournament) {
         toast({ title: 'Error', description: 'Please create and save a tournament first.', variant: 'destructive'});
@@ -189,77 +188,62 @@ export default function TournamentSettingsPage() {
         const existingMatchesQuery = await getDocs(collection(db, 'matches'));
         existingMatchesQuery.forEach(doc => batch.delete(doc.ref));
         
-        const eventTypes: TeamType[] = ['singles', 'mens_doubles', 'womens_doubles', 'mixed_doubles'];
+        const teamsCountPerEvent = Object.values(
+            teams.reduce((acc, team) => {
+                acc[team.type] = (acc[team.type] || { eventType: team.type, count: 0 });
+                acc[team.type].count++;
+                return acc;
+            }, {} as Record<string, { eventType: string; count: number }>)
+        );
 
-        for (const eventType of eventTypes) {
-            const eventTeams = teams
-                .filter(t => t.type === eventType)
-                .sort((a, b) => (a.lotNumber || 0) - (b.lotNumber || 0));
+        const scheduleInput = {
+            teams,
+            tournament: {
+                ...tournament,
+                date: tournament.date.toISOString()
+            },
+            teamsCountPerEvent,
+            organizations,
+        };
 
-            if (eventTeams.length < 2) continue; // Skip events with less than 2 teams
+        const generatedMatches = await scheduleMatches(scheduleInput);
+        
+        // Add byes for knockout tournament
+        if (tournament.tournamentType === 'knockout') {
+            for (const event of teamsCountPerEvent) {
+                const teamCount = event.count;
+                const nextPowerOf2 = Math.pow(2, Math.ceil(Math.log2(teamCount)));
+                const byes = nextPowerOf2 - teamCount;
+                if (byes > 0 && byes < teamCount) { // Byes are only needed if teams are not a power of 2
+                     const eventTeams = teams.filter(t => t.type === event.eventType);
+                     // Find teams that were NOT included in the generated matches for round 1
+                     const scheduledTeamIds = new Set(generatedMatches.flatMap(m => [m.team1Id, m.team2Id]));
+                     const byeTeams = eventTeams.filter(t => !scheduledTeamIds.has(t.id));
 
-            if (tournament.tournamentType === 'knockout') {
-                let teamsToPair = [...eventTeams];
-                // Handle a single bye for odd-numbered teams
-                if (teamsToPair.length % 2 !== 0) {
-                    const byeTeam = teamsToPair.pop()!; // Team with highest lot gets bye
-                    const byeMatchRef = doc(collection(db, 'matches'));
-                    // Create a "bye" match that is already completed
-                     batch.set(byeMatchRef, {
-                        team1Id: byeTeam.id,
-                        team2Id: 'BYE',
-                        team1Name: byeTeam.player1Name + (byeTeam.player2Name ? ` & ${byeTeam.player2Name}` : ''),
-                        team2Name: 'BYE',
-                        team1OrgName: getOrgName(byeTeam.organizationId),
-                        team2OrgName: '',
-                        eventType: eventType,
-                        status: 'COMPLETED',
-                        winnerId: byeTeam.id,
-                        score: 'BYE',
-                        round: 1,
-                     });
-                }
-                // Pair remaining teams
-                for (let i = 0; i < teamsToPair.length; i += 2) {
-                    const team1 = teamsToPair[i];
-                    const team2 = teamsToPair[i+1];
-                    const matchRef = doc(collection(db, 'matches'));
-                    batch.set(matchRef, {
-                        team1Id: team1.id,
-                        team2Id: team2.id,
-                        team1Name: team1.player1Name + (team1.player2Name ? ` & ${team1.player2Name}` : ''),
-                        team2Name: team2.player1Name + (team2.player2Name ? ` & ${team2.player2Name}` : ''),
-                        team1OrgName: getOrgName(team1.organizationId),
-                        team2OrgName: getOrgName(team2.organizationId),
-                        eventType: eventType,
-                        status: 'PENDING',
-                        round: 1,
-                        courtName: '',
-                        startTime: Timestamp.now(),
-                    });
-                }
-            } else { // round-robin
-                 for (let i = 0; i < eventTeams.length; i++) {
-                    for (let j = i + 1; j < eventTeams.length; j++) {
-                        const team1 = eventTeams[i];
-                        const team2 = eventTeams[j];
-                        const matchRef = doc(collection(db, 'matches'));
-                        batch.set(matchRef, {
-                            team1Id: team1.id,
-                            team2Id: team2.id,
-                            team1Name: team1.player1Name + (team1.player2Name ? ` & ${team1.player2Name}` : ''),
-                            team2Name: team2.player1Name + (team2.player2Name ? ` & ${team2.player2Name}` : ''),
-                            team1OrgName: getOrgName(team1.organizationId),
-                            team2OrgName: getOrgName(team2.organizationId),
-                            eventType: eventType,
-                            status: 'PENDING',
-                            courtName: '',
-                            startTime: Timestamp.now(),
-                        });
-                    }
+                     for(const byeTeam of byeTeams) {
+                         const byeMatchRef = doc(collection(db, 'matches'));
+                         batch.set(byeMatchRef, {
+                            team1Id: byeTeam.id,
+                            team2Id: 'BYE',
+                            team1Name: byeTeam.player1Name + (byeTeam.player2Name ? ` & ${byeTeam.player2Name}` : ''),
+                            team2Name: 'BYE',
+                            team1OrgName: organizations.find(o => o.id === byeTeam.organizationId)?.name || 'N/A',
+                            team2OrgName: '',
+                            eventType: byeTeam.type,
+                            status: 'COMPLETED',
+                            winnerId: byeTeam.id,
+                            score: 'BYE',
+                            round: 1,
+                         });
+                     }
                 }
             }
         }
+
+        generatedMatches.forEach(match => {
+            const matchRef = doc(collection(db, 'matches'));
+            batch.set(matchRef, { ...match, courtName: '', startTime: Timestamp.now() });
+        });
         
         // Set tournament status to IN_PROGRESS
         const tourneyRef = doc(db, 'tournaments', tournament.id);
