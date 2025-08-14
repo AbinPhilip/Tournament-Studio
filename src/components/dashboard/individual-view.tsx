@@ -131,7 +131,7 @@ export default function IndividualView() {
                         <CardTitle className="capitalize">{team.type.replace(/_/g, ' ')}</CardTitle>
                         <CardDescription>
                            Team: {team.player1Name} {team.player2Name && `& ${team.player2Name}`} 
-                           <span className="font-bold block">({orgNameMap.get(team.organizationId) || 'N/A'})</span>
+                           <span className="font-bold block">({orgNameMap.get(team.organizationId)})</span>
                         </CardDescription>
                     </CardHeader>
                     <CardContent>
@@ -158,7 +158,7 @@ export default function IndividualView() {
                                                 <TableCell>
                                                     <div>
                                                         <span>{opponentName}</span>
-                                                        <p className="font-bold">{opponentOrgName || 'N/A'}</p>
+                                                        <p className="font-bold">{opponentOrgName}</p>
                                                     </div>
                                                 </TableCell>
                                                 <TableCell>

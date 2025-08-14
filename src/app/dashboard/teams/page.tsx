@@ -384,7 +384,7 @@ export default function TeamsPage() {
       return new Map(organizations.map(org => [org.id, org.name]));
   }, [organizations]);
 
-  const getOrgName = (orgId: string) => orgNameMap.get(orgId) || 'N/A';
+  const getOrgName = (orgId: string) => orgNameMap.get(orgId) || '';
   
   const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];

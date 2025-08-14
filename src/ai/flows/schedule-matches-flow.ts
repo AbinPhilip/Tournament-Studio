@@ -146,7 +146,7 @@ const scheduleMatchesFlow = ai.defineFlow(
     
     const teamsWithOrgNames = input.teams.map(team => ({
       ...team,
-      organizationName: orgNameMap.get(team.organizationId) || 'N/A',
+      organizationName: orgNameMap.get(team.organizationId) || '',
     }));
 
     // Create the input for the prompt with the augmented team data.

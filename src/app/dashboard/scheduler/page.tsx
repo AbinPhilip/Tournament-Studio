@@ -222,12 +222,12 @@ export default function SchedulerPage() {
                                         <TableCell>
                                             <div>
                                                 <span>{match.team1Name}</span>
-                                                <p className="font-bold">{match.team1OrgName || 'N/A'}</p>
+                                                <p className="font-bold">{match.team1OrgName}</p>
                                             </div>
                                             <p className="text-muted-foreground my-1">vs</p>
                                             <div>
                                                 <span>{match.team2Name}</span>
-                                                <p className="font-bold">{match.team2OrgName || 'N/A'}</p>
+                                                <p className="font-bold">{match.team2OrgName}</p>
                                             </div>
                                         </TableCell>
                                         <TableCell>

@@ -227,7 +227,7 @@ export default function TournamentSettingsPage() {
                             team2Id: 'BYE',
                             team1Name: byeTeam.player1Name + (byeTeam.player2Name ? ` & ${byeTeam.player2Name}` : ''),
                             team2Name: 'BYE',
-                            team1OrgName: organizations.find(o => o.id === byeTeam.organizationId)?.name || 'N/A',
+                            team1OrgName: organizations.find(o => o.id === byeTeam.organizationId)?.name || '',
                             team2OrgName: '',
                             eventType: byeTeam.type,
                             status: 'COMPLETED',

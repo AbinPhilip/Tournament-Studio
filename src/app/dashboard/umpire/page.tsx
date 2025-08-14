@@ -164,12 +164,12 @@ export default function CourtViewPage() {
                                                 <TableCell className="min-w-[250px]">
                                                     <div className={match.winnerId === match.team1Id ? 'font-bold' : ''}>
                                                         <span>{match.team1Name}</span>
-                                                        <p className="font-bold">{match.team1OrgName || 'N/A'}</p>
+                                                        <p className="font-bold">{match.team1OrgName}</p>
                                                     </div>
                                                     <div className="text-muted-foreground my-1">vs</div>
                                                     <div className={match.winnerId === match.team2Id ? 'font-bold' : ''}>
                                                         <span>{match.team2Name}</span>
-                                                        <p className="font-bold">{match.team2OrgName || 'N/A'}</p>
+                                                        <p className="font-bold">{match.team2OrgName}</p>
                                                     </div>
                                                 </TableCell>
                                                 <TableCell>{match.score || 'N/A'}</TableCell>
