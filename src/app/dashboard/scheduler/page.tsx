@@ -5,9 +5,9 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft, Loader2, Play, XCircle } from 'lucide-react';
-import type { Match, Tournament, Team, TeamType } from '@/types';
+import type { Match, Tournament, Team } from '@/types';
 import { db } from '@/lib/firebase';
-import { collection, getDocs, doc, writeBatch, query, Timestamp, where } from 'firebase/firestore';
+import { collection, getDocs, doc, writeBatch, query, Timestamp } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
 import { useRouter } from 'next/navigation';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -34,59 +34,53 @@ import {
 export default function SchedulerPage() {
     const [tournament, setTournament] = useState<Tournament | null>(null);
     const [matches, setMatches] = useState<Match[]>([]);
-    const [teams, setTeams] = useState<Team[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [isSaving, setIsSaving] = useState(false);
-    const [isGenerating, setIsGenerating] = useState(false);
     const { toast } = useToast();
     const router = useRouter();
 
-    const fetchAndSetData = async () => {
-        setIsLoading(true);
-        try {
-            const [tournamentSnap, matchesSnap, teamsSnap] = await Promise.all([
-                getDocs(collection(db, 'tournaments')),
-                getDocs(query(collection(db, 'matches'))),
-                getDocs(collection(db, 'teams')),
-            ]);
-
-            if (!tournamentSnap.empty) {
-                const tourneyData = tournamentSnap.docs[0].data() as Omit<Tournament, 'id'|'date'> & { date: Timestamp };
-                const date = tourneyData.date instanceof Timestamp ? tourneyData.date.toDate() : new Date();
-                setTournament({id: tournamentSnap.docs[0].id, ...tourneyData, date });
-            } else {
-                 toast({ title: 'No Tournament Found', description: 'Please configure a tournament first.', variant: 'destructive'});
-                 router.push('/dashboard/tournament');
-                 return;
-            }
-
-            const allMatches = matchesSnap.docs.map(doc => {
-              const data = doc.data();
-              const startTime = data.startTime instanceof Timestamp ? data.startTime.toDate() : new Date();
-              return { id: doc.id, ...data, startTime } as Match;
-            });
-            setMatches(allMatches);
-            
-            setTeams(teamsSnap.docs.map(doc => ({ id: doc.id, ...doc.data()} as Team)));
-
-        } catch (error) {
-            console.error("Error fetching data:", error);
-            toast({ title: 'Error', description: 'Failed to fetch tournament data.', variant: 'destructive' });
-        } finally {
-            setIsLoading(false);
-        }
-    };
-    
     useEffect(() => {
+        const fetchAndSetData = async () => {
+            setIsLoading(true);
+            try {
+                const [tournamentSnap, matchesSnap] = await Promise.all([
+                    getDocs(collection(db, 'tournaments')),
+                    getDocs(query(collection(db, 'matches'))),
+                ]);
+
+                if (!tournamentSnap.empty) {
+                    const tourneyData = tournamentSnap.docs[0].data() as Omit<Tournament, 'id'|'date'> & { date: Timestamp };
+                    const date = tourneyData.date.toDate();
+                    setTournament({id: tournamentSnap.docs[0].id, ...tourneyData, date });
+                } else {
+                     toast({ title: 'No Tournament Found', description: 'Please configure a tournament first.', variant: 'destructive'});
+                     router.push('/dashboard/tournament');
+                     return;
+                }
+
+                const allMatches = matchesSnap.docs.map(doc => {
+                  const data = doc.data();
+                  const startTime = data.startTime instanceof Timestamp ? data.startTime.toDate() : new Date();
+                  return { id: doc.id, ...data, startTime } as Match;
+                });
+                setMatches(allMatches);
+
+            } catch (error) {
+                console.error("Error fetching data:", error);
+                toast({ title: 'Error', description: 'Failed to fetch tournament data.', variant: 'destructive' });
+            } finally {
+                setIsLoading(false);
+            }
+        };
         fetchAndSetData();
-    }, []);
+    }, [toast, router]);
 
     const { unassignedMatches, busyCourts } = useMemo(() => {
         const unassigned = matches.filter(m => m.status === 'PENDING');
         const busy = new Set(matches
             .filter(m => m.status === 'SCHEDULED' || m.status === 'IN_PROGRESS')
             .map(m => m.courtName)
-            .filter(Boolean)
+            .filter((name): name is string => !!name)
         );
         return { unassignedMatches: unassigned, busyCourts: busy };
     }, [matches]);
@@ -98,8 +92,7 @@ export default function SchedulerPage() {
                     ...m, 
                     courtName: courtName,
                     status: courtName ? 'SCHEDULED' : 'PENDING',
-                    // Set a new start time when scheduled, revert if unscheduled
-                    startTime: courtName ? new Date() : m.startTime,
+                    startTime: courtName ? Timestamp.now().toDate() : m.startTime,
                 };
             }
             return m;
@@ -114,7 +107,6 @@ export default function SchedulerPage() {
 
             if (matchesToUpdate.length === 0) {
                 toast({ title: 'No changes to save', description: 'No matches have been assigned to courts.' });
-                setIsSaving(false);
                 return;
             }
 
@@ -123,7 +115,7 @@ export default function SchedulerPage() {
                 batch.update(matchRef, {
                     status: 'SCHEDULED',
                     courtName: match.courtName,
-                    startTime: match.startTime // This will now be a valid Date object
+                    startTime: match.startTime 
                 });
             });
             await batch.commit();
@@ -138,12 +130,11 @@ export default function SchedulerPage() {
     }
     
      const handleResetTournament = async () => {
+        setIsSaving(true);
         try {
             const batch = writeBatch(db);
             const matchesQuery = await getDocs(collection(db, 'matches'));
-            matchesQuery.forEach(doc => {
-                batch.delete(doc.ref);
-            });
+            matchesQuery.forEach(doc => batch.delete(doc.ref));
 
             if (tournament) {
                 const tourneyRef = doc(db, 'tournaments', tournament.id);
@@ -151,11 +142,12 @@ export default function SchedulerPage() {
             }
 
             await batch.commit();
-            toast({ title: 'Tournament Reset', description: 'All matches have been deleted and tournament status is now PENDING. You can now re-generate pairings.' });
+            toast({ title: 'Tournament Reset', description: 'All matches have been deleted. You can now re-generate pairings.' });
             setMatches([]);
-            router.push('/dashboard/tournament');
         } catch (error) {
             toast({ title: 'Error', description: 'Could not reset the tournament.', variant: 'destructive' });
+        } finally {
+            setIsSaving(false);
         }
     };
 
@@ -192,7 +184,7 @@ export default function SchedulerPage() {
                             <AlertDialogHeader>
                             <AlertDialogTitle>Are you sure?</AlertDialogTitle>
                             <AlertDialogDescription>
-                                This will permanently delete all generated matches and reset the tournament status to PENDING. This allows you to regenerate the pairings from the tournament page.
+                                This will permanently delete all generated matches and reset the tournament status. This allows you to regenerate the pairings from the tournament page.
                             </AlertDialogDescription>
                             </AlertDialogHeader>
                             <AlertDialogFooter>
@@ -264,5 +256,3 @@ export default function SchedulerPage() {
         </div>
     );
 }
-
-    

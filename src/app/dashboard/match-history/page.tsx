@@ -13,10 +13,9 @@ import {
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
 import { db } from '@/lib/firebase';
-import { collection, getDocs, query, where, orderBy } from 'firebase/firestore';
+import { collection, getDocs, query, where } from 'firebase/firestore';
 import type { Match, TeamType } from '@/types';
 import { Loader2 } from 'lucide-react';
-import { Badge } from '@/components/ui/badge';
 import { getRoundName } from '@/lib/utils';
 
 export default function MatchHistoryPage() {
@@ -44,7 +43,6 @@ export default function MatchHistoryPage() {
 
                 const matchesData = matchesSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Match));
                 
-                // Sort the data in the client
                 matchesData.sort((a, b) => {
                     if (a.eventType < b.eventType) return -1;
                     if (a.eventType > b.eventType) return 1;
@@ -167,5 +165,3 @@ export default function MatchHistoryPage() {
         </div>
     )
 }
-
-    

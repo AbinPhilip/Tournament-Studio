@@ -26,7 +26,7 @@ export function DashboardHeader({ user }: { user: User | null }) {
                     <SheetHeader>
                         <SheetTitle className="sr-only">Main Menu</SheetTitle>
                     </SheetHeader>
-                    <Link href="/dashboard" className="mb-6">
+                    <Link href="/dashboard" className="mb-6 flex">
                         <Logo />
                     </Link>
                     <MainNav user={user} isMobile={true} />
@@ -35,7 +35,9 @@ export function DashboardHeader({ user }: { user: User | null }) {
          </div>
 
         <div className="hidden lg:flex">
-            <Logo />
+             <Link href="/dashboard">
+                <Logo />
+            </Link>
         </div>
         
         <div className="flex flex-1 items-center justify-end space-x-4">

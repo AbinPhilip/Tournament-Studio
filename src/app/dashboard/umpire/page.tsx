@@ -38,7 +38,6 @@ export default function CourtViewPage() {
 
     useEffect(() => {
         setIsLoading(true);
-        // Simplified query to avoid composite index requirement
         const matchesQuery = query(collection(db, 'matches'));
 
         const unsubscribe = onSnapshot(matchesQuery, async (querySnapshot) => {
@@ -46,8 +45,7 @@ export default function CourtViewPage() {
                  const data = doc.data() as Omit<Match, 'startTime'> & {startTime: Timestamp | null};
                  return { id: doc.id, ...data, startTime: data.startTime?.toDate() ?? new Date() } as Match;
             });
-            // Perform sorting on the client side
-            matchesData.sort((a,b) => (a.courtName || '').localeCompare(b.courtName || '') || (b.startTime?.getTime() || 0) - (a.startTime?.getTime() || 0));
+            matchesData.sort((a,b) => (a.courtName || 'ZZZ').localeCompare(b.courtName || 'ZZZ') || (b.startTime?.getTime() || 0) - (a.startTime?.getTime() || 0));
 
             setMatches(matchesData);
 
@@ -83,17 +81,16 @@ export default function CourtViewPage() {
             return;
         }
         if (!match.courtName) {
-            toast({ title: 'Court Not Assigned', description: 'Please assign a court to this match in the scheduler first.', variant: 'destructive' });
+            toast({ title: 'Court Not Assigned', description: 'Please assign a court in the scheduler first.', variant: 'destructive' });
             return;
         }
         router.push(`/dashboard/umpire/${match.id}`);
     };
 
     const groupedMatchesByCourt = useMemo(() => {
-        // Filter out unassigned matches before grouping
         const assignedMatches = matches.filter(match => match.courtName);
         return assignedMatches.reduce((acc, match) => {
-            const courtName = match.courtName; // No need for "Unassigned" fallback
+            const courtName = match.courtName;
             if (!acc[courtName]) {
                 acc[courtName] = [];
             }
@@ -103,9 +100,7 @@ export default function CourtViewPage() {
     }, [matches]);
 
     const courtNames = useMemo(() => {
-        // Sort the court names alphabetically
-        const sortedNames = Object.keys(groupedMatchesByCourt).sort((a, b) => a.localeCompare(b));
-        return sortedNames;
+        return Object.keys(groupedMatchesByCourt).sort((a, b) => a.localeCompare(b));
     }, [groupedMatchesByCourt]);
 
 
@@ -124,7 +119,7 @@ export default function CourtViewPage() {
                     <div>
                         <CardTitle>Umpire Court View</CardTitle>
                         <CardDescription>
-                            View all matches organized by court. Click the scorer icon to begin live scoring for a match.
+                            View all matches organized by court. Click the scorer icon to begin live scoring.
                         </CardDescription>
                     </div>
                     <Button variant="outline" onClick={() => router.push('/dashboard')}>
@@ -134,7 +129,7 @@ export default function CourtViewPage() {
                 </div>
             </CardHeader>
             <CardContent className="space-y-6">
-                {Object.keys(groupedMatchesByCourt).length === 0 ? (
+                {courtNames.length === 0 ? (
                     <div className="text-center py-12">
                         <p className="text-muted-foreground">No matches have been assigned to courts yet.</p>
                         <Button className="mt-4" onClick={() => router.push('/dashboard/scheduler')}>
@@ -200,5 +195,3 @@ export default function CourtViewPage() {
         </Card>
     );
 }
-
-    

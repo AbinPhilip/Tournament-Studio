@@ -11,6 +11,15 @@ export default function AdminView() {
   const { user } = useAuth();
   const router = useRouter();
 
+  const navItems = [
+    { label: "Tournament Setup", href: "/dashboard/tournament", icon: Cog },
+    { label: "Organizations", href: "/dashboard/organizations", icon: Building },
+    { label: "Teams", href: "/dashboard/teams", icon: Users },
+    { label: "Scheduler", href: "/dashboard/scheduler", icon: ListOrdered },
+    { label: "Umpire View", href: "/dashboard/umpire", icon: Shield },
+    { label: "Match History", href: "/dashboard/match-history", icon: Trophy },
+  ];
+
   return (
     <div className="grid gap-8">
       <div>
@@ -20,35 +29,22 @@ export default function AdminView() {
       
       <Card>
         <CardHeader>
-            <CardTitle>Tournament Actions</CardTitle>
-            <CardDescription>Configure, schedule, and manage the tournament.</CardDescription>
+            <CardTitle>Tournament Management</CardTitle>
+            <CardDescription>Configure, schedule, and manage all aspects of the tournament.</CardDescription>
         </CardHeader>
         <CardContent className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            <Button variant="outline" onClick={() => router.push('/dashboard/tournament')}>
-                <Cog className="mr-2"/> Tournament Setup
-            </Button>
-            <Button variant="outline" onClick={() => router.push('/dashboard/organizations')}>
-                <Building className="mr-2"/> Organizations
-            </Button>
-            <Button variant="outline" onClick={() => router.push('/dashboard/teams')}>
-                <Users className="mr-2"/> Teams
-            </Button>
-            <Button variant="outline" onClick={() => router.push('/dashboard/scheduler')}>
-                <ListOrdered className="mr-2"/> Scheduler
-            </Button>
-            <Button variant="outline" onClick={() => router.push('/dashboard/umpire')}>
-                <Shield className="mr-2"/> Court View
-            </Button>
-            <Button variant="outline" onClick={() => router.push('/dashboard/match-history')}>
-                <Trophy className="mr-2"/> Match History
-            </Button>
+            {navItems.map((item) => (
+                <Button key={item.href} variant="outline" onClick={() => router.push(item.href)} className="justify-start text-left">
+                    <item.icon className="mr-2"/> {item.label}
+                </Button>
+            ))}
         </CardContent>
       </Card>
       
       <Card>
           <CardHeader>
             <CardTitle>System Management</CardTitle>
-            <CardDescription>Manage application-wide settings, including users and the database.</CardDescription>
+            <CardDescription>Manage application-wide settings, including users, permissions, and the database.</CardDescription>
           </CardHeader>
           <CardContent>
              <Button onClick={() => router.push('/dashboard/settings')}>

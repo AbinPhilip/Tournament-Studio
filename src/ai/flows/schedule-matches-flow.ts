@@ -11,8 +11,6 @@
 import { ai } from '@/ai/genkit';
 import { z } from 'zod';
 import type { Team, Tournament, Match, Organization } from '@/types';
-import { collection, getDocs } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
 
 // Define Zod schemas for validation
 const TeamSchema = z.object({
@@ -85,9 +83,9 @@ const schedulePrompt = ai.definePrompt({
         Here is the tournament information:
         - Tournament Type: {{{tournament.tournamentType}}}
 
-        Here is the list of all registered teams, which you must group by their 'type' for scheduling:
+        Here is the list of all registered teams, which you must group by their 'type' for scheduling. Use their lotNumber for pairing.
         {{#each teams}}
-        - Team ID: {{this.id}}, Players: {{this.player1Name}}{{#if this.player2Name}} & {{this.player2Name}}{{/if}}, Event: {{this.type}}, OrgID: {{this.organizationId}}
+        - Team ID: {{this.id}}, Players: {{this.player1Name}}{{#if this.player2Name}} & {{this.player2Name}}{{/if}}, Event: {{this.type}}, OrgID: {{this.organizationId}}, Lot #: {{this.lotNumber}}
         {{/each}}
         
         Here is the list of all organizations. Use this to find the organization name from an organizationId.
@@ -104,32 +102,27 @@ const schedulePrompt = ai.definePrompt({
         1.  **Group by Event:** All scheduling must happen independently for each event type (e.g., 'mens_doubles', 'singles'). Matches must only be between teams of the same type.
         2.  **Initial Status:** Set the initial 'status' of all generated matches to 'PENDING'.
         3.  **Organization Names**: You MUST look up the organization ID from the team data and provide the full organization name for team1OrgName and team2OrgName in the output.
+        4.  **Use Lot Numbers**: All pairings must be determined by the provided 'lotNumber' for each team. Do not shuffle or randomize. Pair lot #1 vs lot #2, #3 vs #4, etc.
 
         --- SCHEDULING ALGORITHM BY TOURNAMENT TYPE ---
 
         **A. If 'tournamentType' is 'knockout':**
 
         Follow this "picking of lots" procedure for EACH event type category:
-        1.  **Identify Teams:** Get the list of all N players/teams for the category using the 'teamsCountPerEvent' data.
+        1.  **Identify Teams:** Get the list of all N players/teams for the category.
         2.  **Calculate Byes:** A "bye" is a pass to the next round. A bye is needed if N is not a power of 2.
             *   Find the next highest power of 2 (P). (e.g., if N=13, P=16).
             *   Number of byes = P - N. (if N=13, byes = 3).
-        3.  **Perform the Draw (Picking Lots):**
-            *   Create a list of all N team IDs for the category.
-            *   **Shuffle this list randomly.** This is the critical step for a random draw.
-        4.  **Assign Byes and Matches:**
-            *   The first (P - N) teams in your shuffled list receive a bye. Do NOT generate a match for them. They are considered winners of round 1 and will play in round 2.
-            *   The remaining teams are paired up sequentially for the first round. For example, the next team in the shuffled list plays the one after it, and so on.
-        5.  **Set Round Number:** For all generated matches, set the 'round' field to 1.
+        3.  **Assign Byes and Matches:**
+            *   The teams with the lowest lot numbers from 1 up to the number of byes (P-N) receive a bye. Do NOT generate a match for them. They are considered winners of round 1.
+            *   The remaining teams are paired up sequentially based on their lot numbers. For example, the team with the next lot number plays the one after it, and so on.
+        4.  **Set Round Number:** For all generated matches, set the 'round' field to 1.
 
         **B. If 'tournamentType' is 'round-robin':**
         
         Follow this procedure for EACH event type category:
-        1.  **Generate All Pairings:** First, create a list of all possible unique pairings. For N teams, this will be N * (N-1) / 2 matches.
-        2.  **Perform the Draw (Picking Lots):**
-            *   Take this complete list of generated matches.
-            *   **Shuffle this list of matches randomly.** This randomizes the order of play.
-        3.  **Assign Courts and Times:** Do NOT assign courts or times.
+        1.  **Generate All Pairings:** Create a list of all possible unique pairings based on lot number.
+        2.  **Order by Lot Number**: Ensure the generated matches are ordered logically based on the lot numbers (e.g., pairings involving lower lot numbers appear first).
 
         Now, generate the complete list of matches in the required JSON format according to these rules.
     `,
@@ -142,6 +135,8 @@ const scheduleMatchesFlow = ai.defineFlow(
     outputSchema: ScheduleMatchesOutputSchema,
   },
   async (input) => {
+    // The AI prompt is now responsible for including the org names.
+    // This flow simply calls the AI and returns the result.
     const { output } = await schedulePrompt(input);
     if (!output) {
       throw new Error('Failed to generate a schedule.');
@@ -149,11 +144,12 @@ const scheduleMatchesFlow = ai.defineFlow(
     
     // Create a map for quick org name lookup
     const orgNameMap = new Map(input.organizations.map(org => [org.id, org.name]));
+    const teamMap = new Map(input.teams.map(team => [team.id, team]));
 
-    // Augment the output with organization names to ensure correctness
+    // Post-process to ensure correctness of org names, just in case AI missed it
     const augmentedMatches = output.matches.map(match => {
-        const team1 = input.teams.find(t => t.id === match.team1Id);
-        const team2 = input.teams.find(t => t.id === match.team2Id);
+        const team1 = teamMap.get(match.team1Id);
+        const team2 = teamMap.get(match.team2Id);
         return {
             ...match,
             team1OrgName: team1 ? orgNameMap.get(team1.organizationId) || 'N/A' : 'N/A',
@@ -165,13 +161,8 @@ const scheduleMatchesFlow = ai.defineFlow(
   }
 );
 
-// Wrapper function to be called from the application
-export async function scheduleMatches(input: {
-    teams: Team[],
-    tournament: Omit<Tournament, 'date' | 'startedAt' | 'status'> & { id: string; date: string; status?: string; startedAt?:string; },
-    teamsCountPerEvent: { eventType: string, count: number }[],
-    organizations: Organization[],
-}): Promise<Omit<Match, 'id'>[]> {
+
+export async function scheduleMatches(input: ScheduleMatchesInput): Promise<Omit<Match, 'id'>[]> {
     const result = await scheduleMatchesFlow(input);
     return result.matches;
 }

@@ -16,10 +16,9 @@ import { db } from '@/lib/firebase';
 import { collection, getDocs, query, where, orderBy } from 'firebase/firestore';
 import type { Match, TeamType } from '@/types';
 import { Loader2 } from 'lucide-react';
-import { Badge } from '@/components/ui/badge';
 import { getRoundName } from '@/lib/utils';
 
-export default function MatchHistoryPage() {
+export default function StandingsPage() {
     const { toast } = useToast();
     const [isLoading, setIsLoading] = useState(true);
     const [matches, setMatches] = useState<Match[]>([]);
@@ -44,7 +43,6 @@ export default function MatchHistoryPage() {
 
                 const matchesData = matchesSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Match));
                 
-                // Sort the data in the client
                 matchesData.sort((a, b) => {
                     if (a.eventType < b.eventType) return -1;
                     if (a.eventType > b.eventType) return 1;
@@ -167,5 +165,3 @@ export default function MatchHistoryPage() {
         </div>
     )
 }
-
-    

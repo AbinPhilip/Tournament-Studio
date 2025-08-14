@@ -4,8 +4,8 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { db } from '@/lib/firebase';
-import { doc, onSnapshot, getDoc, collection, getDocs, Unsubscribe, Timestamp } from 'firebase/firestore';
-import type { Match, Tournament } from '@/types';
+import { doc, onSnapshot, Unsubscribe, Timestamp } from 'firebase/firestore';
+import type { Match } from '@/types';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2, ArrowLeft, Send, Repeat, CheckCircle } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -22,9 +22,8 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
   AlertDialogTrigger,
-} from "@/components/ui/alert-dialog"
+} from "@/components/ui/alert-dialog";
 
-// Main component
 export default function LiveScorerPage() {
     const params = useParams();
     const router = useRouter();
@@ -32,66 +31,47 @@ export default function LiveScorerPage() {
     const matchId = params.matchId as string;
 
     const [match, setMatch] = useState<Match | null>(null);
-    const [tournament, setTournament] = useState<Tournament | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [isSubmitting, setIsSubmitting] = useState(false);
     
-    // Subscribe to live match updates
     useEffect(() => {
         if (!matchId) return;
         
-        let unsubscribe: Unsubscribe | undefined;
+        const matchRef = doc(db, 'matches', matchId);
+        const unsubscribe = onSnapshot(matchRef, (docSnap) => {
+            if (docSnap.exists()) {
+                const data = docSnap.data() as Omit<Match, 'startTime'> & {startTime: Timestamp};
+                const matchData = { id: docSnap.id, ...data, startTime: data.startTime.toDate() } as Match;
 
-        const fetchInitialData = async () => {
-             try {
-                const tournamentSnap = await getDocs(collection(db, 'tournaments'));
-                if (!tournamentSnap.empty) {
-                    setTournament(tournamentSnap.docs[0].data() as Tournament);
+                const currentSetNumber = (matchData.scores?.length || 0) + 1;
+                if (!matchData.live) {
+                    matchData.live = {
+                        team1Points: 0,
+                        team2Points: 0,
+                        servingTeamId: matchData.team1Id,
+                        currentSet: currentSetNumber,
+                    };
+                } else if (matchData.live.currentSet !== currentSetNumber) {
+                    matchData.live.currentSet = currentSetNumber;
                 }
-
-                const matchRef = doc(db, 'matches', matchId);
-                unsubscribe = onSnapshot(matchRef, (docSnap) => {
-                    if (docSnap.exists()) {
-                        const matchData = { id: docSnap.id, ...docSnap.data() } as Omit<Match, 'startTime'> & {startTime: Timestamp};
-                        const liveMatchData = { ...matchData, startTime: matchData.startTime.toDate() };
-
-                        const currentSetNumber = (liveMatchData.scores?.length || 0) + 1;
-                        if (!liveMatchData.live) {
-                            liveMatchData.live = {
-                                team1Points: 0,
-                                team2Points: 0,
-                                servingTeamId: liveMatchData.team1Id,
-                                currentSet: currentSetNumber,
-                            };
-                        } else if (liveMatchData.live.currentSet !== currentSetNumber) {
-                           liveMatchData.live.currentSet = currentSetNumber;
-                        }
-                        setMatch(liveMatchData as Match);
-                    } else {
-                        toast({ title: "Error", description: "Match not found.", variant: 'destructive' });
-                        router.push('/dashboard/umpire');
-                    }
-                    setIsLoading(false);
-                });
-
-            } catch (error) {
-                console.error("Error fetching initial data: ", error);
-                toast({ title: "Error", description: "Could not load match data.", variant: "destructive"});
-                setIsLoading(false);
+                setMatch(matchData);
+            } else {
+                toast({ title: "Error", description: "Match not found.", variant: 'destructive' });
+                router.push('/dashboard/umpire');
             }
-        }
+            setIsLoading(false);
+        }, (error) => {
+            console.error("Snapshot error:", error);
+            toast({ title: "Error", description: "Could not load match data.", variant: "destructive"});
+            setIsLoading(false);
+        });
 
-        fetchInitialData();
-
-        return () => {
-            if (unsubscribe) {
-                unsubscribe();
-            }
-        };
+        return () => unsubscribe();
     }, [matchId, router, toast]);
 
-    const handlePointChange = async (team: 'team1' | 'team2', delta: 1 | -1) => {
+    const handlePointChange = useCallback(async (team: 'team1' | 'team2', delta: 1 | -1) => {
         if (!match?.live || isSubmitting) return;
+        
         const newPoints = team === 'team1' ? match.live.team1Points + delta : match.live.team2Points + delta;
         if (newPoints < 0) return;
 
@@ -108,9 +88,9 @@ export default function LiveScorerPage() {
         } finally {
             setIsSubmitting(false);
         }
-    };
+    }, [match, matchId, isSubmitting, toast]);
     
-    const handleServiceChange = async () => {
+    const handleServiceChange = useCallback(async () => {
         if (!match?.live || isSubmitting) return;
         setIsSubmitting(true);
         try {
@@ -125,11 +105,10 @@ export default function LiveScorerPage() {
         } finally {
             setIsSubmitting(false);
         }
-    };
+    }, [match, matchId, isSubmitting, toast]);
 
-    const handleFinalizeSet = async () => {
+    const handleFinalizeSet = useCallback(async () => {
         if (!match?.live) return;
-        const setToFinalize = match.live.currentSet || (match.scores?.length || 0) + 1;
         setIsSubmitting(true);
         try {
             const newScores = [...(match.scores || [])];
@@ -138,32 +117,21 @@ export default function LiveScorerPage() {
             await recordMatchResult({
                 matchId: match.id,
                 scores: newScores,
-                status: 'IN_PROGRESS', // Keep it in progress
+                status: 'IN_PROGRESS',
             });
-
-            // Reset live data for the next set
-            await updateLiveScore({
-                matchId,
-                team1Points: 0,
-                team2Points: 0,
-                servingTeamId: match.team1Id, // Reset service to team 1 for simplicity
-            });
-
-            toast({ title: "Set Finalized", description: `Set ${setToFinalize} score has been recorded.` });
-
+            toast({ title: "Set Finalized", description: `Set ${match.live.currentSet} score has been recorded.` });
         } catch (error) {
             toast({ title: "Error", description: "Could not finalize set.", variant: "destructive" });
         } finally {
             setIsSubmitting(false);
         }
-    };
+    }, [match, toast]);
     
-    const handleFinalizeMatch = async (winnerId?: string, isForfeited = false) => {
+    const handleFinalizeMatch = useCallback(async (winnerId?: string, isForfeited = false) => {
          if (!match) return;
          setIsSubmitting(true);
          try {
             let finalScores = [...(match.scores || [])];
-            // Add the current set's score if it hasn't been finalized yet, and it's not a forfeit
             if (!isForfeited && match.live && (match.live.team1Points > 0 || match.live.team2Points > 0)) {
                  finalScores.push({ team1: match.live.team1Points, team2: match.live.team2Points });
             }
@@ -171,7 +139,7 @@ export default function LiveScorerPage() {
             await recordMatchResult({
                 matchId: match.id,
                 scores: finalScores,
-                winnerId: winnerId,
+                winnerId: winnerId, // Let backend calculate if not provided
                 isForfeited,
                 status: 'COMPLETED',
             });
@@ -183,17 +151,15 @@ export default function LiveScorerPage() {
          } finally {
              setIsSubmitting(false);
          }
-    };
+    }, [match, router, toast]);
     
     const { team1SetsWon, team2SetsWon } = useMemo(() => {
         if (!match || !match.scores) return { team1SetsWon: 0, team2SetsWon: 0 };
-        let team1SetsWon = 0;
-        let team2SetsWon = 0;
-        match.scores.forEach(set => {
-            if (set.team1 > set.team2) team1SetsWon++;
-            else team2SetsWon++;
-        });
-        return { team1SetsWon, team2SetsWon };
+        return match.scores.reduce((acc, set) => {
+            if (set.team1 > set.team2) acc.team1SetsWon++;
+            else acc.team2SetsWon++;
+            return acc;
+        }, { team1SetsWon: 0, team2SetsWon: 0 });
     }, [match]);
 
     if (isLoading || !match) {
@@ -217,8 +183,7 @@ export default function LiveScorerPage() {
                     </div>
                 </CardHeader>
                 <CardContent className="space-y-8">
-                   {/* Scoreboard */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-8 items-start text-center">
+                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-8 items-start text-center">
                        <TeamScorePanel 
                             teamName={match.team1Name} 
                             points={team1Points}
@@ -235,7 +200,6 @@ export default function LiveScorerPage() {
                        />
                     </div>
                     
-                    {/* Previous Sets */}
                     {match.scores && match.scores.length > 0 && (
                         <div className="text-center">
                             <h3 className="font-semibold text-lg mb-2">Previous Sets</h3>
@@ -245,7 +209,6 @@ export default function LiveScorerPage() {
                         </div>
                     )}
 
-                    {/* Controls */}
                     <div className="border-t pt-6 space-y-4">
                         <div className="flex flex-wrap gap-4 justify-center">
                              <Button variant="secondary" onClick={handleServiceChange} disabled={isSubmitting}>
@@ -264,7 +227,7 @@ export default function LiveScorerPage() {
                                 <AlertDialogHeader>
                                     <AlertDialogTitle>Finalize Match</AlertDialogTitle>
                                     <AlertDialogDescription>
-                                        Click confirm to finalize the match based on the scores entered. You can also declare a forfeit.
+                                        Click confirm to finalize the match. The winner will be calculated automatically from the scores. You can also declare a forfeit below.
                                     </AlertDialogDescription>
                                 </AlertDialogHeader>
                                 <div className="space-y-4 py-4">
@@ -277,7 +240,7 @@ export default function LiveScorerPage() {
                                     
                                     <div className="relative">
                                         <div className="absolute inset-0 flex items-center"><span className="w-full border-t" /></div>
-                                        <div className="relative flex justify-center text-xs uppercase"><span className="bg-background px-2 text-muted-foreground">Or Forfeit</span></div>
+                                        <div className="relative flex justify-center text-xs uppercase"><span className="bg-background px-2 text-muted-foreground">Or Declare Forfeit</span></div>
                                     </div>
                                     <div className="grid grid-cols-2 gap-2">
                                         <AlertDialogAction asChild>
@@ -288,7 +251,7 @@ export default function LiveScorerPage() {
                                         <AlertDialogAction asChild>
                                              <Button variant="outline" onClick={() => handleFinalizeMatch(match.team1Id, true)}>
                                                 {match.team2Name} Forfeits
-                                            </Button>
+                                             </Button>
                                         </AlertDialogAction>
                                     </div>
                                 </div>
@@ -305,7 +268,6 @@ export default function LiveScorerPage() {
 }
 
 
-// Helper component for team panel
 function TeamScorePanel({ teamName, points, setsWon, isServing, onPointChange }: { teamName: string, points: number, setsWon: number, isServing: boolean, onPointChange: (delta: 1 | -1) => void }) {
     return (
         <div className={`p-6 rounded-lg border-4 transition-all ${isServing ? 'border-primary shadow-lg' : 'border-muted'}`}>

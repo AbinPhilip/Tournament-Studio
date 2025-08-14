@@ -27,7 +27,7 @@ import { MoreHorizontal, Trash2, Edit, CheckCircle, Users, ArrowUpDown } from 'l
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import { db } from '@/lib/firebase';
-import { collection, doc, getDocs, setDoc, updateDoc, addDoc, deleteDoc, query, where } from 'firebase/firestore';
+import { collection, doc, getDocs, updateDoc, addDoc, deleteDoc, query, where, writeBatch } from 'firebase/firestore';
 import type { Team, Organization } from '@/types';
 import {
   AlertDialog,
@@ -61,8 +61,8 @@ const teamFormSchema = z.object({
   genderP1: z.enum(['male', 'female']).optional(),
   genderP2: z.enum(['male', 'female']).optional(),
   organizationId: z.string({ required_error: "Organization is required." }),
-  photoUrl: z.string().optional(),
-  lotNumber: z.coerce.number().int().positive("Lot number must be a positive number.").optional(),
+  photoUrl: z.string().url().optional().or(z.literal('')),
+  lotNumber: z.coerce.number().int().positive({ message: "Lot number must be a positive number." }).optional(),
 }).refine(data => {
     if (data.type === 'mens_doubles' || data.type === 'womens_doubles' || data.type === 'mixed_doubles') {
         return !!data.player2Name && data.player2Name.length >= 2;
@@ -90,7 +90,6 @@ const teamFormSchema = z.object({
 });
 
 
-// New Reusable Team Form Component
 const TeamForm = ({
     form,
     onSubmit,
@@ -194,7 +193,7 @@ const TeamForm = ({
                 <FormField control={form.control} name="lotNumber" render={({ field }) => (
                     <FormItem>
                         <FormLabel>Lot Number</FormLabel>
-                        <FormControl><Input type="number" placeholder="e.g. 1" {...field} onChange={e => field.onChange(e.target.value === '' ? '' : Number(e.target.value))} /></FormControl>
+                        <FormControl><Input type="number" placeholder="e.g. 1" {...field} onChange={e => field.onChange(e.target.value === '' ? undefined : Number(e.target.value))} /></FormControl>
                         <FormMessage />
                     </FormItem>
                 )} />
@@ -208,7 +207,7 @@ const TeamForm = ({
                         <Button type="button" variant="outline" onClick={() => fileInputRef.current?.click()}>
                             Upload
                         </Button>
-                        <Input type="file" ref={fileInputRef} onChange={handlePhotoChange} className="hidden" accept="image/*" capture="environment" />
+                        <Input type="file" ref={fileInputRef} onChange={handlePhotoChange} className="hidden" accept="image/*" />
                     </div>
                     <FormMessage />
                 </FormItem>
@@ -236,53 +235,54 @@ export default function TeamsPage() {
   const inlineFileInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
   const [originalLotNumbers, setOriginalLotNumbers] = useState<Record<string, number | undefined>>({});
   const [isSuccessModalOpen, setIsSuccessModalOpen] = useState(false);
-  const [sortConfig, setSortConfig] = useState<{ key: string; direction: 'ascending' | 'descending' } | null>(null);
+  const [sortConfig, setSortConfig] = useState<{ key: keyof Team | 'organizationName'; direction: 'ascending' | 'descending' } | null>(null);
 
   const teamForm = useForm<z.infer<typeof teamFormSchema>>({
     resolver: zodResolver(teamFormSchema),
-    defaultValues: { type: 'singles', player1Name: '', player2Name: '', photoUrl: '' },
+    defaultValues: { type: 'singles', player1Name: '', player2Name: '', photoUrl: '', lotNumber: undefined },
   });
 
-  useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const [teamsSnap, orgsSnap] = await Promise.all([
-          getDocs(collection(db, 'teams')),
-          getDocs(collection(db, 'organizations')),
-        ]);
-        
-        const fetchedTeams = teamsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Team));
-        setTeams(fetchedTeams);
+  const fetchData = async () => {
+    try {
+      const [teamsSnap, orgsSnap] = await Promise.all([
+        getDocs(collection(db, 'teams')),
+        getDocs(collection(db, 'organizations')),
+      ]);
+      
+      const fetchedTeams = teamsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Team));
+      setTeams(fetchedTeams);
 
-        const lotNumberMap: Record<string, number | undefined> = {};
-        const playersMap: Record<string, Set<string>> = {};
+      const lotNumberMap: Record<string, number | undefined> = {};
+      const playersMap: Record<string, Set<string>> = {};
 
-        fetchedTeams.forEach(team => {
-            lotNumberMap[team.id] = team.lotNumber;
-            if (!playersMap[team.organizationId]) {
-                playersMap[team.organizationId] = new Set();
-            }
-            playersMap[team.organizationId].add(team.player1Name);
-            if (team.player2Name) {
-                playersMap[team.organizationId].add(team.player2Name);
-            }
-        });
-        setOriginalLotNumbers(lotNumberMap);
-        
-        const finalPlayersByOrg: Record<string, string[]> = {};
-        for(const orgId in playersMap) {
-            finalPlayersByOrg[orgId] = Array.from(playersMap[orgId]).sort();
-        }
-        setPlayersByOrg(finalPlayersByOrg);
-
-        setOrganizations(orgsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Organization)));
-        
-      } catch (error) {
-        toast({ title: 'Error', description: 'Failed to fetch data.', variant: 'destructive' });
+      fetchedTeams.forEach(team => {
+          lotNumberMap[team.id] = team.lotNumber;
+          if (!playersMap[team.organizationId]) {
+              playersMap[team.organizationId] = new Set();
+          }
+          playersMap[team.organizationId].add(team.player1Name);
+          if (team.player2Name) {
+              playersMap[team.organizationId].add(team.player2Name);
+          }
+      });
+      setOriginalLotNumbers(lotNumberMap);
+      
+      const finalPlayersByOrg: Record<string, string[]> = {};
+      for(const orgId in playersMap) {
+          finalPlayersByOrg[orgId] = Array.from(playersMap[orgId]).sort();
       }
-    };
+      setPlayersByOrg(finalPlayersByOrg);
+
+      setOrganizations(orgsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Organization)));
+      
+    } catch (error) {
+      toast({ title: 'Error', description: 'Failed to fetch data.', variant: 'destructive' });
+    }
+  };
+
+  useEffect(() => {
     fetchData();
-  }, [toast]);
+  }, []);
   
   useEffect(() => {
     if (teamToEdit) {
@@ -292,21 +292,24 @@ export default function TeamsPage() {
     }
   }, [teamToEdit, teamForm]);
   
+  const resetForm = () => {
+    setPhotoPreview(null);
+    teamForm.reset({ type: 'singles', player1Name: '', player2Name: '', photoUrl: '', lotNumber: undefined });
+    if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+    }
+  }
+
   useEffect(() => {
     if (!isAddTeamOpen && !isEditTeamOpen) {
-        setPhotoPreview(null);
-        teamForm.reset();
-        if (fileInputRef.current) {
-            fileInputRef.current.value = '';
-        }
+       resetForm();
     }
-  }, [isAddTeamOpen, isEditTeamOpen, teamForm]);
+  }, [isAddTeamOpen, isEditTeamOpen]);
   
   const handleTeamSubmit = async (values: z.infer<typeof teamFormSchema>) => {
     try {
         const { player1Name, player2Name, organizationId, type, lotNumber } = values;
 
-        // Check for duplicate players
         const teamsRef = collection(db, 'teams');
         const qPlayers = query(teamsRef, 
             where('organizationId', '==', organizationId),
@@ -315,73 +318,48 @@ export default function TeamsPage() {
         );
         
         const playerSnapshot = await getDocs(qPlayers);
-        if (!playerSnapshot.empty) {
-            if (!teamToEdit || playerSnapshot.docs[0].id !== teamToEdit.id) {
-               toast({ title: 'Duplicate Team', description: 'A team with these players from this organization already exists.', variant: 'destructive' });
-               return;
-            }
+        if (!playerSnapshot.empty && (!teamToEdit || playerSnapshot.docs[0].id !== teamToEdit.id)) {
+            toast({ title: 'Duplicate Team', description: 'A team with these players from this organization already exists.', variant: 'destructive' });
+            return;
         }
 
-        // Check for duplicate lot number within the same category
         if (lotNumber) {
             const qLot = query(teamsRef, where('type', '==', type), where('lotNumber', '==', lotNumber));
             const lotSnapshot = await getDocs(qLot);
-            if (!lotSnapshot.empty) {
+            if (!lotSnapshot.empty && (!teamToEdit || lotSnapshot.docs[0].id !== teamToEdit.id)) {
                 const existingTeam = lotSnapshot.docs[0].data() as Team;
-                if (!teamToEdit || lotSnapshot.docs[0].id !== teamToEdit.id) {
-                    toast({ title: 'Duplicate Lot Number', description: `Lot number ${lotNumber} is already taken by "${existingTeam.player1Name}" in the ${type} event.`, variant: 'destructive' });
-                    return;
-                }
+                toast({ title: 'Duplicate Lot Number', description: `Lot number ${lotNumber} is already taken by "${existingTeam.player1Name}" in the ${type} event.`, variant: 'destructive' });
+                return;
             }
         }
 
-        const teamData: Partial<Omit<Team, 'id'>> = {
-            type: values.type,
-            player1Name: values.player1Name,
-            organizationId: values.organizationId,
-            player2Name: values.player2Name || '', // Ensure it's not undefined
+        let teamData: Omit<Team, 'id'> = {
+            ...values,
+            player2Name: values.player2Name || '',
         };
-        
-        if (values.photoUrl) teamData.photoUrl = values.photoUrl;
 
-        if (values.type === 'mens_doubles') {
-            teamData.genderP1 = 'male';
-            teamData.genderP2 = 'male';
-        } else if (values.type === 'womens_doubles') {
-            teamData.genderP1 = 'female';
-            teamData.genderP2 = 'female';
-        } else if (values.type === 'mixed_doubles') {
-            teamData.genderP1 = values.genderP1;
-            teamData.genderP2 = values.genderP2;
-        } else if (values.type === 'singles') {
-            teamData.genderP1 = values.genderP1;
-            teamData.player2Name = ''; // explicitly clear player2 name for singles
-        }
+        if (values.type === 'mens_doubles') { teamData.genderP1 = 'male'; teamData.genderP2 = 'male'; }
+        else if (values.type === 'womens_doubles') { teamData.genderP1 = 'female'; teamData.genderP2 = 'female'; }
+        else if (values.type === 'singles') { teamData.player2Name = ''; }
         
-        const dataToSave: any = { ...teamData };
-        if (values.lotNumber !== undefined && values.lotNumber !== null && !isNaN(values.lotNumber)) {
-            dataToSave.lotNumber = values.lotNumber;
-        }
+        const dataToSave = { ...teamData, lotNumber: teamData.lotNumber ?? null };
 
         if (teamToEdit) {
             const teamRef = doc(db, 'teams', teamToEdit.id);
-            await updateDoc(teamRef, dataToSave as { [x: string]: any });
-            setTeams(teams.map(t => t.id === teamToEdit.id ? { ...teamToEdit, ...dataToSave } as Team : t));
-            setIsEditTeamOpen(false);
+            await updateDoc(teamRef, dataToSave);
             setTeamToEdit(null);
+            setIsEditTeamOpen(false);
             setIsSuccessModalOpen(true);
         } else {
-            const newTeamDoc = await addDoc(collection(db, 'teams'), dataToSave);
-            const newTeam = { id: newTeamDoc.id, ...dataToSave };
-            setTeams([...teams, newTeam as Team]);
+            await addDoc(collection(db, 'teams'), dataToSave);
             toast({
               title: 'Team Registered',
               description: `Team "${dataToSave.player1Name}${dataToSave.player2Name ? ' & ' + dataToSave.player2Name : ''}" has been registered.`,
             });
             setIsAddTeamOpen(false);
         }
-        teamForm.reset({ type: 'singles', player1Name: '', player2Name: '', photoUrl: '', lotNumber: undefined });
-        setPhotoPreview(null);
+        fetchData(); // Refetch all data to keep component in sync
+        resetForm();
     } catch(error) {
         console.error(error);
         toast({ title: 'Error', description: `Failed to ${teamToEdit ? 'update' : 'register'} team.`, variant: 'destructive' });
@@ -424,11 +402,8 @@ export default function TeamsPage() {
     reader.onloadend = async () => {
       const dataUrl = reader.result as string;
       try {
-        const teamRef = doc(db, 'teams', teamId);
-        await updateDoc(teamRef, { photoUrl: dataUrl });
-        setTeams(prevTeams => prevTeams.map(t => 
-            t.id === teamId ? { ...t, photoUrl: dataUrl } : t
-        ));
+        await updateDoc(doc(db, 'teams', teamId), { photoUrl: dataUrl });
+        setTeams(prevTeams => prevTeams.map(t => t.id === teamId ? { ...t, photoUrl: dataUrl } : t));
         toast({ title: 'Photo Updated', description: 'The team photo has been changed.' });
       } catch (error) {
         toast({ title: 'Error', description: 'Failed to update photo.', variant: 'destructive' });
@@ -439,11 +414,8 @@ export default function TeamsPage() {
   
   const handleLotNumberChange = (teamId: string, value: string) => {
     const newLotNumber = value === '' ? undefined : parseInt(value, 10);
-    if (value !== '' && (isNaN(newLotNumber) || newLotNumber < 1)) return; // Prevent non-numeric or non-positive input
-
-    setTeams(prevTeams => prevTeams.map(t => 
-        t.id === teamId ? { ...t, lotNumber: newLotNumber } : t
-    ));
+    if (value !== '' && (isNaN(newLotNumber) || newLotNumber < 1)) return; 
+    setTeams(prevTeams => prevTeams.map(t => t.id === teamId ? { ...t, lotNumber: newLotNumber } : t));
   };
   
   const handleLotNumberBlur = async (teamId: string) => {
@@ -453,43 +425,25 @@ export default function TeamsPage() {
     const originalLot = originalLotNumbers[teamId];
     const currentLot = team.lotNumber;
     
-    // Check for uniqueness before saving
+    if (originalLot === currentLot) return;
+
     if (currentLot && teams.some(t => t.id !== teamId && t.type === team.type && t.lotNumber === currentLot)) {
         toast({
             title: 'Duplicate Lot Number',
-            description: `Lot number ${currentLot} is already used in the ${team.type.replace(/_/g, ' ')} event.`,
+            description: `Lot number ${currentLot} is already used in this event.`,
             variant: 'destructive',
         });
-        // Revert to original value
-        setTeams(prevTeams => prevTeams.map(t => 
-            t.id === teamId ? { ...t, lotNumber: originalLot } : t
-        ));
+        setTeams(prevTeams => prevTeams.map(t => t.id === teamId ? { ...t, lotNumber: originalLot } : t));
         return;
     }
 
-    if (originalLot !== currentLot) {
-        try {
-            const teamRef = doc(db, 'teams', teamId);
-            await updateDoc(teamRef, { lotNumber: currentLot === undefined ? null : currentLot });
-            
-            setOriginalLotNumbers(prev => ({ ...prev, [teamId]: currentLot }));
-            
-            const teamName = team.player2Name ? `${team.player1Name} & ${team.player2Name}` : team.player1Name;
-            const orgName = getOrgName(team.organizationId);
-
-            toast({
-                title: 'Lot Number Updated',
-                description: `Lot for ${teamName} (${orgName}) saved.`
-            });
-        } catch (error) {
-            toast({
-                title: 'Error Saving Lot Number',
-                variant: 'destructive'
-            });
-            setTeams(prevTeams => prevTeams.map(t => 
-                t.id === teamId ? { ...t, lotNumber: originalLot } : t
-            ));
-        }
+    try {
+        await updateDoc(doc(db, 'teams', teamId), { lotNumber: currentLot ?? null });
+        setOriginalLotNumbers(prev => ({ ...prev, [teamId]: currentLot }));
+        toast({ title: 'Lot Number Updated' });
+    } catch (error) {
+        toast({ title: 'Error Saving Lot Number', variant: 'destructive' });
+        setTeams(prevTeams => prevTeams.map(t => t.id === teamId ? { ...t, lotNumber: originalLot } : t));
     }
   };
 
@@ -507,11 +461,17 @@ export default function TeamsPage() {
             aValue = a[sortConfig.key as keyof Team] ?? '';
             bValue = b[sortConfig.key as keyof Team] ?? '';
         }
+        
+        if (typeof aValue === 'number' && typeof bValue === 'number') {
+             if (aValue < bValue) return sortConfig.direction === 'ascending' ? -1 : 1;
+             if (aValue > bValue) return sortConfig.direction === 'ascending' ? 1 : -1;
+             return 0;
+        }
 
-        if (aValue < bValue) {
+        if (String(aValue).toLocaleLowerCase() < String(bValue).toLocaleLowerCase()) {
           return sortConfig.direction === 'ascending' ? -1 : 1;
         }
-        if (aValue > bValue) {
+        if (String(aValue).toLocaleLowerCase() > String(bValue).toLocaleLowerCase()) {
           return sortConfig.direction === 'ascending' ? 1 : -1;
         }
         return 0;
@@ -520,7 +480,7 @@ export default function TeamsPage() {
     return sortableTeams;
   }, [teams, organizations, sortConfig]);
 
-  const requestSort = (key: string) => {
+  const requestSort = (key: keyof Team | 'organizationName') => {
     let direction: 'ascending' | 'descending' = 'ascending';
     if (sortConfig && sortConfig.key === key && sortConfig.direction === 'ascending') {
       direction = 'descending';
@@ -528,6 +488,12 @@ export default function TeamsPage() {
     setSortConfig({ key, direction });
   };
 
+  const SortableHeader = ({ sortKey, children }: { sortKey: keyof Team | 'organizationName', children: React.ReactNode }) => (
+    <Button variant="ghost" onClick={() => requestSort(sortKey)}>
+        {children}
+        <ArrowUpDown className="ml-2 h-4 w-4" />
+    </Button>
+  );
 
   return (
     <div className="space-y-8 p-4 md:p-8">
@@ -535,25 +501,19 @@ export default function TeamsPage() {
           <CardHeader className="flex flex-row items-center justify-between">
             <div>
               <CardTitle>Team Management</CardTitle>
-              <CardDescription>
-                Register and manage badminton teams.
-              </CardDescription>
+              <CardDescription>Register and manage teams. Assign lot numbers before starting the tournament.</CardDescription>
             </div>
             <Dialog open={isAddTeamOpen} onOpenChange={setIsAddTeamOpen}>
               <DialogTrigger asChild>
-                <Button>
-                  <Users className="mr-2 h-4 w-4" />
-                  Register Team
-                </Button>
+                <Button><Users className="mr-2 h-4 w-4" />Register Team</Button>
               </DialogTrigger>
               <DialogContent className="sm:max-w-[425px] max-h-[90vh] overflow-y-auto">
                 <DialogHeader>
                   <DialogTitle>Register New Team</DialogTitle>
-                  <DialogDescription>Enter the details for the new team.</DialogDescription>
                 </DialogHeader>
                 <TeamForm
                     form={teamForm}
-                    onSubmit={(values) => handleTeamSubmit(values)}
+                    onSubmit={handleTeamSubmit}
                     isEditing={false}
                     organizations={organizations}
                     playersByOrg={playersByOrg}
@@ -568,26 +528,11 @@ export default function TeamsPage() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>
-                    <Button variant="ghost" onClick={() => requestSort('lotNumber')}>
-                      Lot #
-                      <ArrowUpDown className="ml-2 h-4 w-4" />
-                    </Button>
-                  </TableHead>
+                  <TableHead><SortableHeader sortKey="lotNumber">Lot #</SortableHeader></TableHead>
                   <TableHead>Photo</TableHead>
-                  <TableHead>
-                     <Button variant="ghost" onClick={() => requestSort('type')}>
-                        Event
-                        <ArrowUpDown className="ml-2 h-4 w-4" />
-                    </Button>
-                  </TableHead>
+                  <TableHead><SortableHeader sortKey="type">Event</SortableHeader></TableHead>
                   <TableHead>Players</TableHead>
-                  <TableHead>
-                    <Button variant="ghost" onClick={() => requestSort('organizationName')}>
-                        Organization
-                        <ArrowUpDown className="ml-2 h-4 w-4" />
-                    </Button>
-                  </TableHead>
+                  <TableHead><SortableHeader sortKey="organizationName">Organization</SortableHeader></TableHead>
                   <TableHead><span className="sr-only">Actions</span></TableHead>
                 </TableRow>
               </TableHeader>
@@ -595,36 +540,18 @@ export default function TeamsPage() {
                 {sortedTeams.map((t) => (
                   <TableRow key={t.id}>
                     <TableCell>
-                      <Input
-                        type="number"
-                        className="w-20"
-                        value={t.lotNumber ?? ''}
+                      <Input type="number" className="w-20" value={t.lotNumber ?? ''}
                         onChange={(e) => handleLotNumberChange(t.id, e.target.value)}
-                        onBlur={() => handleLotNumberBlur(t.id)}
-                        placeholder="N/A"
+                        onBlur={() => handleLotNumberBlur(t.id)} placeholder="N/A"
                       />
                     </TableCell>
                     <TableCell>
-                        <div className={cn("relative group cursor-pointer")} onClick={() => inlineFileInputRefs.current[t.id]?.click()}>
-                           <Image 
-                             data-ai-hint="badminton players"
-                             src={t.photoUrl || 'https://placehold.co/80x80.png'} 
-                             alt="Team photo" 
-                             width={80} 
-                             height={80} 
-                             className="rounded-md object-cover group-hover:opacity-50 transition-opacity"
-                           />
+                        <div className="relative group cursor-pointer" onClick={() => inlineFileInputRefs.current[t.id]?.click()}>
+                           <Image data-ai-hint="badminton players" src={t.photoUrl || 'https://placehold.co/80x80.png'} alt="Team photo" width={80} height={80} className="rounded-md object-cover group-hover:opacity-50 transition-opacity" />
                            <div className="absolute inset-0 flex items-center justify-center bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity rounded-md">
                                 <Edit className="h-6 w-6 text-white" />
                            </div>
-                           <Input
-                                type="file"
-                                className="hidden"
-                                ref={el => (inlineFileInputRefs.current[t.id] = el)}
-                                onChange={(e) => handleInlinePhotoChange(e, t.id)}
-                                accept="image/*"
-                                capture="environment"
-                            />
+                           <Input type="file" className="hidden" ref={el => (inlineFileInputRefs.current[t.id] = el)} onChange={(e) => handleInlinePhotoChange(e, t.id)} accept="image/*" />
                         </div>
                     </TableCell>
                     <TableCell className="font-medium capitalize">{t.type.replace(/_/g, ' ')}</TableCell>
@@ -653,9 +580,7 @@ export default function TeamsPage() {
                     <CheckCircle className="h-6 w-6 text-green-500" />
                     <AlertDialogTitle>Success!</AlertDialogTitle>
                 </div>
-                <AlertDialogDescription>
-                  Team details have been saved successfully.
-                </AlertDialogDescription>
+                <AlertDialogDescription>Team details have been saved successfully.</AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
                 <AlertDialogAction onClick={() => setIsSuccessModalOpen(false)}>OK</AlertDialogAction>
@@ -663,16 +588,12 @@ export default function TeamsPage() {
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Edit Team Dialog */}
       <Dialog open={isEditTeamOpen} onOpenChange={setIsEditTeamOpen}>
           <DialogContent className="sm:max-w-[425px] max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-              <DialogTitle>Edit Team</DialogTitle>
-              <DialogDescription>Update the team details.</DialogDescription>
-          </DialogHeader>
+          <DialogHeader><DialogTitle>Edit Team</DialogTitle></DialogHeader>
            <TeamForm
                 form={teamForm}
-                onSubmit={(values) => handleTeamSubmit(values)}
+                onSubmit={handleTeamSubmit}
                 isEditing={true}
                 organizations={organizations}
                 playersByOrg={playersByOrg}
@@ -683,7 +604,6 @@ export default function TeamsPage() {
           </DialogContent>
       </Dialog>
       
-      {/* Delete Team Alert */}
       <AlertDialog open={!!teamToDelete} onOpenChange={(open) => !open && setTeamToDelete(null)}>
         <AlertDialogContent>
             <AlertDialogHeader>
@@ -694,9 +614,7 @@ export default function TeamsPage() {
             </AlertDialogHeader>
             <AlertDialogFooter>
                 <AlertDialogCancel>Cancel</AlertDialogCancel>
-                <AlertDialogAction onClick={handleDeleteTeam} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
-                  Delete Team
-                </AlertDialogAction>
+                <AlertDialogAction onClick={handleDeleteTeam} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">Delete Team</AlertDialogAction>
             </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
