@@ -247,12 +247,12 @@ export default function LiveScorerPage() {
                                     </div>
                                     <div className="grid grid-cols-2 gap-2">
                                         <AlertDialogAction asChild>
-                                            <Button variant="outline" onClick={() => handleFinalizeMatch(match.team2Id, true)} className="h-auto py-2 text-wrap">
+                                            <Button variant="destructive" onClick={() => handleFinalizeMatch(match.team2Id, true)} className="h-auto py-2 text-wrap">
                                                 {match.team1Name} Forfeits
                                             </Button>
                                         </AlertDialogAction>
                                         <AlertDialogAction asChild>
-                                             <Button variant="outline" onClick={() => handleFinalizeMatch(match.team1Id, true)} className="h-auto py-2 text-wrap">
+                                             <Button variant="destructive" onClick={() => handleFinalizeMatch(match.team1Id, true)} className="h-auto py-2 text-wrap">
                                                 {match.team2Name} Forfeits
                                              </Button>
                                         </AlertDialogAction>
@@ -287,3 +287,5 @@ function TeamScorePanel({ teamName, points, setsWon, isServing, onPointChange }:
         </div>
     );
 }
+
+    
