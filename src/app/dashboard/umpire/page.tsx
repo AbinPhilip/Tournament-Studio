@@ -38,13 +38,17 @@ export default function CourtViewPage() {
 
     useEffect(() => {
         setIsLoading(true);
-        const matchesQuery = query(collection(db, 'matches'), orderBy('courtName'), orderBy('startTime', 'desc'));
+        // Simplified query to avoid composite index requirement
+        const matchesQuery = query(collection(db, 'matches'));
 
         const unsubscribe = onSnapshot(matchesQuery, async (querySnapshot) => {
             const matchesData = querySnapshot.docs.map(doc => {
                  const data = doc.data() as Omit<Match, 'startTime'> & {startTime: Timestamp | null};
                  return { id: doc.id, ...data, startTime: data.startTime?.toDate() ?? new Date() } as Match;
             });
+            // Perform sorting on the client side
+            matchesData.sort((a,b) => (a.courtName || '').localeCompare(b.courtName || '') || (b.startTime?.getTime() || 0) - (a.startTime?.getTime() || 0));
+
             setMatches(matchesData);
 
              try {
