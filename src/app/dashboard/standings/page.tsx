@@ -37,14 +37,20 @@ export default function StandingsPage() {
                 const [matchesSnap, teamsSnap] = await Promise.all([
                      getDocs(query(
                         collection(db, 'matches'),
-                        where('status', '==', 'COMPLETED'),
-                        orderBy('eventType'),
-                        orderBy('round', 'desc'))
+                        where('status', '==', 'COMPLETED'))
                     ),
                     getDocs(collection(db, 'teams'))
                 ]);
 
                 const matchesData = matchesSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Match));
+                
+                // Sort the data in the client
+                matchesData.sort((a, b) => {
+                    if (a.eventType < b.eventType) return -1;
+                    if (a.eventType > b.eventType) return 1;
+                    return (b.round || 0) - (a.round || 0);
+                });
+
                 setMatches(matchesData);
                 
                 const counts: Record<TeamType, number> = { singles: 0, mens_doubles: 0, womens_doubles: 0, mixed_doubles: 0 };
