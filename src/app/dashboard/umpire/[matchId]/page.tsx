@@ -134,8 +134,8 @@ export default function LiveScorerPage() {
          setIsSubmitting(true);
          try {
             let finalScores = [...(match.scores || [])];
-            // Add the current set's score if it hasn't been added yet
-            if (match.live && (match.live.team1Points > 0 || match.live.team2Points > 0)) {
+            // Add the current set's score if it hasn't been added yet and it's not a forfeit
+            if (!isForfeited && match.live && (match.live.team1Points > 0 || match.live.team2Points > 0)) {
                  finalScores.push({ team1: match.live.team1Points, team2: match.live.team2Points });
             }
 
@@ -204,7 +204,7 @@ export default function LiveScorerPage() {
                 </CardHeader>
                 <CardContent className="space-y-8">
                    {/* Scoreboard */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-8 items-center text-center">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-8 items-start text-center">
                        <TeamScorePanel 
                             teamName={match.team1Name} 
                             points={match.live?.team1Points || 0}
@@ -230,47 +230,62 @@ export default function LiveScorerPage() {
 
                     {/* Previous Sets */}
                     {match.scores && match.scores.length > 0 && (
-                        <div>
+                        <div className="text-center">
                             <h3 className="font-semibold text-lg mb-2">Previous Sets</h3>
-                            <div className="flex gap-4 text-muted-foreground">
-                                {match.scores.map((s, i) => <span key={i}>Set {i+1}: {s.team1} - {s.team2}</span>)}
+                            <div className="flex gap-4 justify-center text-muted-foreground">
+                                {match.scores.map((s, i) => <span key={i} className="text-sm">Set {i+1}: <span className="font-bold">{s.team1} - {s.team2}</span></span>)}
                             </div>
                         </div>
                     )}
 
                     {/* Controls */}
-                    <div className="border-t pt-6 flex flex-wrap gap-4 justify-center">
-                        <Button variant="secondary" onClick={handleServiceChange} disabled={isSubmitting}>
-                            <Repeat className="mr-2"/> Change Service
-                        </Button>
-                        <Button variant="default" onClick={handleFinalizeSet} disabled={!canFinalizeSet || isSubmitting}>
-                            <Send className="mr-2"/> Finalize Set {match.live?.currentSet}
-                        </Button>
-
+                    <div className="border-t pt-6 space-y-4">
+                        <div className="flex flex-wrap gap-4 justify-center">
+                             <Button variant="secondary" onClick={handleServiceChange} disabled={isSubmitting}>
+                                <Repeat className="mr-2"/> Change Service
+                            </Button>
+                            <Button variant="default" onClick={handleFinalizeSet} disabled={!canFinalizeSet || isSubmitting}>
+                                <Send className="mr-2"/> Finalize Set {match.live?.currentSet}
+                            </Button>
+                        </div>
+                        
                          <AlertDialog>
                             <AlertDialogTrigger asChild>
-                                <Button variant="destructive" disabled={isSubmitting}>Finalize Match</Button>
+                                <Button variant="destructive" className="w-full" disabled={isSubmitting}>Finalize Match</Button>
                             </AlertDialogTrigger>
                             <AlertDialogContent>
                                 <AlertDialogHeader>
-                                    <AlertDialogTitle>Finalize Match?</AlertDialogTitle>
+                                    <AlertDialogTitle>Finalize Match</AlertDialogTitle>
                                     <AlertDialogDescription>
-                                        Select the winner or declare a forfeit. This action is final and will record the match result.
+                                        Select the winner to record the final score or declare a forfeit. This action is final.
                                     </AlertDialogDescription>
                                 </AlertDialogHeader>
-                                <AlertDialogFooter className="sm:justify-center gap-4">
-                                <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                <Button onClick={() => handleFinalizeMatch(match.team1Id, true)}>Forfeit by {match.team2Name}</Button>
-                                <Button onClick={() => handleFinalizeMatch(match.team2Id, true)}>Forfeit by {match.team1Name}</Button>
-                                <AlertDialogAction asChild>
-                                    <Button onClick={() => handleFinalizeMatch(match.live && match.live.team1Points > match.live.team2Points ? match.team1Id : match.team2Id)} className="bg-green-600 hover:bg-green-700">
-                                         <CheckCircle className="mr-2"/> Declare Winner
+                                <div className="space-y-4 py-4">
+                                     <Button 
+                                        onClick={() => handleFinalizeMatch(match.live && match.live.team1Points > match.live.team2Points ? match.team1Id : match.team2Id)} 
+                                        className="w-full bg-green-600 hover:bg-green-700"
+                                        disabled={!canFinalizeSet}
+                                     >
+                                         <CheckCircle className="mr-2"/> Declare Winner & Save Score
                                     </Button>
-                                </AlertDialogAction>
+                                    <div className="relative">
+                                        <div className="absolute inset-0 flex items-center"><span className="w-full border-t" /></div>
+                                        <div className="relative flex justify-center text-xs uppercase"><span className="bg-background px-2 text-muted-foreground">Or Forfeit</span></div>
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-2">
+                                        <Button variant="outline" onClick={() => handleFinalizeMatch(match.team2Id, true)}>
+                                            {match.team1Name} Forfeits
+                                        </Button>
+                                         <Button variant="outline" onClick={() => handleFinalizeMatch(match.team1Id, true)}>
+                                            {match.team2Name} Forfeits
+                                        </Button>
+                                    </div>
+                                </div>
+                                <AlertDialogFooter>
+                                    <AlertDialogCancel>Cancel</AlertDialogCancel>
                                 </AlertDialogFooter>
                             </AlertDialogContent>
                         </AlertDialog>
-
                     </div>
                 </CardContent>
             </Card>
@@ -282,14 +297,16 @@ export default function LiveScorerPage() {
 // Helper component for team panel
 function TeamScorePanel({ teamName, points, isServing, onPointChange, isMatchPoint }: { teamName: string, points: number, isServing: boolean, onPointChange: (delta: 1 | -1) => void, isMatchPoint: boolean }) {
     return (
-        <div className={`p-6 rounded-lg border-4 ${isServing ? 'border-primary shadow-lg' : 'border-transparent'}`}>
-            <h3 className="text-xl font-semibold mb-4 truncate">{teamName}</h3>
-            <p className={`text-7xl font-bold mb-4 ${isMatchPoint ? 'text-accent' : ''}`}>{points}</p>
+        <div className={`p-6 rounded-lg border-4 transition-all ${isServing ? 'border-primary shadow-lg' : 'border-muted'}`}>
+            <h3 className="text-xl font-semibold mb-4 truncate h-6">{teamName}</h3>
+            <p className={`text-7xl font-bold mb-4 transition-colors ${isMatchPoint ? 'text-accent' : 'text-foreground'}`}>{points}</p>
             <div className="flex justify-center gap-2">
-                <Button onClick={() => onPointChange(1)} size="lg">+</Button>
-                <Button onClick={() => onPointChange(-1)} size="lg" variant="outline">-</Button>
+                <Button onClick={() => onPointChange(1)} size="lg" className="w-16 text-xl">+</Button>
+                <Button onClick={() => onPointChange(-1)} size="lg" variant="outline" className="w-16 text-xl">-</Button>
             </div>
-            {isServing && <div className="mt-4 text-sm font-semibold text-primary">SERVING</div>}
+            <div className="h-6 mt-4">
+              {isServing && <div className="text-sm font-semibold text-primary animate-pulse">SERVING</div>}
+            </div>
         </div>
     );
 }
