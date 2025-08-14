@@ -446,7 +446,10 @@ export default function TeamsPage() {
     try {
         await updateDoc(doc(db, 'teams', teamId), { lotNumber: currentLot ?? null });
         setOriginalLotNumbers(prev => ({ ...prev, [teamId]: currentLot }));
-        toast({ title: 'Lot Number Updated' });
+        toast({
+            title: 'Lot Number Updated',
+            description: `Lot number for ${team.player1Name}${team.player2Name ? ` & ${team.player2Name}` : ''} has been updated.`,
+        });
     } catch (error) {
         toast({ title: 'Error Saving Lot Number', variant: 'destructive' });
         setTeams(prevTeams => prevTeams.map(t => t.id === teamId ? { ...t, lotNumber: originalLot } : t));
@@ -627,5 +630,3 @@ export default function TeamsPage() {
     </div>
   );
 }
-
-    
