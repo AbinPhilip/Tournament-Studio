@@ -18,7 +18,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import type { User, UserRole } from '@/types';
 import { useAuth } from '@/hooks/use-auth';
-import { MoreHorizontal, Trash2, UserPlus, Edit, CheckCircle, ArrowLeft, Database, Loader2, Save, GitBranch, Trophy, Users, Building, ListOrdered, Shield, Cog, LayoutDashboard } from 'lucide-react';
+import { MoreHorizontal, Trash2, UserPlus, Edit, CheckCircle, ArrowLeft, Database, Loader2, Save, GitBranch, Trophy, Users, Building, ListOrdered, Shield, Cog, LayoutDashboard, Settings } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
