@@ -21,17 +21,17 @@ export const mockAppData: Omit<AppData, 'id'>[] = [
     { name: 'Active Users', value: '1250', lastUpdated: '2023-10-26T18:00:00Z', updatedBy: 'System', isFlagged: false },
 ];
 
-export const mockOrganizations: Omit<Organization, 'id'>[] = [
-    { name: "St.Peter's & St.Paul's OSC, Koyambedu", location: 'Koyambedu' },
-    { name: 'St.George OSC, Padi', location: 'Padi' },
-    { name: 'St.Gregorios OSC, Perambur', location: 'Perambur' },
-    { name: 'St.Thomas OSC, Puzhuthivakkam', location: 'Puzhuthivakkam' },
-    { name: 'Mar Gregorios OSC, Tambaram', location: 'Tambaram' },
-    { name: "St.Mary's OSC, Thiruvottiyur", location: 'Thiruvottiyur' },
-    { name: 'St.George OSC, Ramalingapuram', location: 'Ramalingapuram' },
-    { name: 'St.Thomas Cathedral, Broadway', location: 'Broadway' },
-    { name: "St.Mary's Cathedral, Coimbatore", location: 'Coimbatore' },
-    { name: 'St.George OSC, Avadi', location: 'Avadi' },
+export const mockOrganizations: Omit<Organization, 'id' | 'location'>[] = [
+    { name: "St.Peter's & St.Paul's OSC, Koyambedu" },
+    { name: 'St.George OSC, Padi' },
+    { name: 'St.Gregorios OSC, Perambur' },
+    { name: 'St.Thomas OSC, Puzhuthivakkam' },
+    { name: 'Mar Gregorios OSC, Tambaram' },
+    { name: "St.Mary's OSC, Thiruvottiyur" },
+    { name: 'St.George OSC, Ramalingapuram' },
+    { name: 'St.Thomas Cathedral, Broadway' },
+    { name: "St.Mary's Cathedral, Coimbatore" },
+    { name: 'St.George OSC, Avadi' },
 ];
 
 // Changed `organizationId` to `organizationName` for more robust mapping during seed.
@@ -70,7 +70,7 @@ export const mockTeams: (Omit<Team, 'id' | 'organizationId'> & { organizationNam
   { type: 'womens_doubles', player1Name: 'Sarah Cherian', player2Name: 'Sheba Cherian', genderP1: 'female', genderP2: 'female', organizationName: 'St.Peter\'s & St.Paul\'s OSC, Koyambedu' },
   { type: 'womens_doubles', player1Name: 'Teena Thomas', player2Name: 'Sherine Vineeth', genderP1: 'female', genderP2: 'female', organizationName: 'St.Peter\'s & St.Paul\'s OSC, Koyambedu' },
   { type: 'womens_doubles', player1Name: 'Ancy Thomson', player2Name: 'Alisha Susan', genderP1: 'female', genderP2: 'female', organizationName: 'St.George OSC, Padi' },
-  { type: 'womens_doubles', player1Name: 'Subitha Anoop', player2Name: 'Jinsi Daniel', genderP1: 'female', genderP2: 'female', organizationName: 'St.George OSC, Pdi' },
+  { type: 'womens_doubles', player1Name: 'Subitha Anoop', player2Name: 'Jinsi Daniel', genderP1: 'female', genderP2: 'female', organizationName: 'St.George OSC, Padi' },
   { type: 'womens_doubles', player1Name: 'Merlin Rachel Joy', player2Name: 'Lincy Anna Varghese', genderP1: 'female', genderP2: 'female', organizationName: 'St.Thomas OSC, Puzhuthivakkam' },
   { type: 'womens_doubles', player1Name: 'Jerlin K Reji', player2Name: 'Sharon Zacharia', genderP1: 'female', genderP2: 'female', organizationName: 'Mar Gregorios OSC, Tambaram' },
   { type: 'womens_doubles', player1Name: 'Sinu Jacob Zachariah', player2Name: 'Johnse Johnson', genderP1: 'female', genderP2: 'female', organizationName: 'Mar Gregorios OSC, Tambaram' },
