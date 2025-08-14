@@ -52,25 +52,27 @@ const recordMatchResultFlow = ai.defineFlow(
   },
   async (input) => {
     const batch = writeBatch(db);
-
-    // 1. Update the match
     const matchRef = doc(db, 'matches', input.matchId);
     const matchSnap = await getDoc(matchRef);
+
     if (!matchSnap.exists()) {
         throw new Error('Match not found');
     }
     const completedMatch = matchSnap.data() as Match;
     
     const updates: Partial<Match> = {};
-    let finalWinnerId = input.winnerId;
-
+    
     if (input.status === 'COMPLETED') {
+        let finalWinnerId = input.winnerId;
         let scoreSummary = '';
         updates.scores = input.scores || [];
 
         if (input.isForfeited) {
             scoreSummary = 'Forfeited';
-            updates.forfeitedById = input.winnerId === completedMatch.team1Id ? completedMatch.team2Id : completedMatch.team1Id;
+            // If forfeited, a winnerId must be provided to know who gets the win.
+            if (input.winnerId) {
+                updates.forfeitedById = input.winnerId === completedMatch.team1Id ? completedMatch.team2Id : completedMatch.team1Id;
+            }
         } else if (updates.scores.length > 0) {
             let team1Sets = 0;
             let team2Sets = 0;
@@ -79,11 +81,13 @@ const recordMatchResultFlow = ai.defineFlow(
                 else team2Sets++;
             });
             scoreSummary = `${team1Sets}-${team2Sets}`;
-             // Trust the winnerId from the input for completed matches
+            
+            // If winnerId is not provided, calculate it from scores.
             if (!finalWinnerId) {
                 finalWinnerId = team1Sets > team2Sets ? completedMatch.team1Id : completedMatch.team2Id;
             }
         }
+        
         updates.score = scoreSummary;
         updates.winnerId = finalWinnerId;
         updates.status = 'COMPLETED';
@@ -92,20 +96,25 @@ const recordMatchResultFlow = ai.defineFlow(
         updates.status = 'IN_PROGRESS';
         if (input.scores) {
           updates.scores = input.scores;
-          // This part updates the live object, but should only happen for IN_PROGRESS
-          updates['live.currentSet'] = input.scores.length + 1;
         }
     }
     
-    batch.update(matchRef, updates as any);
+    // Omit live updates when completing a match
+    const finalUpdates: any = { ...updates };
+    if (updates.status !== 'COMPLETED') {
+        finalUpdates['live.currentSet'] = (updates.scores?.length || 0) + 1;
+    }
+
+
+    batch.update(matchRef, finalUpdates);
 
 
     // 2. If match is COMPLETED, check if it was a knockout match and if we need to schedule the next round
-    if (input.status !== 'COMPLETED' || !finalWinnerId) {
+    const currentWinnerId = updates.winnerId;
+    if (updates.status !== 'COMPLETED' || !currentWinnerId) {
         await batch.commit();
         return;
     }
-    const currentWinnerId = finalWinnerId;
 
 
     const tournamentSnap = await getDocs(collection(db, 'tournaments'));

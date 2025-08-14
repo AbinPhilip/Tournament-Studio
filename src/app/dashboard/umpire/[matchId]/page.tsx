@@ -63,8 +63,8 @@ export default function LiveScorerPage() {
                                 servingTeamId: liveMatchData.team1Id,
                                 currentSet: currentSetNumber,
                             };
-                        } else {
-                            liveMatchData.live.currentSet = currentSetNumber;
+                        } else if (liveMatchData.live.currentSet !== currentSetNumber) {
+                           liveMatchData.live.currentSet = currentSetNumber;
                         }
                         setMatch(liveMatchData as Match);
                     } else {
@@ -129,7 +129,7 @@ export default function LiveScorerPage() {
 
     const handleFinalizeSet = async () => {
         if (!match?.live) return;
-        const setToFinalize = match.live.currentSet;
+        const setToFinalize = match.live.currentSet || (match.scores?.length || 0) + 1;
         setIsSubmitting(true);
         try {
             const newScores = [...(match.scores || [])];
@@ -158,11 +158,12 @@ export default function LiveScorerPage() {
         }
     };
     
-    const handleFinalizeMatch = async (winnerId: string, isForfeited = false) => {
+    const handleFinalizeMatch = async (winnerId?: string, isForfeited = false) => {
          if (!match) return;
          setIsSubmitting(true);
          try {
             let finalScores = [...(match.scores || [])];
+            // Add the current set's score if it hasn't been finalized yet, and it's not a forfeit
             if (!isForfeited && match.live && (match.live.team1Points > 0 || match.live.team2Points > 0)) {
                  finalScores.push({ team1: match.live.team1Points, team2: match.live.team2Points });
             }
@@ -263,33 +264,32 @@ export default function LiveScorerPage() {
                                 <AlertDialogHeader>
                                     <AlertDialogTitle>Finalize Match</AlertDialogTitle>
                                     <AlertDialogDescription>
-                                        Select the winner to record the final score or declare a forfeit. This action is final.
+                                        Click confirm to finalize the match based on the scores entered. You can also declare a forfeit.
                                     </AlertDialogDescription>
                                 </AlertDialogHeader>
                                 <div className="space-y-4 py-4">
-                                     <Button 
-                                        onClick={() => handleFinalizeMatch(match.team1Id)} 
+                                    <AlertDialogAction 
+                                        onClick={() => handleFinalizeMatch()} 
                                         className="w-full bg-green-600 hover:bg-green-700"
                                      >
-                                         <CheckCircle className="mr-2"/> Declare {match.team1Name} as Winner
-                                    </Button>
-                                    <Button 
-                                        onClick={() => handleFinalizeMatch(match.team2Id)} 
-                                        className="w-full bg-green-600 hover:bg-green-700"
-                                     >
-                                         <CheckCircle className="mr-2"/> Declare {match.team2Name} as Winner
-                                    </Button>
+                                         <CheckCircle className="mr-2"/> Confirm and Finalize Match
+                                    </AlertDialogAction>
+                                    
                                     <div className="relative">
                                         <div className="absolute inset-0 flex items-center"><span className="w-full border-t" /></div>
                                         <div className="relative flex justify-center text-xs uppercase"><span className="bg-background px-2 text-muted-foreground">Or Forfeit</span></div>
                                     </div>
                                     <div className="grid grid-cols-2 gap-2">
-                                        <Button variant="outline" onClick={() => handleFinalizeMatch(match.team2Id, true)}>
-                                            {match.team1Name} Forfeits
-                                        </Button>
-                                         <Button variant="outline" onClick={() => handleFinalizeMatch(match.team1Id, true)}>
-                                            {match.team2Name} Forfeits
-                                        </Button>
+                                        <AlertDialogAction asChild>
+                                            <Button variant="outline" onClick={() => handleFinalizeMatch(match.team2Id, true)}>
+                                                {match.team1Name} Forfeits
+                                            </Button>
+                                        </AlertDialogAction>
+                                        <AlertDialogAction asChild>
+                                             <Button variant="outline" onClick={() => handleFinalizeMatch(match.team1Id, true)}>
+                                                {match.team2Name} Forfeits
+                                            </Button>
+                                        </AlertDialogAction>
                                     </div>
                                 </div>
                                 <AlertDialogFooter>
