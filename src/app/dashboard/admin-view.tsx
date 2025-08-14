@@ -5,7 +5,7 @@ import { useAuth } from '@/hooks/use-auth';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { useRouter } from 'next/navigation';
-import { ListOrdered, Cog, Shield, Settings } from 'lucide-react';
+import { ListOrdered, Cog, Shield, Settings, Users, Building, Trophy } from 'lucide-react';
 
 export default function AdminView() {
   const { user } = useAuth();
@@ -27,11 +27,20 @@ export default function AdminView() {
             <Button variant="outline" onClick={() => router.push('/dashboard/tournament')}>
                 <Cog className="mr-2"/> Tournament Setup
             </Button>
+            <Button variant="outline" onClick={() => router.push('/dashboard/organizations')}>
+                <Building className="mr-2"/> Organizations
+            </Button>
+            <Button variant="outline" onClick={() => router.push('/dashboard/teams')}>
+                <Users className="mr-2"/> Teams
+            </Button>
             <Button variant="outline" onClick={() => router.push('/dashboard/scheduler')}>
                 <ListOrdered className="mr-2"/> Scheduler
             </Button>
             <Button variant="outline" onClick={() => router.push('/dashboard/umpire')}>
                 <Shield className="mr-2"/> Court View
+            </Button>
+            <Button variant="outline" onClick={() => router.push('/dashboard/match-history')}>
+                <Trophy className="mr-2"/> Match History
             </Button>
         </CardContent>
       </Card>

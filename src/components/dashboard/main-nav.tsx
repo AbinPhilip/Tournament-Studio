@@ -4,7 +4,7 @@
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { cn } from "@/lib/utils"
-import { LayoutDashboard, ListOrdered, Shield, Cog, Settings, Trophy, Loader2 } from "lucide-react"
+import { LayoutDashboard, ListOrdered, Shield, Cog, Settings, Trophy, Users, Building } from "lucide-react"
 import type { User } from "@/types"
 import { useState, useEffect } from "react"
 import { db } from "@/lib/firebase"
@@ -13,9 +13,11 @@ import { doc, getDoc, collection, writeBatch } from "firebase/firestore"
 const allNavItems = [
     { id: "dashboard", href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
     { id: "tournament", href: "/dashboard/tournament", label: "Tournament Setup", icon: Cog },
+    { id: "organizations", href: "/dashboard/organizations", label: "Organizations", icon: Building },
+    { id: "teams", href: "/dashboard/teams", label: "Teams", icon: Users },
     { id: "scheduler", href: "/dashboard/scheduler", label: "Scheduler", icon: ListOrdered },
     { id: "court-view", href: "/dashboard/umpire", label: "Court View", icon: Shield },
-    { id: "standings", href: "/dashboard/standings", label: "Standings", icon: Trophy },
+    { id: "match-history", href: "/dashboard/match-history", label: "Match History", icon: Trophy },
     { id: "settings", href: "/dashboard/settings", label: "System Settings", icon: Settings },
 ];
 
@@ -39,9 +41,9 @@ export function MainNav({ user, isMobile = false }: { user: User | null, isMobil
                         return;
                     }
                     const defaultPerms: any = {
-                        update: ['dashboard', 'court-view', 'standings'],
-                        inquiry: ['dashboard', 'standings'],
-                        individual: ['dashboard', 'standings'],
+                        update: ['dashboard', 'court-view', 'match-history'],
+                        inquiry: ['dashboard', 'match-history'],
+                        individual: ['dashboard', 'match-history'],
                     };
                      const modules = defaultPerms[user.role] || ['dashboard'];
                     setAllowedModules(modules);
@@ -51,7 +53,7 @@ export function MainNav({ user, isMobile = false }: { user: User | null, isMobil
                  if (user.role === 'super' || user.role === 'admin') {
                     setAllowedModules(allNavItems.map(item => item.id));
                 } else {
-                    setAllowedModules(['dashboard', 'standings']);
+                    setAllowedModules(['dashboard', 'match-history']);
                 }
             }
         } else if (user?.role === 'court') {
@@ -60,11 +62,17 @@ export function MainNav({ user, isMobile = false }: { user: User | null, isMobil
     };
     fetchPermissions();
   }, [user]);
+  
+  const getIsActive = (href: string, currentPath: string) => {
+    if (href === '/dashboard') {
+        return currentPath === href;
+    }
+    return currentPath.startsWith(href);
+  }
 
   if (allowedModules === null && user?.role !== 'court') {
     return (
         <div className={cn("flex items-center justify-center", isMobile ? "h-full" : "w-64")}>
-            <Loader2 className="h-8 w-8 animate-spin" />
         </div>
     );
   }
@@ -79,8 +87,7 @@ export function MainNav({ user, isMobile = false }: { user: User | null, isMobil
                 href={item.href}
                 className={cn(
                     "flex items-center gap-3 rounded-lg px-3 py-2 text-muted-foreground transition-all hover:text-primary",
-                    pathname.startsWith(item.href) && item.href !== '/dashboard' && "bg-muted text-primary",
-                    pathname === '/dashboard' && item.href === '/dashboard' && "bg-muted text-primary"
+                    getIsActive(item.href, pathname) && "bg-muted text-primary",
                 )}
             >
                 <item.icon className="h-4 w-4" />
