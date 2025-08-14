@@ -1,5 +1,6 @@
 
-export function Logo() {
+import { cn } from '@/lib/utils';
+export function Logo({ isCollapsed = false }: { isCollapsed?: boolean }) {
   return (
     <div className="flex items-center gap-2">
       <svg
@@ -21,7 +22,7 @@ export function Logo() {
         <path d="M4 14.5h7" />
         <path d="M4 9.5h7" />
       </svg>
-      <span className="text-lg font-semibold text-primary">Battledore</span>
+      <span className={cn("text-lg font-semibold text-primary", isCollapsed && "sr-only")}>Battledore</span>
     </div>
   );
 }

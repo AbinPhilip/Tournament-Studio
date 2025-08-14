@@ -8,9 +8,8 @@ import { LayoutDashboard, ListOrdered, Shield, Cog, Settings, Trophy, Users, Bui
 import type { User, UserRole } from "@/types"
 import { useState, useEffect } from "react"
 import { db } from "@/lib/firebase"
-import { doc, getDoc, collection, onSnapshot, Unsubscribe } from "firebase/firestore"
+import { collection, onSnapshot } from "firebase/firestore"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
-import { Logo } from "@/components/logo"
 
 type NavItem = {
     id: string;
@@ -75,27 +74,20 @@ export function MainNav({ user, isMobile = false, isCollapsed = false }: { user:
   const role = user?.role;
   if (!role || role === 'court') return null;
 
-  const allowedModuleIds = permissions[role] || [];
-  
-  // Backward compatibility for old permission names
-  const effectiveModuleIds = new Set(allowedModuleIds);
-  if (effectiveModuleIds.has('standings')) effectiveModuleIds.add('match-history');
-  if (effectiveModuleIds.has('court-view')) effectiveModuleIds.add('umpire');
-
-
-  const navItems = allNavItems.filter(item => effectiveModuleIds.has(item.id));
+  const allowedModuleIds = new Set(permissions[role] || []);
+  const navItems = allNavItems.filter(item => allowedModuleIds.has(item.id));
   
   if (isCollapsed && !isMobile) {
     return (
         <TooltipProvider>
-            <nav className={cn("flex flex-col gap-2 items-center", isMobile ? "p-0" : "p-4")}>
+            <nav className="grid gap-1 px-2 py-4">
                 {navItems.map(item => (
                     <Tooltip key={item.href} delayDuration={0}>
                         <TooltipTrigger asChild>
                             <Link 
                                 href={item.href}
                                 className={cn(
-                                    "flex items-center justify-center h-10 w-10 rounded-lg text-muted-foreground transition-all hover:text-primary hover:bg-muted",
+                                    "flex items-center justify-center h-10 w-10 rounded-lg text-muted-foreground transition-colors hover:text-primary hover:bg-muted",
                                     getIsActive(item.href, pathname) && "bg-muted text-primary",
                                 )}
                             >
@@ -114,14 +106,7 @@ export function MainNav({ user, isMobile = false, isCollapsed = false }: { user:
   }
 
   return (
-      <nav className={cn("flex flex-col gap-2", isMobile ? "p-0" : "p-4")}>
-        {!isMobile && !isCollapsed && (
-            <div className="flex items-center pl-3 mb-2 h-10">
-                <Link href="/dashboard">
-                    <Logo />
-                </Link>
-            </div>
-        )}
+      <nav className="grid items-start gap-1 px-2 py-4">
         {navItems.map(item => (
             <Link 
                 key={item.href}
@@ -132,7 +117,7 @@ export function MainNav({ user, isMobile = false, isCollapsed = false }: { user:
                 )}
             >
                 <item.icon className="h-4 w-4" />
-                {item.label}
+                {!isCollapsed && item.label}
             </Link>
         ))}
       </nav>

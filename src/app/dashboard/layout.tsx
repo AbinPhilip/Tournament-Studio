@@ -5,7 +5,7 @@ import { useAuth } from '@/hooks/use-auth';
 import { useRouter, usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { DashboardHeader } from '@/components/dashboard/header';
-import { Loader2 } from 'lucide-react';
+import { Loader2, PanelLeftClose } from 'lucide-react';
 import { MainNav } from '@/components/dashboard/main-nav';
 import { CollapsibleButton } from '@/components/ui/collapsible-button';
 
@@ -56,11 +56,11 @@ export default function DashboardLayout({
       <div className="flex flex-1">
         {!isCourtUmpire && (
           <aside className={`fixed inset-y-0 left-0 z-30 hidden flex-col border-r bg-background transition-all duration-300 lg:flex ${isCollapsed ? 'w-20' : 'w-64'}`}>
-            <div className="flex-1">
-              <MainNav user={user} isCollapsed={isCollapsed} />
+            <div className="flex h-16 items-center border-b px-4 lg:px-6">
+               <CollapsibleButton isCollapsed={isCollapsed} onToggle={() => setIsCollapsed(!isCollapsed)} />
             </div>
-            <div className="mt-auto p-4">
-              <CollapsibleButton isCollapsed={isCollapsed} onToggle={() => setIsCollapsed(!isCollapsed)} />
+            <div className="flex-1 overflow-y-auto">
+              <MainNav user={user} isCollapsed={isCollapsed} />
             </div>
           </aside>
         )}
