@@ -82,5 +82,5 @@ export interface Match {
         team2Points: number;
         servingTeamId: string;
         currentSet: number;
-    }
+    } | null;
 }

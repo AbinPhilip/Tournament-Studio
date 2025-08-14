@@ -4,7 +4,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { db } from '@/lib/firebase';
-import { doc, onSnapshot, Unsubscribe, Timestamp } from 'firebase/firestore';
+import { doc, onSnapshot, Unsubscribe, Timestamp, updateDoc } from 'firebase/firestore';
 import type { Match } from '@/types';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2, ArrowLeft, Send, Repeat, CheckCircle } from 'lucide-react';
@@ -21,7 +21,6 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-  AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 
 export default function LiveScorerPage() {
@@ -42,19 +41,20 @@ export default function LiveScorerPage() {
             if (docSnap.exists()) {
                 const data = docSnap.data() as Omit<Match, 'startTime'> & {startTime: Timestamp};
                 const matchData = { id: docSnap.id, ...data, startTime: data.startTime.toDate() } as Match;
-
-                const currentSetNumber = (matchData.scores?.length || 0) + 1;
-                if (!matchData.live) {
-                    matchData.live = {
+                
+                // If match is just starting, initialize live data
+                if (matchData.status === 'SCHEDULED' && !matchData.live) {
+                    const initialLiveState = {
                         team1Points: 0,
                         team2Points: 0,
-                        servingTeamId: matchData.team1Id,
+                        servingTeamId: matchData.team1Id, // Default server
                         currentSet: 1,
                     };
+                    // Update firestore and local state
+                    updateDoc(matchRef, { live: initialLiveState, status: 'IN_PROGRESS' });
+                    matchData.live = initialLiveState;
+                    matchData.status = 'IN_PROGRESS';
                 }
-                
-                // Always ensure current set number is accurate
-                matchData.live.currentSet = currentSetNumber;
 
                 setMatch(matchData);
             } else {

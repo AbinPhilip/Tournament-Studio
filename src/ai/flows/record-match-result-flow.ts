@@ -90,6 +90,7 @@ const recordMatchResultFlow = ai.defineFlow(
         updates.score = scoreSummary;
         updates.winnerId = finalWinnerId;
         updates.status = 'COMPLETED';
+        updates.live = null; // Clear live data on completion
 
     } else { // Handle 'IN_PROGRESS' updates (e.g., finalizing a set)
         updates.status = 'IN_PROGRESS';

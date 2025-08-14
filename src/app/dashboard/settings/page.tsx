@@ -36,7 +36,6 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-  AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"
 import {
   Dialog,
@@ -78,7 +77,8 @@ function RoleBadge({ role }: { role: UserRole }) {
         super: "destructive",
         update: "default",
         inquiry: "secondary",
-        individual: "outline"
+        individual: "outline",
+        court: 'default',
     }[role]
     return <Badge variant={variant} className="capitalize">{role}</Badge>
 }
@@ -88,7 +88,7 @@ const userFormSchema = z.object({
   username: z.string().min(1, { message: "Username is required." }),
   email: z.string().email({ message: "Please enter a valid email." }),
   phoneNumber: z.string().regex(/^\d{10}$/, { message: 'Please enter a valid 10-digit phone number.' }),
-  role: z.enum(['individual', 'update', 'admin', 'inquiry', 'super']),
+  role: z.enum(['individual', 'update', 'admin', 'inquiry', 'super', 'court']),
 });
 
 const userRoles: UserRole[] = ['super', 'admin', 'update', 'inquiry', 'individual'];
@@ -129,7 +129,7 @@ export default function SettingsPage() {
   const [isSeedAlertOpen, setIsSeedAlertOpen] = useState(false);
 
   const [permissions, setPermissions] = useState<RolePermissions>({
-    super: [], admin: [], update: [], inquiry: [], individual: []
+    super: [], admin: [], update: [], inquiry: [], individual: [], court: []
   });
 
   const fetchUsersAndPermissions = async () => {
@@ -159,6 +159,7 @@ export default function SettingsPage() {
         // Optionally, save these defaults to Firestore
         const batch = writeBatch(db);
         Object.entries(defaultPerms).forEach(([role, modules]) => {
+            if (role === 'court') return; // Do not save 'court' role permissions
             const docRef = doc(db, 'rolePermissions', role);
             batch.set(docRef, { modules });
         });
@@ -324,6 +325,7 @@ export default function SettingsPage() {
     try {
         const batch = writeBatch(db);
         Object.entries(permissions).forEach(([role, modules]) => {
+            if (role === 'court') return;
             const docRef = doc(db, 'rolePermissions', role);
             batch.set(docRef, { modules });
         });

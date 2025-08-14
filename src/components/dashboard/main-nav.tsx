@@ -32,35 +32,28 @@ const allNavItems: NavItem[] = [
 
 type RolePermissions = Record<UserRole, string[]>;
 
-const defaultPermissions: RolePermissions = {
-    super: ['dashboard', 'tournament', 'organizations', 'teams', 'scheduler', 'umpire', 'draw', 'match-history', 'settings'],
-    admin: ['dashboard', 'tournament', 'organizations', 'teams', 'scheduler', 'umpire', 'draw', 'match-history', 'settings'],
-    update: ['dashboard', 'umpire', 'draw', 'match-history'],
-    inquiry: ['dashboard', 'draw', 'match-history'],
-    individual: ['dashboard', 'draw', 'match-history'],
-    court: [],
-};
-
 
 export function MainNav({ user, isMobile = false, isCollapsed = false }: { user: User | null, isMobile?: boolean, isCollapsed?: boolean }) {
   const pathname = usePathname();
-  const [permissions, setPermissions] = useState<RolePermissions>(defaultPermissions);
+  const [permissions, setPermissions] = useState<RolePermissions>({
+      super: [], admin: [], update: [], inquiry: [], individual: [], court: []
+  });
   
   useEffect(() => {
     const permsCollectionRef = collection(db, 'rolePermissions');
     const unsubscribe = onSnapshot(permsCollectionRef, (snapshot) => {
         if (snapshot.empty) {
-            setPermissions(defaultPermissions);
+            console.warn("No role permissions found in Firestore. Using empty defaults.");
+            setPermissions({ super: [], admin: [], update: [], inquiry: [], individual: [], court: [] });
             return;
         }
         const fetchedPerms = snapshot.docs.reduce((acc, doc) => {
             acc[doc.id as UserRole] = doc.data().modules;
             return acc;
-        }, {} as Partial<RolePermissions>);
-        setPermissions(current => ({...defaultPermissions, ...fetchedPerms}));
+        }, {} as RolePermissions);
+        setPermissions(fetchedPerms);
     }, (error) => {
         console.error("Failed to fetch permissions in real-time:", error);
-        setPermissions(defaultPermissions);
     });
 
     return () => unsubscribe();
