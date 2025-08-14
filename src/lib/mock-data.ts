@@ -21,22 +21,30 @@ export const mockAppData: Omit<AppData, 'id'>[] = [
     { name: 'Active Users', value: '1250', lastUpdated: '2023-10-26T18:00:00Z', updatedBy: 'System', isFlagged: false },
 ];
 
-export const mockOrganizations: Omit<Organization, 'id'>[] = [
-    { name: "St.Peter's & St.Paul's OSC", location: "Koyambedu" },
-    { name: 'St.George OSC', location: 'Padi' },
-    { name: 'St.Gregorios OSC', location: 'Perambur' },
-    { name: 'St.Thomas OSC', location: 'Puzhuthivakkam' },
-    { name: 'Mar Gregorios OSC', location: 'Tambaram' },
-    { name: "St.Mary's OSC", location: 'Thiruvottiyur' },
-    { name: 'St.George OSC', location: 'Ramalingapuram' },
-    { name: 'St.Thomas Cathedral', location: 'Broadway' },
-    { name: "St.Mary's Cathedral", location: 'Coimbatore' },
-    { name: 'St.George OSC', location: 'Avadi' },
+const orgStrings = [
+    "St.Peter's & St.Paul's OSC, Koyambedu",
+    "St.George OSC, Padi",
+    "St.Gregorios OSC, Perambur",
+    "St.Thomas OSC, Puzhuthivakkam",
+    "Mar Gregorios OSC, Tambaram",
+    "St.Mary's OSC, Thiruvottiyur",
+    "St.George OSC, Ramalingapuram",
+    "St.Thomas Cathedral, Broadway",
+    "St.Mary's Cathedral, Coimbatore",
+    "St.George OSC, Avadi",
 ];
+
+export const mockOrganizations: Omit<Organization, 'id'>[] = orgStrings.map(orgString => {
+    const parts = orgString.split(',').map(p => p.trim());
+    const name = orgString;
+    const location = parts.length > 1 ? parts.slice(1).join(', ').trim() : '';
+    return { name, location };
+});
+
 
 // Changed `organizationId` to `organizationName` for more robust mapping during seed.
 // Clearing mockTeams as they are associated with old organizations.
-export const mockTeams: (Omit<Team, 'id' | 'organizationId'> & { organizationName: string })[] = [
+const rawMockTeams: (Omit<Team, 'id' | 'organizationId' | 'lotNumber'> & { organizationName: string })[] = [
   { type: 'mens_doubles', player1Name: 'Allen B George', player2Name: 'Rohan James', genderP1: 'male', genderP2: 'male', organizationName: "St.George OSC, Ramalingapuram" },
   { type: 'mens_doubles', player1Name: 'Sanjan Sunil', player2Name: 'Johan Thomas', genderP1: 'male', genderP2: 'male', organizationName: "St.Peter's & St.Paul's OSC, Koyambedu" },
   { type: 'mens_doubles', player1Name: 'Vineeth P V', player2Name: 'Shalin Sunil', genderP1: 'male', genderP2: 'male', organizationName: "St.Peter's & St.Paul's OSC, Koyambedu" },
@@ -98,5 +106,17 @@ export const mockTeams: (Omit<Team, 'id' | 'organizationId'> & { organizationNam
   { type: 'womens_doubles', player1Name: 'Jinu Mathew', player2Name: 'Sneha Jithin', genderP1: 'female', genderP2: 'female', organizationName: "St.George OSC, Avadi" },
   { type: 'womens_doubles', player1Name: 'Kezia john', player2Name: 'Irene Biju', genderP1: 'female', genderP2: 'female', organizationName: "St.Gregorios OSC, Perambur" },
 ];
+
+const lotNumberCounters: Record<TeamType, number> = {
+    "mens_doubles": 1,
+    "womens_doubles": 1,
+    "mixed_doubles": 1,
+    "singles": 1,
+};
+
+export const mockTeams: (Omit<Team, 'id' | 'organizationId'> & { organizationName: string })[] = rawMockTeams.map(team => {
+    const lotNumber = lotNumberCounters[team.type]++;
+    return { ...team, lotNumber };
+});
 
     
