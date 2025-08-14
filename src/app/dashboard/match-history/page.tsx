@@ -131,16 +131,27 @@ export default function MatchHistoryPage() {
                                     </TableHeader>
                                     <TableBody>
                                         {eventMatches.map(match => {
-                                            const winner = match.winnerId === match.team1Id ? match.team1Name : match.team2Name;
-                                            const loser = match.winnerId === match.team1Id ? match.team2Name : match.team1Name;
+                                            const winnerIsTeam1 = match.winnerId === match.team1Id;
+                                            const winnerName = winnerIsTeam1 ? match.team1Name : match.team2Name;
+                                            const winnerOrg = winnerIsTeam1 ? match.team1OrgName : match.team2OrgName;
+                                            const loserName = winnerIsTeam1 ? match.team2Name : match.team1Name;
+                                            const loserOrg = winnerIsTeam1 ? match.team2OrgName : match.team1OrgName;
 
                                             return (
                                                  <TableRow key={match.id}>
                                                     <TableCell className="font-medium">{getRoundName(match.round || 0, eventType, teamCounts[eventType])}</TableCell>
                                                     <TableCell>
-                                                        <Badge>{winner}</Badge>
+                                                        <Badge variant="default" className="flex flex-col items-start h-auto">
+                                                            <span>{winnerName}</span>
+                                                            <span className="font-normal opacity-80">{winnerOrg}</span>
+                                                        </Badge>
                                                     </TableCell>
-                                                    <TableCell>{loser}</TableCell>
+                                                    <TableCell>
+                                                        <div>
+                                                            <span>{loserName}</span>
+                                                            <p className="font-bold text-muted-foreground">{loserOrg}</p>
+                                                        </div>
+                                                    </TableCell>
                                                     <TableCell>{match.score || 'N/A'}</TableCell>
                                                 </TableRow>
                                             )
@@ -156,3 +167,5 @@ export default function MatchHistoryPage() {
         </div>
     )
 }
+
+    

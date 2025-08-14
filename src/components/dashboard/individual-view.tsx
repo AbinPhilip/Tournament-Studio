@@ -150,12 +150,19 @@ export default function IndividualView() {
                             <TableBody>
                                {myMatches[team.id]?.length > 0 ? (
                                     myMatches[team.id].map(match => {
-                                        const opponentName = match.team1Id === team.id ? match.team2Name : match.team1Name;
+                                        const opponentIsTeam1 = match.team1Id !== team.id;
+                                        const opponentName = opponentIsTeam1 ? match.team1Name : match.team2Name;
+                                        const opponentOrg = opponentIsTeam1 ? match.team1OrgName : match.team2OrgName;
                                         const isWinner = match.winnerId === team.id;
                                         return (
                                             <TableRow key={match.id}>
                                                 <TableCell>{getRoundName(match.round || 0, match.eventType, teamCounts[match.eventType])}</TableCell>
-                                                <TableCell>{opponentName}</TableCell>
+                                                <TableCell>
+                                                    <div>
+                                                        <span>{opponentName}</span>
+                                                        <p className="font-bold">{opponentOrg}</p>
+                                                    </div>
+                                                </TableCell>
                                                 <TableCell>
                                                      <Badge variant={match.status === 'COMPLETED' ? 'default' : (match.status === 'IN_PROGRESS' || match.status === 'SCHEDULED') ? 'secondary' : 'outline'}>
                                                         {match.status}
@@ -187,3 +194,5 @@ export default function IndividualView() {
     </div>
   );
 }
+
+    

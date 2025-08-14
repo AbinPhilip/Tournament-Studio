@@ -104,8 +104,7 @@ export default function CourtUmpireView() {
                 <TableRow>
                   <TableHead>Round</TableHead>
                   <TableHead>Event</TableHead>
-                  <TableHead>Team 1</TableHead>
-                  <TableHead>Team 2</TableHead>
+                  <TableHead>Match</TableHead>
                   <TableHead>Score</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead className="text-right">Action</TableHead>
@@ -116,13 +115,16 @@ export default function CourtUmpireView() {
                   <TableRow key={match.id} className={match.status === 'IN_PROGRESS' ? 'bg-yellow-50 dark:bg-yellow-900/20' : ''}>
                     <TableCell className="font-medium whitespace-nowrap">{getRoundName(match.round || 0, match.eventType, teamCounts[match.eventType])}</TableCell>
                     <TableCell className="capitalize whitespace-nowrap">{match.eventType.replace(/_/g, ' ')}</TableCell>
-                    <TableCell className={match.winnerId === match.team1Id ? 'font-bold' : ''}>
-                        {match.team1Name}
-                        <div className="font-bold text-muted-foreground">{match.team1OrgName}</div>
-                    </TableCell>
-                    <TableCell className={match.winnerId === match.team2Id ? 'font-bold' : ''}>
-                        {match.team2Name}
-                        <div className="font-bold text-muted-foreground">{match.team2OrgName}</div>
+                    <TableCell className="min-w-[250px]">
+                        <div className={match.winnerId === match.team1Id ? 'font-bold' : ''}>
+                            {match.team1Name}
+                            <p className="font-bold text-muted-foreground">{match.team1OrgName}</p>
+                        </div>
+                        <div className="text-muted-foreground my-1">vs</div>
+                        <div className={match.winnerId === match.team2Id ? 'font-bold' : ''}>
+                            {match.team2Name}
+                            <p className="font-bold text-muted-foreground">{match.team2OrgName}</p>
+                        </div>
                     </TableCell>
                     <TableCell>{match.score || 'N/A'}</TableCell>
                     <TableCell>
@@ -145,3 +147,5 @@ export default function CourtUmpireView() {
     </Card>
   );
 }
+
+    

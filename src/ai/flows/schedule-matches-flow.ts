@@ -10,7 +10,9 @@
 
 import { ai } from '@/ai/genkit';
 import { z } from 'zod';
-import type { Team, Tournament, Match } from '@/types';
+import type { Team, Tournament, Match, Organization } from '@/types';
+import { collection, getDocs } from 'firebase/firestore';
+import { db } from '@/lib/firebase';
 
 // Define Zod schemas for validation
 const TeamSchema = z.object({
@@ -53,6 +55,8 @@ const MatchSchema = z.object({
     team2Id: z.string(),
     team1Name: z.string(),
     team2Name: z.string(),
+    team1OrgName: z.string(),
+    team2OrgName: z.string(),
     eventType: z.enum(['singles', 'mens_doubles', 'womens_doubles', 'mixed_doubles']),
     status: z.enum(['PENDING', 'SCHEDULED', 'IN_PROGRESS', 'COMPLETED']),
     round: z.number().optional(),
@@ -69,14 +73,14 @@ const schedulePrompt = ai.definePrompt({
     input: { schema: ScheduleMatchesInputSchema },
     output: { schema: ScheduleMatchesOutputSchema },
     prompt: `
-        You are a highly intelligent tournament scheduler for a badminton competition. Your task is to generate a complete and fair schedule based on the "picking of lots" principle for randomness. You should only generate the pairings. Do NOT assign courts or times.
+        You are a highly intelligent tournament scheduler for a badminton competition. Your task is to generate a complete and fair schedule based on the "picking of lots" principle for randomness. You should only generate the pairings. Do NOT assign courts or times. You MUST include the organization name for each team in the match data.
 
         Here is the tournament information:
         - Tournament Type: {{{tournament.tournamentType}}}
 
         Here is the list of all registered teams, which you must group by their 'type' for scheduling:
         {{#each teams}}
-        - Team ID: {{this.id}}, Players: {{this.player1Name}}{{#if this.player2Name}} & {{this.player2Name}}{{/if}}, Event: {{this.type}}
+        - Team ID: {{this.id}}, Players: {{this.player1Name}}{{#if this.player2Name}} & {{this.player2Name}}{{/if}}, Event: {{this.type}}, OrgID: {{this.organizationId}}
         {{/each}}
 
         Here is the count of teams per event category:
@@ -87,6 +91,7 @@ const schedulePrompt = ai.definePrompt({
         General Rules:
         1.  **Group by Event:** All scheduling must happen independently for each event type (e.g., 'mens_doubles', 'singles'). Matches must only be between teams of the same type.
         2.  **Initial Status:** Set the initial 'status' of all generated matches to 'PENDING'.
+        3.  **Organization Names**: You MUST look up the organization ID from the team data and provide the full organization name for team1OrgName and team2OrgName in the output.
 
         --- SCHEDULING ALGORITHM BY TOURNAMENT TYPE ---
 
@@ -125,11 +130,28 @@ const scheduleMatchesFlow = ai.defineFlow(
     outputSchema: ScheduleMatchesOutputSchema,
   },
   async (input) => {
+    
+    const orgsCollection = await getDocs(collection(db, 'organizations'));
+    const organizations = orgsCollection.docs.map(doc => ({ id: doc.id, ...doc.data() } as Organization));
+    const getOrgName = (orgId: string) => organizations.find(o => o.id === orgId)?.name || 'N/A';
+
     const { output } = await schedulePrompt(input);
     if (!output) {
       throw new Error('Failed to generate a schedule.');
     }
-    return output;
+
+    // Augment the output with organization names
+    const augmentedMatches = output.matches.map(match => {
+        const team1 = input.teams.find(t => t.id === match.team1Id);
+        const team2 = input.teams.find(t => t.id === match.team2Id);
+        return {
+            ...match,
+            team1OrgName: team1 ? getOrgName(team1.organizationId) : 'N/A',
+            team2OrgName: team2 ? getOrgName(team2.organizationId) : 'N/A',
+        };
+    });
+
+    return { matches: augmentedMatches };
   }
 );
 
@@ -142,3 +164,5 @@ export async function scheduleMatches(input: {
     const result = await scheduleMatchesFlow(input);
     return result.matches;
 }
+
+    
