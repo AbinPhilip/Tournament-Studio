@@ -414,11 +414,11 @@ export default function TournamentSettingsPage() {
 
     setIsGenerating(true);
     try {
+        const batch = writeBatch(db);
+
         // Clear existing matches
         const existingMatchesQuery = await getDocs(collection(db, 'matches'));
-        const deleteBatch = writeBatch(db);
-        existingMatchesQuery.forEach(doc => deleteBatch.delete(doc.ref));
-        await deleteBatch.commit();
+        existingMatchesQuery.forEach(doc => batch.delete(doc.ref));
         
         const generatedMatches: Omit<Match, 'id'>[] = [];
         const eventTypes: TeamType[] = ['singles', 'mens_doubles', 'womens_doubles', 'mixed_doubles'];
@@ -428,31 +428,51 @@ export default function TournamentSettingsPage() {
                 .filter(t => t.type === eventType)
                 .sort((a, b) => (a.lotNumber || 0) - (b.lotNumber || 0));
 
+            if (eventTeams.length < 2) continue; // Skip events with less than 2 teams
+
             if (tournament.tournamentType === 'knockout') {
-                 // Simple 1v2, 3v4 pairing for knockout based on lots
-                for (let i = 0; i < eventTeams.length; i += 2) {
-                    if (eventTeams[i+1]) {
-                        const team1 = eventTeams[i];
-                        const team2 = eventTeams[i+1];
-                        generatedMatches.push({
-                            team1Id: team1.id,
-                            team2Id: team2.id,
-                            team1Name: team1.player1Name + (team1.player2Name ? ` & ${team1.player2Name}` : ''),
-                            team2Name: team2.player1Name + (team2.player2Name ? ` & ${team2.player2Name}` : ''),
-                            eventType: eventType,
-                            status: 'PENDING',
-                            round: 1,
-                            courtName: '',
-                            startTime: new Date(),
-                        });
-                    }
+                let teamsToPair = [...eventTeams];
+                // Handle a single bye for odd-numbered teams
+                if (teamsToPair.length % 2 !== 0) {
+                    const byeTeam = teamsToPair.pop()!; // Team with highest lot gets bye
+                    const byeMatchRef = doc(collection(db, 'matches'));
+                    // Create a "bye" match that is already completed
+                     batch.set(byeMatchRef, {
+                        team1Id: byeTeam.id,
+                        team2Id: 'BYE',
+                        team1Name: byeTeam.player1Name + (byeTeam.player2Name ? ` & ${byeTeam.player2Name}` : ''),
+                        team2Name: 'BYE',
+                        eventType: eventType,
+                        status: 'COMPLETED',
+                        winnerId: byeTeam.id,
+                        score: 'BYE',
+                        round: 1,
+                     });
+                }
+                // Pair remaining teams
+                for (let i = 0; i < teamsToPair.length; i += 2) {
+                    const team1 = teamsToPair[i];
+                    const team2 = teamsToPair[i+1];
+                    const matchRef = doc(collection(db, 'matches'));
+                    batch.set(matchRef, {
+                        team1Id: team1.id,
+                        team2Id: team2.id,
+                        team1Name: team1.player1Name + (team1.player2Name ? ` & ${team1.player2Name}` : ''),
+                        team2Name: team2.player1Name + (team2.player2Name ? ` & ${team2.player2Name}` : ''),
+                        eventType: eventType,
+                        status: 'PENDING',
+                        round: 1,
+                        courtName: '',
+                        startTime: Timestamp.now(),
+                    });
                 }
             } else { // round-robin
                  for (let i = 0; i < eventTeams.length; i++) {
                     for (let j = i + 1; j < eventTeams.length; j++) {
                         const team1 = eventTeams[i];
                         const team2 = eventTeams[j];
-                        generatedMatches.push({
+                        const matchRef = doc(collection(db, 'matches'));
+                        batch.set(matchRef, {
                             team1Id: team1.id,
                             team2Id: team2.id,
                             team1Name: team1.player1Name + (team1.player2Name ? ` & ${team1.player2Name}` : ''),
@@ -460,25 +480,19 @@ export default function TournamentSettingsPage() {
                             eventType: eventType,
                             status: 'PENDING',
                             courtName: '',
-                            startTime: new Date(),
+                            startTime: Timestamp.now(),
                         });
                     }
                 }
             }
         }
         
-        const saveBatch = writeBatch(db);
-        generatedMatches.forEach(match => {
-            const matchRef = doc(collection(db, 'matches'));
-            saveBatch.set(matchRef, match);
-        });
-
         // Set tournament status to IN_PROGRESS
         const tourneyRef = doc(db, 'tournaments', tournament.id);
-        saveBatch.update(tourneyRef, { status: 'IN_PROGRESS', startedAt: Timestamp.now() });
+        batch.update(tourneyRef, { status: 'IN_PROGRESS', startedAt: Timestamp.now() });
 
-        await saveBatch.commit();
-        toast({ title: 'Pairings Generated!', description: `${generatedMatches.length} matches have been created. Go to the scheduler to assign them.` });
+        await batch.commit();
+        toast({ title: 'Pairings Generated!', description: `Matches have been created. Go to the scheduler to assign them.` });
         router.push('/dashboard/scheduler');
 
     } catch (error) {
@@ -1109,3 +1123,5 @@ export default function TournamentSettingsPage() {
     </div>
   );
 }
+
+    

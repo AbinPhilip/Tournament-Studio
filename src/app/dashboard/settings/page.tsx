@@ -68,6 +68,8 @@ import { useToast } from '@/hooks/use-toast';
 import { db } from '@/lib/firebase';
 import { collection, getDocs, addDoc, deleteDoc, doc, query, where, updateDoc, writeBatch } from 'firebase/firestore';
 import { mockUsers, mockAppData, mockOrganizations, mockTeams } from '@/lib/mock-data';
+import { useRouter } from 'next/navigation';
+
 
 function RoleBadge({ role }: { role: UserRole }) {
     const variant: BadgeProps["variant"] = {
@@ -518,3 +520,5 @@ export default function SettingsPage() {
     </div>
   );
 }
+
+    

@@ -83,7 +83,7 @@ const recordMatchResultFlow = ai.defineFlow(
         const completedRoundMatchesSnap = await getDocs(q);
         const winnersInRound = completedRoundMatchesSnap.docs
             .map(d => d.data().winnerId)
-            .filter((id): id is string => !!id); // Ensure winnerId is not undefined or empty
+            .filter((id): id is string => !!id && id !== 'BYE'); // Ensure winnerId is not undefined, empty, or a BYE
 
         const currentWinnerId = input.winnerId;
 
@@ -167,3 +167,5 @@ const recordMatchResultFlow = ai.defineFlow(
 export async function recordMatchResult(input: RecordMatchResultInput): Promise<void> {
     await recordMatchResultFlow(input);
 }
+
+    

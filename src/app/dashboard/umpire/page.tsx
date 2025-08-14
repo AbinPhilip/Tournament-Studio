@@ -30,7 +30,7 @@ import { recordMatchResult } from '@/ai/flows/record-match-result-flow';
 
 
 const scoreFormSchema = z.object({
-  score: z.string().regex(/^\d{1,2}-\d{1,2}$/, { message: "Score must be in format '10-21'" }),
+  score: z.string().regex(/^\d{1,2}-\d{1,2}$/, { message: "Score must be in format '10-21' or 'BYE'" }),
   winnerId: z.string({ required_error: "Please select a winner." }),
 });
 
@@ -60,20 +60,16 @@ export default function UmpirePage() {
     });
     
     const getRoundName = useCallback((round: number, eventType: TeamType) => {
-        const totalRounds = getTotalRounds(teamCounts[eventType]);
+        const teamCount = teamCounts[eventType];
+        if (teamCount === 0) return `Round ${round}`;
+        const totalRounds = getTotalRounds(teamCount);
         if (totalRounds === 0) return `Round ${round}`;
     
         if (round === totalRounds) return 'Final';
         if (round === totalRounds - 1) return 'Semi-Finals';
         if (round === totalRounds - 2) return 'Quarter-Finals';
         
-        // For preliminary rounds if total rounds > 3
-        const preliminaryRounds = totalRounds - 3;
-        if (round <= preliminaryRounds) {
-            return `Round ${round} - Preliminary`;
-        }
-        // This logic handles cases where there are no QF, e.g. a 4-person tournament
-        return `Round ${round} - Knockout`;
+        return `Round ${round}`;
 
     }, [teamCounts]);
 
@@ -320,3 +316,5 @@ export default function UmpirePage() {
         </Card>
     );
 }
+
+    
