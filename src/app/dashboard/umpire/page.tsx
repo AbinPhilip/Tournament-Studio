@@ -73,6 +73,10 @@ export default function UmpirePage() {
             toast({ title: 'Match Completed', description: 'This match has already been scored.' });
             return;
         }
+        if (!match.courtName) {
+            toast({ title: 'Court Not Assigned', description: 'Please assign a court to this match in the scheduler first.', variant: 'destructive' });
+            return;
+        }
         router.push(`/dashboard/umpire/${match.id}`);
     };
 
