@@ -23,7 +23,7 @@ import {
     SelectValue,
 } from '@/components/ui/select';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { MoreHorizontal, Trash2, Edit, CheckCircle, TeamsIcon } from 'lucide-react';
+import { MoreHorizontal, Trash2, Edit, CheckCircle, Users } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import { db } from '@/lib/firebase';
@@ -428,7 +428,7 @@ export default function TeamsPage() {
             <Dialog open={isAddTeamOpen} onOpenChange={setIsAddTeamOpen}>
               <DialogTrigger asChild>
                 <Button>
-                  <TeamsIcon className="mr-2 h-4 w-4" />
+                  <Users className="mr-2 h-4 w-4" />
                   Register Team
                 </Button>
               </DialogTrigger>
@@ -556,3 +556,5 @@ export default function TeamsPage() {
     </div>
   );
 }
+
+    
