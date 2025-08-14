@@ -62,7 +62,6 @@ import {
 import Image from 'next/image';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { scheduleMatches } from '@/ai/flows/schedule-matches-flow';
 
 const tournamentFormSchema = z.object({
   location: z.string().min(3, { message: 'Location must be at least 3 characters.' }),
@@ -120,7 +119,6 @@ export default function TournamentSettingsPage() {
   const [tournamentDocRef, setTournamentDocRef] = useState<DocumentReference | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isGenerating, setIsGenerating] = useState(false);
-  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [isSuccessModalOpen, setIsSuccessModalOpen] = useState(false);
 
   // States for Team/Org Management
@@ -166,6 +164,7 @@ export default function TournamentSettingsPage() {
   });
 
   const numberOfCourts = form.watch('numberOfCourts');
+  const isTournamentStarted = tournament?.status === 'IN_PROGRESS' || tournament?.status === 'COMPLETED';
 
   useEffect(() => {
     const numCourts = isNaN(numberOfCourts) || numberOfCourts < 1 ? 1 : numberOfCourts > 50 ? 50 : numberOfCourts;
@@ -272,28 +271,6 @@ export default function TournamentSettingsPage() {
     } catch (error) {
       console.error(error);
       toast({ title: 'Error', description: 'Failed to save tournament details.', variant: 'destructive' });
-    }
-  };
-  
-  const handleDeleteTournament = async () => {
-    if (!tournamentDocRef) return;
-    try {
-        await deleteDoc(tournamentDocRef);
-        toast({ title: 'Success', description: 'Tournament has been deleted.' });
-        setTournamentDocRef(null);
-        setTournament(null);
-        form.reset({
-          location: '',
-          date: new Date(),
-          tournamentType: 'round-robin',
-          numberOfCourts: 4,
-          courtNames: Array.from({ length: 4 }, (_, i) => ({ name: `Court ${i + 1}` })),
-        });
-        router.push('/dashboard');
-    } catch (error) {
-        toast({ title: 'Error', description: 'Failed to delete tournament.', variant: 'destructive' });
-    } finally {
-        setIsDeleteDialogOpen(false);
     }
   };
   
@@ -421,13 +398,17 @@ export default function TournamentSettingsPage() {
     setTeamToDelete(null);
   };
 
-  const handleGenerateSchedule = async () => {
+ const handleGenerateSchedule = async () => {
     if (!tournament) {
         toast({ title: 'Error', description: 'Please create and save a tournament first.', variant: 'destructive'});
         return;
     }
      if (teams.length < 2) {
         toast({ title: 'Not enough teams', description: 'You need at least 2 teams to generate a schedule.', variant: 'destructive' });
+        return;
+    }
+    if (teams.some(t => t.lotNumber === undefined || t.lotNumber === null)) {
+        toast({ title: 'Missing Lot Numbers', description: 'Please assign a lot number to every team before generating pairings.', variant: 'destructive' });
         return;
     }
 
@@ -439,22 +420,52 @@ export default function TournamentSettingsPage() {
         existingMatchesQuery.forEach(doc => deleteBatch.delete(doc.ref));
         await deleteBatch.commit();
         
-        const plainTournament = {
-            id: tournament.id,
-            location: tournament.location,
-            numberOfCourts: tournament.numberOfCourts,
-            courtNames: tournament.courtNames,
-            tournamentType: tournament.tournamentType,
-            date: format(tournament.date, 'yyyy-MM-dd'),
-            status: tournament.status,
-        };
-        
-        const teamsCountPerEvent = (['singles', 'mens_doubles', 'womens_doubles', 'mixed_doubles'] as TeamType[]).map(eventType => ({
-            eventType,
-            count: teams.filter(t => t.type === eventType).length,
-        }));
+        const generatedMatches: Omit<Match, 'id'>[] = [];
+        const eventTypes: TeamType[] = ['singles', 'mens_doubles', 'womens_doubles', 'mixed_doubles'];
 
-        const generatedMatches = await scheduleMatches({ teams, tournament: plainTournament, teamsCountPerEvent });
+        for (const eventType of eventTypes) {
+            const eventTeams = teams
+                .filter(t => t.type === eventType)
+                .sort((a, b) => (a.lotNumber || 0) - (b.lotNumber || 0));
+
+            if (tournament.tournamentType === 'knockout') {
+                 // Simple 1v2, 3v4 pairing for knockout based on lots
+                for (let i = 0; i < eventTeams.length; i += 2) {
+                    if (eventTeams[i+1]) {
+                        const team1 = eventTeams[i];
+                        const team2 = eventTeams[i+1];
+                        generatedMatches.push({
+                            team1Id: team1.id,
+                            team2Id: team2.id,
+                            team1Name: team1.player1Name + (team1.player2Name ? ` & ${team1.player2Name}` : ''),
+                            team2Name: team2.player1Name + (team2.player2Name ? ` & ${team2.player2Name}` : ''),
+                            eventType: eventType,
+                            status: 'PENDING',
+                            round: 1,
+                            courtName: '',
+                            startTime: new Date(),
+                        });
+                    }
+                }
+            } else { // round-robin
+                 for (let i = 0; i < eventTeams.length; i++) {
+                    for (let j = i + 1; j < eventTeams.length; j++) {
+                        const team1 = eventTeams[i];
+                        const team2 = eventTeams[j];
+                        generatedMatches.push({
+                            team1Id: team1.id,
+                            team2Id: team2.id,
+                            team1Name: team1.player1Name + (team1.player2Name ? ` & ${team1.player2Name}` : ''),
+                            team2Name: team2.player1Name + (team2.player2Name ? ` & ${team2.player2Name}` : ''),
+                            eventType: eventType,
+                            status: 'PENDING',
+                            courtName: '',
+                            startTime: new Date(),
+                        });
+                    }
+                }
+            }
+        }
         
         const saveBatch = writeBatch(db);
         generatedMatches.forEach(match => {
@@ -472,7 +483,7 @@ export default function TournamentSettingsPage() {
 
     } catch (error) {
         console.error("Error generating schedule:", error);
-        toast({ title: 'Error Generating Schedule', description: 'An error occurred. Check the AI prompt and try again.', variant: 'destructive' });
+        toast({ title: 'Error Generating Schedule', description: 'An error occurred while generating pairings.', variant: 'destructive' });
     } finally {
         setIsGenerating(false);
     }
@@ -690,128 +701,129 @@ export default function TournamentSettingsPage() {
           <CardHeader>
             <CardTitle>Tournament Administration</CardTitle>
             <CardDescription>
-              Configure the settings for the upcoming tournament. Once settings are finalized, generate the schedule.
+             Configure the tournament. Once settings are finalized, register teams, assign lot numbers, and generate pairings.
             </CardDescription>
           </CardHeader>
           <CardContent>
             <Form {...form}>
               <form onSubmit={form.handleSubmit(onTournamentSubmit)} className="space-y-8">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                    <FormField
-                    control={form.control}
-                    name="location"
-                    render={({ field }) => (
-                        <FormItem>
-                        <FormLabel>Tournament Location</FormLabel>
-                        <FormControl>
-                            <Input placeholder="e.g. City Arena" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                        </FormItem>
-                    )}
-                    />
+                <fieldset disabled={isTournamentStarted}>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                        <FormField
+                        control={form.control}
+                        name="location"
+                        render={({ field }) => (
+                            <FormItem>
+                            <FormLabel>Tournament Location</FormLabel>
+                            <FormControl>
+                                <Input placeholder="e.g. City Arena" {...field} />
+                            </FormControl>
+                            <FormMessage />
+                            </FormItem>
+                        )}
+                        />
+                         <FormField
+                            control={form.control}
+                            name="date"
+                            render={({ field }) => (
+                                <FormItem className="flex flex-col">
+                                <FormLabel>Tournament Date</FormLabel>
+                                <Popover>
+                                    <PopoverTrigger asChild>
+                                    <FormControl>
+                                        <Button
+                                        variant={"outline"}
+                                        className={cn(
+                                            "pl-3 text-left font-normal",
+                                            !field.value && "text-muted-foreground"
+                                        )}
+                                        >
+                                        {field.value ? (
+                                            format(field.value, "PPP")
+                                        ) : (
+                                            <span>Pick a date</span>
+                                        )}
+                                        <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                                        </Button>
+                                    </FormControl>
+                                    </PopoverTrigger>
+                                    <PopoverContent className="w-auto p-0" align="start">
+                                    <Calendar
+                                        mode="single"
+                                        selected={field.value}
+                                        onSelect={field.onChange}
+                                        disabled={(date) =>
+                                        date < new Date()
+                                        }
+                                        initialFocus
+                                    />
+                                    </PopoverContent>
+                                </Popover>
+                                <FormMessage />
+                                </FormItem>
+                            )}
+                        />
+                    </div>
+                    
                      <FormField
                         control={form.control}
-                        name="date"
+                        name="tournamentType"
                         render={({ field }) => (
-                            <FormItem className="flex flex-col">
-                            <FormLabel>Tournament Date</FormLabel>
-                            <Popover>
-                                <PopoverTrigger asChild>
+                            <FormItem>
+                            <FormLabel>Tournament Type</FormLabel>
+                             <Select onValueChange={field.onChange} defaultValue={field.value}>
                                 <FormControl>
-                                    <Button
-                                    variant={"outline"}
-                                    className={cn(
-                                        "pl-3 text-left font-normal",
-                                        !field.value && "text-muted-foreground"
-                                    )}
-                                    >
-                                    {field.value ? (
-                                        format(field.value, "PPP")
-                                    ) : (
-                                        <span>Pick a date</span>
-                                    )}
-                                    <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
-                                    </Button>
+                                <SelectTrigger>
+                                    <SelectValue placeholder="Select a tournament format" />
+                                </SelectTrigger>
                                 </FormControl>
-                                </PopoverTrigger>
-                                <PopoverContent className="w-auto p-0" align="start">
-                                <Calendar
-                                    mode="single"
-                                    selected={field.value}
-                                    onSelect={field.onChange}
-                                    disabled={(date) =>
-                                    date < new Date()
-                                    }
-                                    initialFocus
-                                />
-                                </PopoverContent>
-                            </Popover>
+                                <SelectContent>
+                                <SelectItem value="round-robin">Round Robin</SelectItem>
+                                <SelectItem value="knockout">Knockout</SelectItem>
+                                </SelectContent>
+                            </Select>
                             <FormMessage />
                             </FormItem>
                         )}
                     />
-                </div>
-                
-                 <FormField
-                    control={form.control}
-                    name="tournamentType"
-                    render={({ field }) => (
+
+                    <FormField
+                      control={form.control}
+                      name="numberOfCourts"
+                      render={({ field }) => (
                         <FormItem>
-                        <FormLabel>Tournament Type</FormLabel>
-                         <Select onValueChange={field.onChange} defaultValue={field.value}>
-                            <FormControl>
-                            <SelectTrigger>
-                                <SelectValue placeholder="Select a tournament format" />
-                            </SelectTrigger>
-                            </FormControl>
-                            <SelectContent>
-                            <SelectItem value="round-robin">Round Robin</SelectItem>
-                            <SelectItem value="knockout">Knockout</SelectItem>
-                            </SelectContent>
-                        </Select>
-                        <FormMessage />
+                          <FormLabel>Number of Courts</FormLabel>
+                          <FormControl>
+                            <Input type="number" min="1" max="50" {...field} />
+                          </FormControl>
+                          <FormMessage />
                         </FormItem>
-                    )}
-                />
+                      )}
+                    />
 
-                <FormField
-                  control={form.control}
-                  name="numberOfCourts"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Number of Courts</FormLabel>
-                      <FormControl>
-                        <Input type="number" min="1" max="50" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <div>
-                  <FormLabel>Court Names</FormLabel>
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-2">
-                    {fields.map((field, index) => (
-                        <FormField
-                        key={field.id}
-                        control={form.control}
-                        name={`courtNames.${index}.name`}
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormControl>
-                              <Input {...field} placeholder={`Court ${index + 1}`} />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                    ))}
-                  </div>
-                </div>
-
+                    <div>
+                      <FormLabel>Court Names</FormLabel>
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-2">
+                        {fields.map((field, index) => (
+                            <FormField
+                            key={field.id}
+                            control={form.control}
+                            name={`courtNames.${index}.name`}
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormControl>
+                                  <Input {...field} placeholder={`Court ${index + 1}`} />
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                </fieldset>
                 <div className="flex gap-4 flex-wrap items-center border-t pt-6">
-                    <Button type="submit">
+                    <Button type="submit" disabled={isTournamentStarted}>
                         <Save className="mr-2 h-4 w-4" />
                         {tournamentDocRef ? 'Update Tournament' : 'Create Tournament'}
                     </Button>
@@ -819,37 +831,10 @@ export default function TournamentSettingsPage() {
                         <ArrowLeft className="mr-2 h-4 w-4" />
                         Back to Dashboard
                     </Button>
-                     <Button type="button" variant="default" onClick={handleGenerateSchedule} disabled={isGenerating}>
+                     <Button type="button" variant="default" onClick={handleGenerateSchedule} disabled={isGenerating || isTournamentStarted || !tournament}>
                         {isGenerating ? <Loader2 className="animate-spin" /> : <ListOrdered />}
                         Generate Pairings
                     </Button>
-
-                    <div className="flex-grow" />
-
-                    {tournamentDocRef && (
-                      <AlertDialog>
-                          <AlertDialogTrigger asChild>
-                               <Button type="button" variant="destructive">
-                                    <Trash2 className="mr-2 h-4 w-4" />
-                                    Delete Tournament
-                                </Button>
-                          </AlertDialogTrigger>
-                          <AlertDialogContent>
-                                <AlertDialogHeader>
-                                    <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
-                                    <AlertDialogDescription>
-                                    This action cannot be undone. This will permanently delete the tournament and all associated teams, organizations, and matches.
-                                    </AlertDialogDescription>
-                                </AlertDialogHeader>
-                                <AlertDialogFooter>
-                                    <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                    <AlertDialogAction onClick={handleDeleteTournament} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
-                                    Delete
-                                    </AlertDialogAction>
-                                </AlertDialogFooter>
-                          </AlertDialogContent>
-                      </AlertDialog>
-                    )}
                 </div>
               </form>
             </Form>
@@ -860,11 +845,13 @@ export default function TournamentSettingsPage() {
           <CardHeader className="flex flex-row items-center justify-between">
             <div>
               <CardTitle>Team Management</CardTitle>
-              <CardDescription>Register and manage badminton teams.</CardDescription>
+              <CardDescription>
+                {isTournamentStarted ? "Tournament has started. Team registration is locked." : "Register and manage badminton teams."}
+              </CardDescription>
             </div>
             <Dialog open={isAddTeamOpen} onOpenChange={setIsAddTeamOpen}>
               <DialogTrigger asChild>
-                <Button>
+                <Button disabled={isTournamentStarted}>
                   <TeamsIcon className="mr-2 h-4 w-4" />
                   Register Team
                 </Button>
@@ -901,10 +888,11 @@ export default function TournamentSettingsPage() {
                         onChange={(e) => handleLotNumberChange(t.id, e.target.value)}
                         onBlur={() => handleLotNumberBlur(t.id)}
                         placeholder="N/A"
+                        disabled={isTournamentStarted}
                       />
                     </TableCell>
                     <TableCell>
-                        <div className="relative group cursor-pointer" onClick={() => inlineFileInputRefs.current[t.id]?.click()}>
+                        <div className={cn("relative group", !isTournamentStarted && "cursor-pointer")} onClick={() => !isTournamentStarted && inlineFileInputRefs.current[t.id]?.click()}>
                            <Image 
                              data-ai-hint="badminton players"
                              src={t.photoUrl || 'https://placehold.co/80x80.png'} 
@@ -913,9 +901,11 @@ export default function TournamentSettingsPage() {
                              height={80} 
                              className="rounded-md object-cover group-hover:opacity-50 transition-opacity"
                            />
+                           {!isTournamentStarted && (
                            <div className="absolute inset-0 flex items-center justify-center bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity rounded-md">
                                 <Edit className="h-6 w-6 text-white" />
                            </div>
+                           )}
                            <Input
                                 type="file"
                                 className="hidden"
@@ -923,6 +913,7 @@ export default function TournamentSettingsPage() {
                                 onChange={(e) => handleInlinePhotoChange(e, t.id)}
                                 accept="image/*"
                                 capture="environment"
+                                disabled={isTournamentStarted}
                             />
                         </div>
                     </TableCell>
@@ -931,7 +922,7 @@ export default function TournamentSettingsPage() {
                     <TableCell>{getOrgName(t.organizationId)}</TableCell>
                     <TableCell className="text-right">
                       <DropdownMenu>
-                        <DropdownMenuTrigger asChild><Button variant="ghost" className="h-8 w-8 p-0"><MoreHorizontal className="h-4 w-4" /></Button></DropdownMenuTrigger>
+                        <DropdownMenuTrigger asChild><Button variant="ghost" className="h-8 w-8 p-0" disabled={isTournamentStarted}><MoreHorizontal className="h-4 w-4" /></Button></DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
                           <DropdownMenuItem onSelect={() => setTeamToEdit(t)}><Edit className="mr-2 h-4 w-4" />Edit</DropdownMenuItem>
                           <DropdownMenuItem className="text-destructive focus:text-destructive" onSelect={() => setTeamToDelete(t)}><Trash2 className="mr-2 h-4 w-4" />Delete</DropdownMenuItem>
@@ -949,11 +940,13 @@ export default function TournamentSettingsPage() {
           <CardHeader className="flex flex-row items-center justify-between">
             <div>
               <CardTitle>Organization Management</CardTitle>
-              <CardDescription>Create and manage organizations.</CardDescription>
+              <CardDescription>
+                 {isTournamentStarted ? "Tournament has started. Organization management is locked." : "Create and manage organizations."}
+              </CardDescription>
             </div>
             <Dialog open={isAddOrgOpen} onOpenChange={setIsAddOrgOpen}>
               <DialogTrigger asChild>
-                <Button>
+                <Button disabled={isTournamentStarted}>
                   <Building className="mr-2 h-4 w-4" />
                   Create Organization
                 </Button>
@@ -1003,7 +996,7 @@ export default function TournamentSettingsPage() {
                     <TableCell>{org.location}</TableCell>
                     <TableCell className="text-right">
                       <DropdownMenu>
-                        <DropdownMenuTrigger asChild><Button variant="ghost" className="h-8 w-8 p-0"><MoreHorizontal className="h-4 w-4" /></Button></DropdownMenuTrigger>
+                        <DropdownMenuTrigger asChild><Button variant="ghost" className="h-8 w-8 p-0" disabled={isTournamentStarted}><MoreHorizontal className="h-4 w-4" /></Button></DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
                           <DropdownMenuItem onSelect={() => setOrgToEdit(org)}><Edit className="mr-2 h-4 w-4" />Edit</DropdownMenuItem>
                           <DropdownMenuItem className="text-destructive focus:text-destructive" onSelect={() => setOrgToDelete(org)}><Trash2 className="mr-2 h-4 w-4" />Delete</DropdownMenuItem>
@@ -1016,23 +1009,6 @@ export default function TournamentSettingsPage() {
             </Table>
           </CardContent>
         </Card>
-
-     <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
-        <AlertDialogContent>
-            <AlertDialogHeader>
-                <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
-                <AlertDialogDescription>
-                  This action cannot be undone. This will permanently delete the tournament and all associated teams, organizations, and matches.
-                </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-                <AlertDialogCancel>Cancel</AlertDialogCancel>
-                <AlertDialogAction onClick={handleDeleteTournament} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
-                  Delete
-                </AlertDialogAction>
-            </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
 
       <AlertDialog open={isSuccessModalOpen} onOpenChange={setIsSuccessModalOpen}>
         <AlertDialogContent>

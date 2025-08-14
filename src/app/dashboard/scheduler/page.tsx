@@ -85,15 +85,17 @@ const CourtColumn = ({ courtName, matches, isOccupied }: { courtName: string; ma
             <CardHeader>
                 <CardTitle className="text-lg capitalize">{courtName}</CardTitle>
             </CardHeader>
-            <CardContent className="min-h-[100px] p-2">
-                {matches.length > 0 ? (
-                    matches.map(m => <MatchCard key={m.id} match={m} />)
-                ) : (
-                    <div className="flex items-center justify-center h-full border-2 border-dashed border-muted-foreground/20 rounded-md p-4">
-                        <p className="text-muted-foreground text-sm">Drop match here</p>
-                    </div>
-                )}
-            </CardContent>
+            <SortableContext id={courtName} items={matches.map(m => ({id: m.id}))} strategy={verticalListSortingStrategy}>
+              <CardContent className="min-h-[100px] p-2">
+                  {matches.length > 0 ? (
+                      matches.map(m => <SortableMatchCard key={m.id} match={m} />)
+                  ) : (
+                      <div className="flex items-center justify-center h-full border-2 border-dashed border-muted-foreground/20 rounded-md p-4">
+                          <p className="text-muted-foreground text-sm">Drop match here</p>
+                      </div>
+                  )}
+              </CardContent>
+            </SortableContext>
         </Card>
     );
 };
@@ -121,14 +123,19 @@ export default function SchedulerPage() {
 
             if (!tournamentSnap.empty) {
                 const tourneyData = tournamentSnap.docs[0].data() as Omit<Tournament, 'id'|'date'> & { date: Timestamp };
-                setTournament({id: tournamentSnap.docs[0].id, ...tourneyData, date: tourneyData.date.toDate()});
+                const date = tourneyData.date instanceof Timestamp ? tourneyData.date.toDate() : new Date();
+                setTournament({id: tournamentSnap.docs[0].id, ...tourneyData, date });
             } else {
                  toast({ title: 'No Tournament Found', description: 'Please configure a tournament first.', variant: 'destructive'});
                  router.push('/dashboard/tournament');
                  return; // Stop execution if no tournament
             }
 
-            const allMatches = matchesSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Match));
+            const allMatches = matchesSnap.docs.map(doc => {
+              const data = doc.data();
+              const startTime = data.startTime instanceof Timestamp ? data.startTime.toDate() : data.startTime;
+              return { id: doc.id, ...data, startTime } as Match;
+            });
             setMatches(allMatches);
 
         } catch (error) {
@@ -158,7 +165,6 @@ export default function SchedulerPage() {
                 if (assignments[match.courtName]) {
                     assignments[match.courtName].push(match);
                 } else {
-                    // If a match is assigned to a court that no longer exists, treat it as unassigned
                     unassigned.push(match);
                 }
             }
@@ -178,17 +184,18 @@ export default function SchedulerPage() {
         const { active, over } = event;
         setActiveId(null);
 
-        if (!over) return;
+        if (!over || !activeMatch) return;
         
         const activeMatchId = active.id as string;
         const targetContainerId = over.id as string;
 
-        // Check if dropping on a court
         const isCourtDrop = tournament?.courtNames.some(c => c.name === targetContainerId);
-
+        const isUnassignedDrop = targetContainerId === 'unassigned-column';
+        
+        const originalCourtName = activeMatch.courtName;
+        
         if (isCourtDrop) {
-             // Prevent dropping on a court that is already occupied
-            if (courtAssignments[targetContainerId] && courtAssignments[targetContainerId].length > 0) {
+             if (courtAssignments[targetContainerId] && courtAssignments[targetContainerId].length > 0 && targetContainerId !== originalCourtName) {
                 toast({
                     title: 'Court Occupied',
                     description: `Court ${targetContainerId} already has a match.`,
@@ -199,12 +206,11 @@ export default function SchedulerPage() {
 
             setMatches(prev => prev.map(m => {
                 if (m.id === activeMatchId) {
-                    return { ...m, courtName: targetContainerId, status: 'SCHEDULED', startTime: new Date() };
+                    return { ...m, courtName: targetContainerId, status: 'SCHEDULED', startTime: Timestamp.now().toDate() };
                 }
                 return m;
             }));
-        } else if (targetContainerId === 'unassigned') {
-             // Logic to handle dropping back to the unassigned list
+        } else if (isUnassignedDrop) {
              setMatches(prev => prev.map(m => {
                 if (m.id === activeMatchId) {
                     const { courtName, startTime, ...rest } = m;
@@ -221,15 +227,13 @@ export default function SchedulerPage() {
             const batch = writeBatch(db);
             matches.forEach(match => {
                 const matchRef = doc(db, 'matches', match.id);
-                const dataToUpdate: Partial<Match> = {
+                const dataToUpdate: Partial<Match> & {startTime?: Timestamp} = {
                     status: match.status,
                     courtName: match.courtName || undefined,
                 };
-                 if (match.status === 'SCHEDULED') {
-                    // Only set startTime if it doesn't exist, to avoid overwriting
-                    dataToUpdate.startTime = match.startTime || Timestamp.fromDate(new Date());
+                 if (match.status === 'SCHEDULED' && match.startTime) {
+                    dataToUpdate.startTime = Timestamp.fromDate(new Date(match.startTime));
                  } else if (match.status === 'PENDING') {
-                    // Firestore cannot store `undefined`, so we don't set the field
                     dataToUpdate.startTime = undefined;
                     dataToUpdate.courtName = undefined;
                  }
@@ -254,8 +258,14 @@ export default function SchedulerPage() {
             matchesQuery.forEach(doc => {
                 batch.delete(doc.ref);
             });
+
+            if (tournament) {
+                const tourneyRef = doc(db, 'tournaments', tournament.id);
+                batch.update(tourneyRef, { status: 'PENDING' });
+            }
+
             await batch.commit();
-            toast({ title: 'Schedule Cleared', description: 'All matches have been deleted.' });
+            toast({ title: 'Schedule Cleared', description: 'All matches have been deleted and tournament status is PENDING.' });
             setMatches([]);
         } catch (error) {
             toast({ title: 'Error', description: 'Could not clear schedule.', variant: 'destructive' });
@@ -289,8 +299,8 @@ export default function SchedulerPage() {
                         <p className="text-muted-foreground">Drag unassigned matches to an available court to start them.</p>
                     </div>
                     <div className="flex gap-2 flex-wrap">
-                         <Button variant="outline" onClick={() => router.push('/dashboard')}>
-                            <ArrowLeft /> Back
+                         <Button variant="outline" onClick={() => router.push('/dashboard/tournament')}>
+                            <ArrowLeft /> Back to Setup
                         </Button>
                         <AlertDialog>
                             <AlertDialogTrigger asChild>
@@ -302,7 +312,7 @@ export default function SchedulerPage() {
                                 <AlertDialogHeader>
                                 <AlertDialogTitle>Are you sure?</AlertDialogTitle>
                                 <AlertDialogDescription>
-                                    This will permanently delete all generated matches. You will have to regenerate them from the tournament page.
+                                    This will permanently delete all generated matches and reset the tournament status. You will have to regenerate them from the tournament page.
                                 </AlertDialogDescription>
                                 </AlertDialogHeader>
                                 <AlertDialogFooter>
@@ -325,8 +335,8 @@ export default function SchedulerPage() {
                         <CardHeader>
                             <CardTitle>Unassigned Matches</CardTitle>
                         </CardHeader>
-                        <CardContent>
-                             <SortableContext id="unassigned" items={unassignedMatches.map(m => ({id: m.id}))} strategy={verticalListSortingStrategy}>
+                        <SortableContext id="unassigned-column" items={unassignedMatches.map(m => ({id: m.id}))} strategy={verticalListSortingStrategy}>
+                          <CardContent>
                                 {unassignedMatches.length > 0 ? (
                                     unassignedMatches.map(match => (
                                         <SortableMatchCard key={match.id} match={match} />
@@ -334,8 +344,8 @@ export default function SchedulerPage() {
                                 ) : (
                                     <p className="text-sm text-muted-foreground py-4 text-center">No more matches to schedule.</p>
                                 )}
-                            </SortableContext>
-                        </CardContent>
+                          </CardContent>
+                        </SortableContext>
                     </Card>
 
                     {/* Court Columns */}
@@ -344,13 +354,12 @@ export default function SchedulerPage() {
                             const courtMatches = courtAssignments[court.name] || [];
                             const isOccupied = courtMatches.length > 0;
                             return (
-                             <SortableContext key={court.name} id={court.name} items={[]}>
-                                <CourtColumn
-                                    courtName={court.name}
-                                    matches={courtMatches}
-                                    isOccupied={isOccupied}
-                                />
-                             </SortableContext>
+                             <CourtColumn
+                                key={court.name}
+                                courtName={court.name}
+                                matches={courtMatches}
+                                isOccupied={isOccupied}
+                            />
                             )
                         })}
                     </div>
@@ -362,5 +371,3 @@ export default function SchedulerPage() {
         </DndContext>
     );
 }
-
-    
