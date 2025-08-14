@@ -159,12 +159,13 @@ export default function SchedulerPage() {
         }
 
         matches.forEach(match => {
-            if (match.status === 'PENDING') {
+            if (match.status === 'PENDING' || !match.courtName) {
                 unassigned.push(match);
             } else if ((match.status === 'SCHEDULED' || match.status === 'IN_PROGRESS') && match.courtName) {
                 if (assignments[match.courtName]) {
                     assignments[match.courtName].push(match);
                 } else {
+                    // If court somehow doesn't exist in tournament, treat as unassigned
                     unassigned.push(match);
                 }
             }
@@ -183,42 +184,54 @@ export default function SchedulerPage() {
     const handleDragEnd = (event: DragEndEvent) => {
         const { active, over } = event;
         setActiveId(null);
-
-        if (!over || !activeMatch) return;
-        
+    
+        if (!over || !active.id) return;
+    
         const activeMatchId = active.id as string;
+        const droppedMatch = matches.find(m => m.id === activeMatchId);
+        if (!droppedMatch) return;
+    
         const targetContainerId = over.id as string;
-
+    
         const isCourtDrop = tournament?.courtNames.some(c => c.name === targetContainerId);
         const isUnassignedDrop = targetContainerId === 'unassigned-column';
-        
-        const originalCourtName = activeMatch.courtName;
-        
-        if (isCourtDrop) {
-             if (courtAssignments[targetContainerId] && courtAssignments[targetContainerId].length > 0 && targetContainerId !== originalCourtName) {
+    
+        // Check if dropping onto an occupied court
+        if (isCourtDrop && courtAssignments[targetContainerId]?.length > 0) {
+            // Allow if dragging within the same court (reordering, though not supported, won't trigger error)
+            // or if the dropped match is the one already in that court
+            const isSelfDrop = courtAssignments[targetContainerId][0]?.id === activeMatchId;
+            if (!isSelfDrop) {
                 toast({
                     title: 'Court Occupied',
                     description: `Court ${targetContainerId} already has a match.`,
                     variant: 'destructive',
                 });
-                return;
+                return; // Prevent drop
             }
-
-            setMatches(prev => prev.map(m => {
-                if (m.id === activeMatchId) {
-                    return { ...m, courtName: targetContainerId, status: 'SCHEDULED', startTime: Timestamp.now().toDate() };
-                }
-                return m;
-            }));
-        } else if (isUnassignedDrop) {
-             setMatches(prev => prev.map(m => {
-                if (m.id === activeMatchId) {
-                    const { courtName, startTime, ...rest } = m;
-                    return { ...rest, status: 'PENDING' };
-                }
-                return m;
-            }));
         }
+    
+        setMatches(prevMatches => {
+            return prevMatches.map(match => {
+                if (match.id !== activeMatchId) return match;
+    
+                if (isCourtDrop) {
+                    return {
+                        ...match,
+                        courtName: targetContainerId,
+                        status: 'SCHEDULED',
+                        startTime: Timestamp.now().toDate()
+                    };
+                }
+    
+                if (isUnassignedDrop) {
+                    const { courtName, startTime, ...rest } = match;
+                    return { ...rest, status: 'PENDING', courtName: '', startTime: new Date() };
+                }
+    
+                return match; // Return unchanged if not a valid drop target
+            });
+        });
     };
     
     const handleSaveSchedule = async () => {
@@ -229,13 +242,13 @@ export default function SchedulerPage() {
                 const matchRef = doc(db, 'matches', match.id);
                 const dataToUpdate: Partial<Match> & {startTime?: Timestamp} = {
                     status: match.status,
-                    courtName: match.courtName || undefined,
+                    courtName: match.courtName || '', // Use empty string for unassigned
                 };
                  if (match.status === 'SCHEDULED' && match.startTime) {
                     dataToUpdate.startTime = Timestamp.fromDate(new Date(match.startTime));
                  } else if (match.status === 'PENDING') {
-                    dataToUpdate.startTime = undefined;
-                    dataToUpdate.courtName = undefined;
+                    dataToUpdate.startTime = undefined; // Firestore SDK should handle removing field
+                    dataToUpdate.courtName = '';
                  }
                 
                 batch.update(matchRef, dataToUpdate as any);
