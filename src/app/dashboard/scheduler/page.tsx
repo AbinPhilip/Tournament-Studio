@@ -264,7 +264,7 @@ export default function SchedulerPage() {
         }
     }
     
-    const handleClearSchedule = async () => {
+    const handleResetTournament = async () => {
         try {
             const batch = writeBatch(db);
             const matchesQuery = await getDocs(collection(db, 'matches'));
@@ -278,10 +278,11 @@ export default function SchedulerPage() {
             }
 
             await batch.commit();
-            toast({ title: 'Schedule Cleared', description: 'All matches have been deleted and tournament status is PENDING.' });
+            toast({ title: 'Tournament Reset', description: 'All matches have been deleted and tournament status is now PENDING. You can now re-generate pairings.' });
             setMatches([]);
+            router.push('/dashboard/tournament');
         } catch (error) {
-            toast({ title: 'Error', description: 'Could not clear schedule.', variant: 'destructive' });
+            toast({ title: 'Error', description: 'Could not reset the tournament.', variant: 'destructive' });
         }
     };
 
@@ -318,19 +319,19 @@ export default function SchedulerPage() {
                         <AlertDialog>
                             <AlertDialogTrigger asChild>
                                 <Button variant="destructive">
-                                    <XCircle className="mr-2" /> Clear All
+                                    <XCircle className="mr-2" /> Reset Tournament
                                 </Button>
                             </AlertDialogTrigger>
                             <AlertDialogContent>
                                 <AlertDialogHeader>
                                 <AlertDialogTitle>Are you sure?</AlertDialogTitle>
                                 <AlertDialogDescription>
-                                    This will permanently delete all generated matches and reset the tournament status. You will have to regenerate them from the tournament page.
+                                    This will permanently delete all generated matches and reset the tournament status to PENDING. This allows you to regenerate the pairings from the tournament page.
                                 </AlertDialogDescription>
                                 </AlertDialogHeader>
                                 <AlertDialogFooter>
                                 <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                <AlertDialogAction onClick={handleClearSchedule}>Clear Schedule</AlertDialogAction>
+                                <AlertDialogAction onClick={handleResetTournament}>Reset Tournament</AlertDialogAction>
                                 </AlertDialogFooter>
                             </AlertDialogContent>
                         </AlertDialog>
@@ -384,3 +385,5 @@ export default function SchedulerPage() {
         </DndContext>
     );
 }
+
+    

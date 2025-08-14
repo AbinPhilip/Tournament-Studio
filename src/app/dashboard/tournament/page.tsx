@@ -29,7 +29,7 @@ import {
 } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Save, ArrowLeft, Trash2, CheckCircle, Calendar as CalendarIcon, MoreHorizontal, UserPlus, Users as TeamsIcon, Building, Edit, Loader2, ListOrdered } from 'lucide-react';
+import { Save, ArrowLeft, Trash2, CheckCircle, Calendar as CalendarIcon, MoreHorizontal, UserPlus, Users as TeamsIcon, Building, Edit, Loader2, ListOrdered, Play } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import { db } from '@/lib/firebase';
@@ -715,6 +715,7 @@ export default function TournamentSettingsPage() {
             <CardTitle>Tournament Administration</CardTitle>
             <CardDescription>
              Configure the tournament. Once settings are finalized, register teams, assign lot numbers, and generate pairings.
+             {isTournamentStarted && <span className="font-bold text-destructive block mt-2">Tournament is active. All settings are locked.</span>}
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -847,8 +848,8 @@ export default function TournamentSettingsPage() {
                         Back to Dashboard
                     </Button>
                      <Button type="button" variant="default" onClick={handleGenerateSchedule} disabled={isGenerating || isTournamentStarted || !tournament}>
-                        {isGenerating ? <Loader2 className="animate-spin" /> : <ListOrdered />}
-                        Generate Pairings
+                        {isGenerating ? <Loader2 className="animate-spin" /> : <Play />}
+                        Start Tournament & Generate Pairings
                     </Button>
                 </div>
               </form>
@@ -1124,3 +1125,5 @@ export default function TournamentSettingsPage() {
     </div>
   );
 }
+
+    
