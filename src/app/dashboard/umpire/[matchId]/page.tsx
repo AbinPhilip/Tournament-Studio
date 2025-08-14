@@ -189,12 +189,12 @@ export default function LiveScorerPage() {
         return { team1SetsWon, team2SetsWon };
     }, [match]);
 
-    if (isLoading || !match || !tournament) {
+    if (isLoading || !match) {
         return <div className="flex h-screen w-full items-center justify-center"><Loader2 className="h-16 w-16 animate-spin" /></div>;
     }
     
     const { team1Points = 0, team2Points = 0, servingTeamId, currentSet = 1 } = match.live || {};
-    const finalWinnerId = team1SetsWon > team2SetsWon ? match.team1Id : match.team2Id;
+    const suggestedWinnerId = team1SetsWon > team2SetsWon ? match.team1Id : match.team2Id;
 
     return (
         <div className="container mx-auto p-4 md:p-8">
@@ -263,7 +263,7 @@ export default function LiveScorerPage() {
                                 </AlertDialogHeader>
                                 <div className="space-y-4 py-4">
                                      <Button 
-                                        onClick={() => handleFinalizeMatch(finalWinnerId)} 
+                                        onClick={() => handleFinalizeMatch(suggestedWinnerId)} 
                                         className="w-full bg-green-600 hover:bg-green-700"
                                      >
                                          <CheckCircle className="mr-2"/> Declare Winner & Save Final Score

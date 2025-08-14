@@ -62,6 +62,7 @@ const recordMatchResultFlow = ai.defineFlow(
     const completedMatch = matchSnap.data() as Match;
     
     const updates: Partial<Match> & { 'live.currentSet'?: number } = {};
+    let finalWinnerId = input.winnerId;
 
     if (input.scores) {
         updates.scores = input.scores;
@@ -72,6 +73,9 @@ const recordMatchResultFlow = ai.defineFlow(
         let scoreSummary = '';
         if (input.isForfeited) {
             scoreSummary = 'Forfeited';
+            // If forfeited, the winner is the one who didn't forfeit.
+            finalWinnerId = input.winnerId === completedMatch.team1Id ? completedMatch.team1Id : completedMatch.team2Id;
+            updates.forfeitedById = input.winnerId === completedMatch.team1Id ? completedMatch.team2Id : completedMatch.team1Id;
         } else if (input.scores && input.scores.length > 0) {
             let team1Sets = 0;
             let team2Sets = 0;
@@ -80,11 +84,11 @@ const recordMatchResultFlow = ai.defineFlow(
                 else team2Sets++;
             });
             scoreSummary = `${team1Sets}-${team2Sets}`;
+            finalWinnerId = team1Sets > team2Sets ? completedMatch.team1Id : completedMatch.team2Id;
         }
         updates.score = scoreSummary;
-        updates.winnerId = input.winnerId;
+        updates.winnerId = finalWinnerId;
         updates.status = 'COMPLETED';
-        updates.forfeitedById = input.isForfeited ? (input.winnerId === completedMatch.team1Id ? completedMatch.team2Id : completedMatch.team1Id) : undefined;
     } else {
         updates.status = 'IN_PROGRESS';
     }
@@ -93,11 +97,11 @@ const recordMatchResultFlow = ai.defineFlow(
 
 
     // 2. If match is COMPLETED, check if it was a knockout match and if we need to schedule the next round
-    if (input.status !== 'COMPLETED' || !input.winnerId) {
+    if (input.status !== 'COMPLETED' || !finalWinnerId) {
         await batch.commit();
         return;
     }
-    const currentWinnerId = input.winnerId;
+    const currentWinnerId = finalWinnerId;
 
 
     const tournamentSnap = await getDocs(collection(db, 'tournaments'));
