@@ -252,6 +252,9 @@ export default function TeamsPage() {
       const fetchedTeams = teamsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Team));
       setTeams(fetchedTeams);
 
+      const fetchedOrgs = orgsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Organization));
+      setOrganizations(fetchedOrgs);
+
       const lotNumberMap: Record<string, number | undefined> = {};
       const playersMap: Record<string, Set<string>> = {};
 
@@ -272,8 +275,6 @@ export default function TeamsPage() {
           finalPlayersByOrg[orgId] = Array.from(playersMap[orgId]).sort();
       }
       setPlayersByOrg(finalPlayersByOrg);
-
-      setOrganizations(orgsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Organization)));
       
     } catch (error) {
       toast({ title: 'Error', description: 'Failed to fetch data.', variant: 'destructive' });
@@ -282,7 +283,7 @@ export default function TeamsPage() {
 
   useEffect(() => {
     fetchData();
-  }, []);
+  }, [toast]);
   
   useEffect(() => {
     if (teamToEdit) {
@@ -379,7 +380,11 @@ export default function TeamsPage() {
     setTeamToDelete(null);
   };
   
-  const getOrgName = (orgId: string) => organizations.find(o => o.id === orgId)?.name || 'N/A';
+  const orgNameMap = useMemo(() => {
+      return new Map(organizations.map(org => [org.id, org.name]));
+  }, [organizations]);
+
+  const getOrgName = (orgId: string) => orgNameMap.get(orgId) || 'N/A';
   
   const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -478,7 +483,7 @@ export default function TeamsPage() {
       });
     }
     return sortableTeams;
-  }, [teams, organizations, sortConfig]);
+  }, [teams, organizations, sortConfig, orgNameMap]);
 
   const requestSort = (key: keyof Team | 'organizationName') => {
     let direction: 'ascending' | 'descending' = 'ascending';

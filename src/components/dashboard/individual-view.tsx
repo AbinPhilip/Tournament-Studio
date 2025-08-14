@@ -1,11 +1,11 @@
 
 "use client";
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '@/hooks/use-auth';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
-import type { User, Team, Match, TeamType } from '@/types';
+import type { User, Team, Match, TeamType, Organization } from '@/types';
 import { db } from '@/lib/firebase';
 import { collection, query, where, getDocs, orderBy } from 'firebase/firestore';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -19,6 +19,7 @@ export default function IndividualView() {
   const [myTeams, setMyTeams] = useState<Team[]>([]);
   const [myMatches, setMyMatches] = useState<Record<string, Match[]>>({});
   const [isLoading, setIsLoading] = useState(true);
+  const [organizations, setOrganizations] = useState<Organization[]>([]);
   const [teamCounts, setTeamCounts] = useState<Record<TeamType, number>>({
     singles: 0,
     mens_doubles: 0,
@@ -32,27 +33,21 @@ export default function IndividualView() {
     const fetchData = async () => {
       setIsLoading(true);
       try {
-        // 1. Find teams the user is part of
-        const teamsQuery = query(
-          collection(db, 'teams'),
-          where('player1Name', '==', user.name)
-        );
-        const teamsSnap = await getDocs(teamsQuery);
-        let userTeams = teamsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Team));
-
-        // Add teams where user is player 2
-        const p2TeamsQuery = query(
-          collection(db, 'teams'),
-          where('player2Name', '==', user.name)
-        );
-        const p2TeamsSnap = await getDocs(p2TeamsQuery);
-        userTeams.push(...p2TeamsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Team)));
+        const [orgsSnap, teamsSnap] = await Promise.all([
+          getDocs(collection(db, 'organizations')),
+          getDocs(collection(db, 'teams'))
+        ]);
         
+        setOrganizations(orgsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Organization)));
+        
+        const allTeams = teamsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Team));
+
+        // 1. Find teams the user is part of
+        let userTeams = allTeams.filter(t => t.player1Name === user.name || t.player2Name === user.name);
+
         // Deduplicate teams in case user name was entered in both fields
         userTeams = userTeams.filter((team, index, self) =>
-            index === self.findIndex((t) => (
-                t.id === team.id
-            ))
+            index === self.findIndex((t) => (t.id === team.id))
         )
         setMyTeams(userTeams);
         
@@ -87,10 +82,8 @@ export default function IndividualView() {
         }
         
         // 3. Get team counts for round name calculation
-         const allTeamsSnap = await getDocs(collection(db, 'teams'));
          const counts: Record<TeamType, number> = { singles: 0, mens_doubles: 0, womens_doubles: 0, mixed_doubles: 0 };
-         allTeamsSnap.forEach(doc => {
-            const team = doc.data() as { type: TeamType };
+         allTeams.forEach(team => {
             if (counts[team.type] !== undefined) {
                 counts[team.type]++;
             }
@@ -106,6 +99,17 @@ export default function IndividualView() {
 
     fetchData();
   }, [user, toast]);
+
+  const orgNameMap = useMemo(() => {
+    return new Map(organizations.map(org => [org.id, org.name]));
+  }, [organizations]);
+  
+  const getOpponentOrgName = (match: Match, myTeamId: string) => {
+    const opponentTeamId = match.team1Id === myTeamId ? match.team2Id : match.team1Id;
+    const team = myTeams.find(t => t.id === opponentTeamId);
+    // Fallback to match data if team not in `myTeams` (which it shouldn't be)
+    return team ? orgNameMap.get(team.organizationId) : (match.team1Id === myTeamId ? match.team2OrgName : match.team1OrgName) || 'N/A';
+  };
   
   if (isLoading) {
       return (
@@ -133,7 +137,7 @@ export default function IndividualView() {
                     <CardHeader>
                         <CardTitle className="capitalize">{team.type.replace(/_/g, ' ')}</CardTitle>
                         <CardDescription>
-                           Team: {team.player1Name} {team.player2Name && `& ${team.player2Name}`}
+                           Team: {team.player1Name} {team.player2Name && `& ${team.player2Name}`} ({orgNameMap.get(team.organizationId)})
                         </CardDescription>
                     </CardHeader>
                     <CardContent>
@@ -152,7 +156,6 @@ export default function IndividualView() {
                                     myMatches[team.id].map(match => {
                                         const opponentIsTeam1 = match.team1Id !== team.id;
                                         const opponentName = opponentIsTeam1 ? match.team1Name : match.team2Name;
-                                        const opponentOrg = opponentIsTeam1 ? match.team1OrgName : match.team2OrgName;
                                         const isWinner = match.winnerId === team.id;
                                         return (
                                             <TableRow key={match.id}>
@@ -160,7 +163,7 @@ export default function IndividualView() {
                                                 <TableCell>
                                                     <div>
                                                         <span>{opponentName}</span>
-                                                        <p className="font-bold">{opponentOrg}</p>
+                                                        <p className="font-bold">{getOpponentOrgName(match, team.id)}</p>
                                                     </div>
                                                 </TableCell>
                                                 <TableCell>
