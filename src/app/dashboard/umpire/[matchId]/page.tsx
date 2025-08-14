@@ -4,7 +4,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { db } from '@/lib/firebase';
-import { doc, onSnapshot, getDoc, collection, getDocs, Unsubscribe } from 'firebase/firestore';
+import { doc, onSnapshot, getDoc, collection, getDocs, Unsubscribe, Timestamp } from 'firebase/firestore';
 import type { Match, Tournament } from '@/types';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2, ArrowLeft, Send, Repeat, CheckCircle } from 'lucide-react';
@@ -52,19 +52,21 @@ export default function LiveScorerPage() {
                 const matchRef = doc(db, 'matches', matchId);
                 unsubscribe = onSnapshot(matchRef, (docSnap) => {
                     if (docSnap.exists()) {
-                        const matchData = { id: docSnap.id, ...docSnap.data() } as Match;
-                        const currentSetNumber = (matchData.scores?.length || 0) + 1;
-                        if (!matchData.live) {
-                            matchData.live = {
+                        const matchData = { id: docSnap.id, ...docSnap.data() } as Omit<Match, 'startTime'> & {startTime: Timestamp};
+                        const liveMatchData = { ...matchData, startTime: matchData.startTime.toDate() };
+
+                        const currentSetNumber = (liveMatchData.scores?.length || 0) + 1;
+                        if (!liveMatchData.live) {
+                            liveMatchData.live = {
                                 team1Points: 0,
                                 team2Points: 0,
-                                servingTeamId: matchData.team1Id,
+                                servingTeamId: liveMatchData.team1Id,
                                 currentSet: currentSetNumber,
                             };
                         } else {
-                            matchData.live.currentSet = currentSetNumber;
+                            liveMatchData.live.currentSet = currentSetNumber;
                         }
-                        setMatch(matchData);
+                        setMatch(liveMatchData as Match);
                     } else {
                         toast({ title: "Error", description: "Match not found.", variant: 'destructive' });
                         router.push('/dashboard/umpire');
@@ -198,8 +200,7 @@ export default function LiveScorerPage() {
     }
     
     const { team1Points = 0, team2Points = 0, servingTeamId, currentSet = 1 } = match.live || {};
-    const suggestedWinnerId = team1SetsWon > team2SetsWon ? match.team1Id : match.team2Id;
-
+    
     return (
         <div className="container mx-auto p-4 md:p-8">
             <Card>
@@ -267,10 +268,16 @@ export default function LiveScorerPage() {
                                 </AlertDialogHeader>
                                 <div className="space-y-4 py-4">
                                      <Button 
-                                        onClick={() => handleFinalizeMatch(suggestedWinnerId)} 
+                                        onClick={() => handleFinalizeMatch(match.team1Id)} 
                                         className="w-full bg-green-600 hover:bg-green-700"
                                      >
-                                         <CheckCircle className="mr-2"/> Declare Winner & Save Final Score
+                                         <CheckCircle className="mr-2"/> Declare {match.team1Name} as Winner
+                                    </Button>
+                                    <Button 
+                                        onClick={() => handleFinalizeMatch(match.team2Id)} 
+                                        className="w-full bg-green-600 hover:bg-green-700"
+                                     >
+                                         <CheckCircle className="mr-2"/> Declare {match.team2Name} as Winner
                                     </Button>
                                     <div className="relative">
                                         <div className="absolute inset-0 flex items-center"><span className="w-full border-t" /></div>
@@ -315,3 +322,5 @@ function TeamScorePanel({ teamName, points, setsWon, isServing, onPointChange }:
         </div>
     );
 }
+
+    
