@@ -40,7 +40,7 @@ export default function AdminView() {
           <CardHeader>
             <CardTitle>System Management</CardTitle>
             <CardDescription>Manage application-wide settings, including users and the database.</CardDescription>
-          </Header>
+          </CardHeader>
           <CardContent>
              <Button onClick={() => router.push('/dashboard/settings')}>
                 <Settings className="mr-2" />
