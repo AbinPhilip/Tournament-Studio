@@ -141,10 +141,10 @@ export default function MatchHistoryPage() {
                                                  <TableRow key={match.id}>
                                                     <TableCell className="font-medium">{getRoundName(match.round || 0, eventType, teamCounts[eventType])}</TableCell>
                                                     <TableCell>
-                                                        <Badge variant="default" className="flex flex-col items-start h-auto">
-                                                            <span>{winnerName}</span>
-                                                            <span className="font-normal opacity-80">{winnerOrg}</span>
-                                                        </Badge>
+                                                        <div>
+                                                          <span>{winnerName}</span>
+                                                          <p className="font-bold text-muted-foreground">{winnerOrg}</p>
+                                                        </div>
                                                     </TableCell>
                                                     <TableCell>
                                                         <div>
@@ -167,5 +167,3 @@ export default function MatchHistoryPage() {
         </div>
     )
 }
-
-    
