@@ -52,9 +52,9 @@ export interface Tournament {
     numberOfCourts: number;
     courtNames: { name: string }[];
     tournamentType: TournamentType;
-    date: Date | Timestamp;
+    date: string;
     status?: TournamentStatus;
-    startedAt?: Date | Timestamp;
+    startedAt?: string;
 }
 
 export type MatchStatus = 'PENDING' | 'SCHEDULED' | 'IN_PROGRESS' | 'COMPLETED';
@@ -84,3 +84,5 @@ export interface Match {
         currentSet: number;
     } | null;
 }
+
+    

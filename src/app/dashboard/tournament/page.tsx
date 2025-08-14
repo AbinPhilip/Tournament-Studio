@@ -63,7 +63,7 @@ const tournamentFormSchema = z.object({
 export default function TournamentSettingsPage() {
   const { toast } = useToast();
   const router = useRouter();
-  const [tournament, setTournament] = useState<(Omit<Tournament, 'date'> & { date: Date }) | null>(null);
+  const [tournament, setTournament] = useState<(Omit<Tournament, 'date' | 'startedAt'> & { date: Date, startedAt?: Date | Timestamp }) | null>(null);
   const [tournamentDocRef, setTournamentDocRef] = useState<DocumentReference | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isGenerating, setIsGenerating] = useState(false);
@@ -112,8 +112,13 @@ export default function TournamentSettingsPage() {
         
         if (!tournamentSnap.empty) {
           const tournamentDoc = tournamentSnap.docs[0];
-          const data = tournamentDoc.data() as Omit<Tournament, 'id'|'date'> & { date: Timestamp };
-          const tournamentData = { id: tournamentDoc.id, ...data, date: data.date.toDate()};
+          const data = tournamentDoc.data() as Omit<Tournament, 'id'|'date'|'startedAt'> & { date: Timestamp, startedAt?: Timestamp };
+          const tournamentData = { 
+              id: tournamentDoc.id, 
+              ...data, 
+              date: data.date.toDate(),
+              startedAt: data.startedAt?.toDate(),
+          };
           setTournament(tournamentData)
           setTournamentDocRef(tournamentDoc.ref);
           form.reset({
@@ -157,7 +162,7 @@ export default function TournamentSettingsPage() {
         const newDocRef = doc(collection(db, 'tournaments'));
         await setDoc(newDocRef, { ...dataToSave, status: 'PENDING' });
         setTournamentDocRef(newDocRef);
-        setTournament({ id: newDocRef.id, ...values });
+        setTournament({ ...values, id: newDocRef.id, date: values.date });
       }
       setIsSuccessModalOpen(true);
     } catch (error) {
@@ -195,13 +200,16 @@ export default function TournamentSettingsPage() {
                 return acc;
             }, {} as Record<string, { eventType: string; count: number }>)
         );
+        
+        const plainTournament = {
+            ...tournament,
+            date: tournament.date.toISOString(),
+            startedAt: tournament.startedAt instanceof Timestamp ? tournament.startedAt.toDate().toISOString() : tournament.startedAt?.toISOString(),
+        }
 
         const scheduleInput = {
             teams,
-            tournament: {
-                ...tournament,
-                date: tournament.date.toISOString()
-            },
+            tournament: plainTournament,
             teamsCountPerEvent,
             organizations,
         };
@@ -442,3 +450,5 @@ export default function TournamentSettingsPage() {
     </div>
   );
 }
+
+    

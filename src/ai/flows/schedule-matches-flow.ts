@@ -31,9 +31,9 @@ const TournamentSchema = z.object({
     numberOfCourts: z.number(),
     courtNames: z.array(z.object({ name: z.string() })),
     tournamentType: z.enum(['round-robin', 'knockout']),
-    date: z.string(),
+    date: z.string(), // Pass date as ISO string
     status: z.enum(['PENDING', 'IN_PROGRESS', 'COMPLETED']).optional(),
-    startedAt: z.string().optional(),
+    startedAt: z.string().optional(), // Pass date as ISO string
 });
 
 const OrganizationSchema = z.object({
@@ -146,7 +146,7 @@ const scheduleMatchesFlow = ai.defineFlow(
     
     const teamsWithOrgNames = input.teams.map(team => ({
       ...team,
-      organizationName: orgNameMap.get(team.organizationId) || '',
+      organizationName: orgNameMap.get(team.organizationId) || 'N/A',
     }));
 
     // Create the input for the prompt with the augmented team data.
@@ -169,3 +169,5 @@ export async function scheduleMatches(input: ScheduleMatchesInput): Promise<Omit
     const result = await scheduleMatchesFlow(input);
     return result.matches;
 }
+
+    
