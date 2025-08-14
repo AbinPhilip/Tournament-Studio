@@ -143,13 +143,13 @@ export default function MatchHistoryPage() {
                                                     <TableCell>
                                                         <div>
                                                           <span>{winnerName}</span>
-                                                          <p className="font-bold text-muted-foreground">{winnerOrg}</p>
+                                                          <p className="font-bold">{winnerOrg}</p>
                                                         </div>
                                                     </TableCell>
                                                     <TableCell>
                                                         <div>
                                                             <span>{loserName}</span>
-                                                            <p className="font-bold text-muted-foreground">{loserOrg}</p>
+                                                            <p className="font-bold">{loserOrg}</p>
                                                         </div>
                                                     </TableCell>
                                                     <TableCell>{match.score || 'N/A'}</TableCell>
