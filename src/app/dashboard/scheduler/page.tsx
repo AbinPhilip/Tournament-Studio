@@ -66,6 +66,7 @@ export default function SchedulerPage() {
 
                 const allMatches = matchesSnap.docs.map(doc => {
                   const data = doc.data();
+                  // Firestore Timestamps need to be converted to JS Date objects
                   const startTime = data.startTime instanceof Timestamp ? data.startTime.toDate() : new Date();
                   return { id: doc.id, ...data, startTime } as Match;
                 });
@@ -92,14 +93,44 @@ export default function SchedulerPage() {
 
     const { unassignedMatches, busyCourts } = useMemo(() => {
         const unassigned = matches.filter(m => m.status === 'PENDING');
-        unassigned.sort((a, b) => (a.round || 0) - (b.round || 0));
+        
+        unassigned.sort((a, b) => {
+            const getRoundStage = (round: number, teamCount: number) => {
+                if (teamCount < 2) return 3; // Not enough teams for a full match
+                const totalRounds = Math.ceil(Math.log2(teamCount));
+                if (round === totalRounds) return 2; // Final
+                if (round === totalRounds - 1) return 1; // Semi-Final
+                return 0; // Preliminary round
+            };
+
+            const aRound = a.round || 0;
+            const bRound = b.round || 0;
+            const aTeamCount = teamCounts[a.eventType] || 0;
+            const bTeamCount = teamCounts[b.eventType] || 0;
+
+            const aStage = getRoundStage(aRound, aTeamCount);
+            const bStage = getRoundStage(bRound, bTeamCount);
+
+            if (aStage !== bStage) {
+                return aStage - bStage; // Sort stages: Preliminary (0) < Semi-Final (1) < Final (2)
+            }
+
+            // If stages are the same, sort by round number (lower rounds first)
+            if (aRound !== bRound) {
+                return aRound - bRound;
+            }
+
+            // Finally, sort by event type
+            return a.eventType.localeCompare(b.eventType);
+        });
+
         const busy = new Set(matches
             .filter(m => m.status === 'SCHEDULED' || m.status === 'IN_PROGRESS')
             .map(m => m.courtName)
             .filter((name): name is string => !!name)
         );
         return { unassignedMatches: unassigned, busyCourts: busy };
-    }, [matches]);
+    }, [matches, teamCounts]);
 
     const handleCourtChange = (matchId: string, courtName: string) => {
         setMatches(currentMatches => currentMatches.map(m => {
@@ -108,7 +139,7 @@ export default function SchedulerPage() {
                     ...m, 
                     courtName: courtName,
                     status: courtName ? 'SCHEDULED' : 'PENDING',
-                    startTime: courtName ? Timestamp.now().toDate() : m.startTime,
+                    startTime: courtName ? Timestamp.now().toDate() : m.startTime, // Set timestamp when court is assigned
                 };
             }
             return m;
@@ -131,7 +162,7 @@ export default function SchedulerPage() {
                 batch.update(matchRef, {
                     status: 'SCHEDULED',
                     courtName: match.courtName,
-                    startTime: match.startTime 
+                    startTime: match.startTime // This is now a Date object
                 });
             });
             await batch.commit();
@@ -274,5 +305,3 @@ export default function SchedulerPage() {
         </div>
     );
 }
-
-    
