@@ -11,11 +11,8 @@ import { Loader2 } from 'lucide-react';
 import { getRoundName } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
-interface BracketMatch extends Match {
-    top?: BracketMatch;
-    bottom?: BracketMatch;
-}
 
 export default function DrawPage() {
     const { toast } = useToast();
@@ -106,21 +103,22 @@ export default function DrawPage() {
     }, [groupedMatches]);
 
     const eventOrder: TeamType[] = ['singles', 'mens_doubles', 'womens_doubles', 'mixed_doubles'];
+    const availableEvents = eventOrder.filter(event => groupedMatches[event] && groupedMatches[event].length > 0);
 
 
     if (isLoading) {
         return (
             <div className="flex h-full w-full items-center justify-center">
-                <Loader2 className="h-12 w-12 animate-spin text-primary" />
+                <Loader2 className="h-16 w-16 animate-spin text-primary" />
             </div>
         );
     }
 
     return (
         <div className="space-y-8">
-             <div>
-                <h1 className="text-3xl font-bold mb-2">Tournament Draw</h1>
-                <p className="text-muted-foreground">
+             <div className="p-4 md:p-0">
+                <h1 className="text-4xl font-bold tracking-tight mb-2">Tournament Draw</h1>
+                <p className="text-lg text-muted-foreground">
                     {tournamentType === 'knockout' 
                         ? "Visualize each team's path to the finals in the knockout bracket."
                         : "View all scheduled round-robin matches for each event."
@@ -130,66 +128,80 @@ export default function DrawPage() {
             
             {matches.length === 0 && !isLoading ? (
                  <Card>
-                    <CardContent className="pt-6">
-                        <p className="text-center text-muted-foreground">The tournament draw has not been generated yet.</p>
+                    <CardContent className="pt-6 text-center">
+                        <p className="text-lg text-muted-foreground">The tournament draw has not been generated yet.</p>
                     </CardContent>
                 </Card>
             ) : (
-                eventOrder.map(eventType => {
-                    const eventRounds = matchesByRound[eventType];
-                    if (!eventRounds || Object.keys(eventRounds).length === 0) return null;
-                    const totalTeams = teamCounts[eventType] || 0;
+                <Tabs defaultValue={availableEvents[0]} className="w-full">
+                    <TabsList className="grid w-full grid-cols-2 md:grid-cols-4 h-auto">
+                        {availableEvents.map(eventType => (
+                            <TabsTrigger key={eventType} value={eventType} className="capitalize text-base py-2.5">
+                                {eventType.replace(/_/g, ' ')}
+                            </TabsTrigger>
+                        ))}
+                    </TabsList>
 
-                    return (
-                        <Card key={eventType}>
-                            <CardHeader>
-                                <CardTitle className="capitalize">{eventType.replace(/_/g, ' ')}</CardTitle>
-                                <CardDescription>{totalTeams} teams competing.</CardDescription>
-                            </CardHeader>
-                            <CardContent>
-                                <ScrollArea>
-                                    <div className="flex gap-8 pb-4">
-                                        {Object.keys(eventRounds).sort((a,b) => Number(a) - Number(b)).map(roundNumberStr => {
-                                            const roundNumber = Number(roundNumberStr);
-                                            const roundMatches = eventRounds[roundNumber];
-                                            return (
-                                                <div key={roundNumber} className="flex flex-col gap-4 min-w-[300px]">
-                                                    <h4 className="text-lg font-semibold text-center mb-2">{getRoundName(roundNumber, eventType, totalTeams)}</h4>
-                                                    <div className="space-y-4">
-                                                        {roundMatches.map(match => (
-                                                            <div key={match.id} className="border rounded-lg p-3 text-sm">
-                                                                <div className={`flex flex-col ${match.winnerId === match.team1Id ? 'font-bold' : 'text-muted-foreground'}`}>
-                                                                    <span>{match.team1Name}</span>
-                                                                    <span className={match.winnerId === match.team1Id ? 'text-foreground/80' : ''}>{match.team1OrgName}</span>
-                                                                </div>
-                                                                <div className="flex items-center my-2">
-                                                                    <div className="flex-grow border-t border-dashed"></div>
-                                                                    <span className="flex-shrink mx-2 text-xs text-muted-foreground">VS</span>
-                                                                    <div className="flex-grow border-t border-dashed"></div>
-                                                                </div>
-                                                                <div className={`flex flex-col ${match.winnerId === match.team2Id ? 'font-bold' : 'text-muted-foreground'}`}>
-                                                                    <span>{match.team2Name}</span>
-                                                                     <span className={match.winnerId === match.team2Id ? 'text-foreground/80' : ''}>{match.team2OrgName}</span>
-                                                                </div>
-                                                                {match.status === 'COMPLETED' && (
-                                                                     <div className="text-center mt-2">
-                                                                        <Badge variant="secondary">{match.score}</Badge>
+                    {availableEvents.map(eventType => {
+                        const eventRounds = matchesByRound[eventType];
+                        if (!eventRounds || Object.keys(eventRounds).length === 0) return null;
+                        const totalTeams = teamCounts[eventType] || 0;
+
+                        return (
+                            <TabsContent key={eventType} value={eventType}>
+                                <Card className="bg-card/50">
+                                    <CardHeader>
+                                        <CardTitle className="text-3xl capitalize">{eventType.replace(/_/g, ' ')}</CardTitle>
+                                        <CardDescription className="text-base">{totalTeams} teams competing.</CardDescription>
+                                    </CardHeader>
+                                    <CardContent>
+                                        <ScrollArea>
+                                            <div className="flex gap-4 md:gap-8 pb-4">
+                                                {Object.keys(eventRounds).sort((a,b) => Number(a) - Number(b)).map(roundNumberStr => {
+                                                    const roundNumber = Number(roundNumberStr);
+                                                    const roundMatches = eventRounds[roundNumber];
+                                                    return (
+                                                        <div key={roundNumber} className="flex flex-col gap-6 min-w-[320px]">
+                                                            <h4 className="text-xl font-bold text-center text-primary tracking-wider uppercase mb-2">{getRoundName(roundNumber, eventType, totalTeams)}</h4>
+                                                            <div className="space-y-4">
+                                                                {roundMatches.map(match => (
+                                                                    <div key={match.id} className="border-2 rounded-xl p-4 text-base bg-background shadow-md transition-all hover:shadow-lg">
+                                                                        <div className={`flex flex-col ${match.winnerId === match.team1Id ? 'font-extrabold text-foreground' : 'text-muted-foreground'}`}>
+                                                                            <span className="text-lg">{match.team1Name}</span>
+                                                                            <span className={`text-sm ${match.winnerId === match.team1Id ? 'font-bold' : ''}`}>{match.team1OrgName}</span>
+                                                                        </div>
+                                                                        <div className="flex items-center my-3">
+                                                                            <div className="flex-grow border-t border-dashed"></div>
+                                                                            <span className="flex-shrink mx-3 text-sm font-bold text-muted-foreground">VS</span>
+                                                                            <div className="flex-grow border-t border-dashed"></div>
+                                                                        </div>
+                                                                        <div className={`flex flex-col ${match.winnerId === match.team2Id ? 'font-extrabold text-foreground' : 'text-muted-foreground'}`}>
+                                                                             <span className="text-lg">{match.team2Name}</span>
+                                                                             <span className={`text-sm ${match.winnerId === match.team2Id ? 'font-bold' : ''}`}>{match.team2OrgName}</span>
+                                                                        </div>
+                                                                        {match.status === 'COMPLETED' && (
+                                                                             <div className="text-center mt-3 pt-3 border-t">
+                                                                                <Badge variant="secondary" className="text-base px-4 py-1">{match.score}</Badge>
+                                                                            </div>
+                                                                        )}
                                                                     </div>
-                                                                )}
+                                                                ))}
                                                             </div>
-                                                        ))}
-                                                    </div>
-                                                </div>
-                                            )
-                                        })}
-                                    </div>
-                                    <ScrollBar orientation="horizontal" />
-                                </ScrollArea>
-                            </CardContent>
-                        </Card>
-                    )
-                })
+                                                        </div>
+                                                    )
+                                                })}
+                                            </div>
+                                            <ScrollBar orientation="horizontal" />
+                                        </ScrollArea>
+                                    </CardContent>
+                                </Card>
+                            </TabsContent>
+                        )
+                    })}
+                </Tabs>
             )}
         </div>
     )
 }
+
+    
