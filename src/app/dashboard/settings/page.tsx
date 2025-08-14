@@ -18,7 +18,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import type { User, UserRole } from '@/types';
 import { useAuth } from '@/hooks/use-auth';
-import { MoreHorizontal, Trash2, UserPlus, Edit, CheckCircle, ArrowLeft, Database, Loader2, Save } from 'lucide-react';
+import { MoreHorizontal, Trash2, UserPlus, Edit, CheckCircle, ArrowLeft, Database, Loader2, Save, GitBranch, Trophy, Users, Building, ListOrdered, Shield, Cog, LayoutDashboard } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -94,12 +94,15 @@ const userFormSchema = z.object({
 const userRoles: UserRole[] = ['super', 'admin', 'update', 'inquiry', 'individual'];
 
 const appModules = [
-    { id: 'dashboard', label: 'Dashboard' },
-    { id: 'tournament', label: 'Tournament Setup' },
-    { id: 'scheduler', label: 'Scheduler' },
-    { id: 'umpire', label: 'Umpire View' },
-    { id: 'match-history', label: 'Match History' },
-    { id: 'settings', label: 'System Settings' },
+    { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
+    { id: 'tournament', label: 'Tournament Setup', icon: Cog },
+    { id: 'organizations', label: 'Organizations', icon: Building },
+    { id: 'teams', label: 'Teams', icon: Users },
+    { id: 'scheduler', label: 'Scheduler', icon: ListOrdered },
+    { id: 'umpire', label: 'Umpire View', icon: Shield },
+    { id: 'draw', label: 'Tournament Draw', icon: GitBranch },
+    { id: 'match-history', label: 'Match History', icon: Trophy },
+    { id: 'settings', label: 'System Settings', icon: Settings },
 ];
 
 type RolePermissions = Record<UserRole, string[]>;
@@ -143,12 +146,14 @@ export default function SettingsPage() {
         setPermissions(fetchedPerms);
     } else {
         // Set default permissions if none found
+        const allModuleIds = appModules.map(m => m.id);
         const defaultPerms: RolePermissions = {
-            super: ['dashboard', 'tournament', 'scheduler', 'umpire', 'match-history', 'settings'],
-            admin: ['dashboard', 'tournament', 'scheduler', 'umpire', 'match-history', 'settings'],
-            update: ['dashboard', 'umpire', 'match-history'],
-            inquiry: ['dashboard', 'match-history'],
-            individual: ['dashboard', 'match-history'],
+            super: allModuleIds,
+            admin: allModuleIds,
+            update: ['dashboard', 'umpire', 'draw', 'match-history'],
+            inquiry: ['dashboard', 'draw', 'match-history'],
+            individual: ['dashboard', 'draw', 'match-history'],
+            court: [],
         };
         setPermissions(defaultPerms);
         // Optionally, save these defaults to Firestore
@@ -242,7 +247,7 @@ export default function SettingsPage() {
     try {
         const batch = writeBatch(db);
 
-        const collectionsToClear = ['users', 'organizations', 'teams', 'appData', 'matches', 'tournaments'];
+        const collectionsToClear = ['users', 'organizations', 'teams', 'appData', 'matches', 'tournaments', 'rolePermissions'];
         for (const coll of collectionsToClear) {
             const querySnapshot = await getDocs(collection(db, coll));
             querySnapshot.forEach(doc => {
@@ -358,32 +363,39 @@ export default function SettingsPage() {
                 </Button>
             </CardHeader>
             <CardContent>
-                <Table>
-                    <TableHeader>
-                        <TableRow>
-                            <TableHead>Module</TableHead>
-                            {userRoles.map(role => (
-                                <TableHead key={role} className="text-center capitalize">{role}</TableHead>
-                            ))}
-                        </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                        {appModules.map(module => (
-                            <TableRow key={module.id}>
-                                <TableCell className="font-medium">{module.label}</TableCell>
+                <div className="overflow-x-auto">
+                    <Table>
+                        <TableHeader>
+                            <TableRow>
+                                <TableHead>Module</TableHead>
                                 {userRoles.map(role => (
-                                    <TableCell key={role} className="text-center">
-                                        <Checkbox
-                                            checked={permissions[role]?.includes(module.id)}
-                                            onCheckedChange={(checked) => handlePermissionChange(role, module.id, !!checked)}
-                                            disabled={role === 'super'}
-                                        />
-                                    </TableCell>
+                                    <TableHead key={role} className="text-center capitalize">{role}</TableHead>
                                 ))}
                             </TableRow>
-                        ))}
-                    </TableBody>
-                </Table>
+                        </TableHeader>
+                        <TableBody>
+                            {appModules.map(module => (
+                                <TableRow key={module.id}>
+                                    <TableCell className="font-medium">
+                                        <div className="flex items-center gap-2">
+                                            <module.icon className="h-4 w-4" />
+                                            {module.label}
+                                        </div>
+                                    </TableCell>
+                                    {userRoles.map(role => (
+                                        <TableCell key={role} className="text-center">
+                                            <Checkbox
+                                                checked={permissions[role]?.includes(module.id)}
+                                                onCheckedChange={(checked) => handlePermissionChange(role, module.id, !!checked)}
+                                                disabled={role === 'super'}
+                                            />
+                                        </TableCell>
+                                    ))}
+                                </TableRow>
+                            ))}
+                        </TableBody>
+                    </Table>
+                </div>
             </CardContent>
         </Card>
       
