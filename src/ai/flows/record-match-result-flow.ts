@@ -88,7 +88,7 @@ const recordMatchResultFlow = ai.defineFlow(
         }
         
         updates.score = scoreSummary;
-        updates.winnerId = finalWinnerId;
+        updates.winnerId = finalWinnerId || completedMatch.team2Id; // Default to team2 if winner is still unresolved (e.g. tie)
         updates.status = 'COMPLETED';
         updates.live = null; // Clear live data on completion
 
