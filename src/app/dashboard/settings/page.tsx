@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -18,7 +18,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import type { User, UserRole } from '@/types';
 import { useAuth } from '@/hooks/use-auth';
-import { MoreHorizontal, Trash2, UserPlus, Edit, CheckCircle, ArrowLeft, Database, Loader2 } from 'lucide-react';
+import { MoreHorizontal, Trash2, UserPlus, Edit, CheckCircle, ArrowLeft, Database, Loader2, Save } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -64,9 +64,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { Checkbox } from '@/components/ui/checkbox';
 import { useToast } from '@/hooks/use-toast';
 import { db } from '@/lib/firebase';
-import { collection, getDocs, addDoc, deleteDoc, doc, query, where, updateDoc, writeBatch } from 'firebase/firestore';
+import { collection, getDocs, addDoc, deleteDoc, doc, query, where, updateDoc, writeBatch, setDoc } from 'firebase/firestore';
 import { mockUsers, mockAppData, mockOrganizations, mockTeams } from '@/lib/mock-data';
 import { useRouter } from 'next/navigation';
 
@@ -90,6 +91,20 @@ const userFormSchema = z.object({
   role: z.enum(['individual', 'update', 'admin', 'inquiry', 'super']),
 });
 
+const userRoles: UserRole[] = ['super', 'admin', 'update', 'inquiry', 'individual'];
+
+const appModules = [
+    { id: 'dashboard', label: 'Dashboard' },
+    { id: 'tournament', label: 'Tournament Setup' },
+    { id: 'scheduler', label: 'Scheduler' },
+    { id: 'umpire', label: 'Umpire View' },
+    { id: 'standings', label: 'Standings' },
+    { id: 'settings', label: 'System Settings' },
+];
+
+type RolePermissions = Record<UserRole, string[]>;
+
+
 export default function SettingsPage() {
   const { user } = useAuth();
   const { toast } = useToast();
@@ -107,15 +122,47 @@ export default function SettingsPage() {
   const [successModalMessage, setSuccessModalMessage] = useState('');
   
   const [isSeeding, setIsSeeding] = useState(false);
+  const [isSavingPermissions, setIsSavingPermissions] = useState(false);
   const [isSeedAlertOpen, setIsSeedAlertOpen] = useState(false);
 
-  const fetchUsers = async () => {
+  const [permissions, setPermissions] = useState<RolePermissions>({
+    super: [], admin: [], update: [], inquiry: [], individual: []
+  });
+
+  const fetchUsersAndPermissions = async () => {
     const usersSnap = await getDocs(collection(db, 'users'));
     setUsers(usersSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as User)));
+    
+    // Fetch permissions
+    const permsSnap = await getDocs(collection(db, 'rolePermissions'));
+    if (!permsSnap.empty) {
+        const fetchedPerms: any = {};
+        permsSnap.forEach(doc => {
+            fetchedPerms[doc.id as UserRole] = doc.data().modules;
+        });
+        setPermissions(fetchedPerms);
+    } else {
+        // Set default permissions if none found
+        const defaultPerms: RolePermissions = {
+            super: ['dashboard', 'tournament', 'scheduler', 'umpire', 'standings', 'settings'],
+            admin: ['dashboard', 'tournament', 'scheduler', 'umpire', 'standings', 'settings'],
+            update: ['dashboard', 'umpire', 'standings'],
+            inquiry: ['dashboard', 'standings'],
+            individual: ['dashboard', 'standings'],
+        };
+        setPermissions(defaultPerms);
+        // Optionally, save these defaults to Firestore
+        const batch = writeBatch(db);
+        Object.entries(defaultPerms).forEach(([role, modules]) => {
+            const docRef = doc(db, 'rolePermissions', role);
+            batch.set(docRef, { modules });
+        });
+        await batch.commit();
+    }
   };
 
   useEffect(() => {
-    fetchUsers();
+    fetchUsersAndPermissions();
   }, []);
 
   const userForm = useForm<z.infer<typeof userFormSchema>>({
@@ -243,7 +290,7 @@ export default function SettingsPage() {
             title: 'Database Reset!',
             description: 'Your database has been cleared and re-seeded with mock data.',
         });
-        await fetchUsers();
+        await fetchUsersAndPermissions();
 
     } catch (error) {
         console.error("Seeding failed:", error);
@@ -256,6 +303,34 @@ export default function SettingsPage() {
         setIsSeeding(false);
     }
   };
+  
+  const handlePermissionChange = (role: UserRole, moduleId: string, isChecked: boolean) => {
+    setPermissions(prev => {
+        const currentModules = prev[role] || [];
+        const newModules = isChecked
+            ? [...currentModules, moduleId]
+            : currentModules.filter(m => m !== moduleId);
+        return { ...prev, [role]: [...new Set(newModules)] };
+    });
+  };
+
+  const handleSavePermissions = async () => {
+    setIsSavingPermissions(true);
+    try {
+        const batch = writeBatch(db);
+        Object.entries(permissions).forEach(([role, modules]) => {
+            const docRef = doc(db, 'rolePermissions', role);
+            batch.set(docRef, { modules });
+        });
+        await batch.commit();
+        toast({ title: 'Permissions Saved', description: 'User role permissions have been updated successfully.' });
+    } catch (error) {
+        console.error('Failed to save permissions:', error);
+        toast({ title: 'Error', description: 'Failed to save permissions.', variant: 'destructive' });
+    } finally {
+        setIsSavingPermissions(false);
+    }
+  };
 
 
   return (
@@ -263,13 +338,54 @@ export default function SettingsPage() {
         <div className="flex justify-between items-start">
             <div>
                 <h1 className="text-3xl font-bold mb-2">System Settings</h1>
-                <p className="text-muted-foreground">Manage users and database operations.</p>
+                <p className="text-muted-foreground">Manage users, permissions, and database operations.</p>
             </div>
             <Button variant="outline" onClick={() => router.push('/dashboard')}>
                 <ArrowLeft className="mr-2" />
                 Back to Dashboard
             </Button>
         </div>
+        
+        <Card>
+            <CardHeader className="flex flex-row items-center justify-between">
+                <div>
+                    <CardTitle>Role-Based Access Control</CardTitle>
+                    <CardDescription>Define which modules each user role can access.</CardDescription>
+                </div>
+                <Button onClick={handleSavePermissions} disabled={isSavingPermissions}>
+                    {isSavingPermissions ? <Loader2 className="animate-spin" /> : <Save />}
+                    Save Permissions
+                </Button>
+            </CardHeader>
+            <CardContent>
+                <Table>
+                    <TableHeader>
+                        <TableRow>
+                            <TableHead>Module</TableHead>
+                            {userRoles.map(role => (
+                                <TableHead key={role} className="text-center capitalize">{role}</TableHead>
+                            ))}
+                        </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                        {appModules.map(module => (
+                            <TableRow key={module.id}>
+                                <TableCell className="font-medium">{module.label}</TableCell>
+                                {userRoles.map(role => (
+                                    <TableCell key={role} className="text-center">
+                                        <Checkbox
+                                            checked={permissions[role]?.includes(module.id)}
+                                            onCheckedChange={(checked) => handlePermissionChange(role, module.id, !!checked)}
+                                            disabled={role === 'super'}
+                                        />
+                                    </TableCell>
+                                ))}
+                            </TableRow>
+                        ))}
+                    </TableBody>
+                </Table>
+            </CardContent>
+        </Card>
       
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
