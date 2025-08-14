@@ -81,10 +81,13 @@ export default function SchedulerPage() {
         fetchAndSetData();
     }, []);
 
-    const { unassignedMatches, assignedMatches } = useMemo(() => {
+    const { unassignedMatches, busyCourts } = useMemo(() => {
         const unassigned = matches.filter(m => m.status === 'PENDING');
-        const assigned = matches.filter(m => m.status !== 'PENDING');
-        return { unassignedMatches: unassigned, assignedMatches: assigned };
+        const busy = new Set(matches
+            .filter(m => m.status === 'SCHEDULED' || m.status === 'IN_PROGRESS')
+            .map(m => m.courtName)
+        );
+        return { unassignedMatches: unassigned, busyCourts: busy };
     }, [matches]);
 
     const handleCourtChange = (matchId: string, courtName: string) => {
@@ -230,7 +233,7 @@ export default function SchedulerPage() {
                                                     <SelectValue placeholder="Select Court" />
                                                 </SelectTrigger>
                                                 <SelectContent>
-                                                    {tournament?.courtNames.map(court => (
+                                                    {tournament?.courtNames.filter(c => !busyCourts.has(c.name)).map(court => (
                                                         <SelectItem key={court.name} value={court.name}>
                                                             {court.name}
                                                         </SelectItem>
