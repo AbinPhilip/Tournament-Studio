@@ -10,6 +10,7 @@ import { useState, useEffect } from "react"
 import { db } from "@/lib/firebase"
 import { doc, getDoc, collection, onSnapshot, Unsubscribe } from "firebase/firestore"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
+import { Logo } from "@/components/logo"
 
 type NavItem = {
     id: string;
