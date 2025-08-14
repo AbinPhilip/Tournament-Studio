@@ -22,16 +22,16 @@ export const mockAppData: Omit<AppData, 'id'>[] = [
 ];
 
 export const mockOrganizations: Omit<Organization, 'id'>[] = [
-    { name: "St.Peter's & St.Paul's OSC", location: 'Koyambedu' },
-    { name: 'St.George OSC', location: 'Padi' },
-    { name: 'St.Gregorios OSC', location: 'Perambur' },
-    { name: 'St.Thomas OSC', location: 'Puzhuthivakkam' },
-    { name: 'Mar Gregorios OSC', location: 'Tambaram' },
-    { name: "St.Mary's OSC", location: 'Thiruvottiyur' },
-    { name: 'St.George OSC', location: 'Ramalingapuram' },
-    { name: 'St.Thomas Cathedral', location: 'Broadway' },
-    { name: "St.Mary's Cathedral", location: 'Coimbatore' },
-    { name: 'St.George OSC', location: 'Avadi' },
+    { name: "St.Peter's & St.Paul's OSC, Koyambedu", location: 'Koyambedu' },
+    { name: 'St.George OSC, Padi', location: 'Padi' },
+    { name: 'St.Gregorios OSC, Perambur', location: 'Perambur' },
+    { name: 'St.Thomas OSC, Puzhuthivakkam', location: 'Puzhuthivakkam' },
+    { name: 'Mar Gregorios OSC, Tambaram', location: 'Tambaram' },
+    { name: "St.Mary's OSC, Thiruvottiyur", location: 'Thiruvottiyur' },
+    { name: 'St.George OSC, Ramalingapuram', location: 'Ramalingapuram' },
+    { name: 'St.Thomas Cathedral, Broadway', location: 'Broadway' },
+    { name: "St.Mary's Cathedral, Coimbatore", location: 'Coimbatore' },
+    { name: 'St.George OSC, Avadi', location: 'Avadi' },
 ];
 
 // Changed `organizationId` to `organizationName` for more robust mapping during seed.
