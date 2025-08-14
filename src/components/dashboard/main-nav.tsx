@@ -9,6 +9,7 @@ import type { User, UserRole } from "@/types"
 import { useState, useEffect } from "react"
 import { db } from "@/lib/firebase"
 import { doc, getDoc, collection, onSnapshot, Unsubscribe } from "firebase/firestore"
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 
 type NavItem = {
     id: string;
@@ -40,7 +41,7 @@ const defaultPermissions: RolePermissions = {
 };
 
 
-export function MainNav({ user, isMobile = false }: { user: User | null, isMobile?: boolean }) {
+export function MainNav({ user, isMobile = false, isCollapsed = false }: { user: User | null, isMobile?: boolean, isCollapsed?: boolean }) {
   const pathname = usePathname();
   const [permissions, setPermissions] = useState<RolePermissions>(defaultPermissions);
   
@@ -81,9 +82,44 @@ export function MainNav({ user, isMobile = false }: { user: User | null, isMobil
 
 
   const navItems = allNavItems.filter(item => effectiveModuleIds.has(item.id));
+  
+  if (isCollapsed && !isMobile) {
+    return (
+        <TooltipProvider>
+            <nav className={cn("flex flex-col gap-2 items-center", isMobile ? "p-0" : "p-4")}>
+                {navItems.map(item => (
+                    <Tooltip key={item.href} delayDuration={0}>
+                        <TooltipTrigger asChild>
+                            <Link 
+                                href={item.href}
+                                className={cn(
+                                    "flex items-center justify-center h-10 w-10 rounded-lg text-muted-foreground transition-all hover:text-primary hover:bg-muted",
+                                    getIsActive(item.href, pathname) && "bg-muted text-primary",
+                                )}
+                            >
+                                <item.icon className="h-5 w-5" />
+                                <span className="sr-only">{item.label}</span>
+                            </Link>
+                        </TooltipTrigger>
+                        <TooltipContent side="right">
+                           <p>{item.label}</p>
+                        </TooltipContent>
+                    </Tooltip>
+                ))}
+            </nav>
+        </TooltipProvider>
+    )
+  }
 
   return (
       <nav className={cn("flex flex-col gap-2", isMobile ? "p-0" : "p-4")}>
+        {!isMobile && (
+            <div className="flex items-center pl-3 mb-2 h-10">
+                <Link href="/dashboard">
+                    <Logo />
+                </Link>
+            </div>
+        )}
         {navItems.map(item => (
             <Link 
                 key={item.href}
