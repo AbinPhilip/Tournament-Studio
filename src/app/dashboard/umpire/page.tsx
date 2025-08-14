@@ -2,7 +2,7 @@
 "use client";
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import { useForm } from 'react-hook-form';
+import { useForm, useFieldArray } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { Button } from '@/components/ui/button';
@@ -19,20 +19,35 @@ import { useToast } from '@/hooks/use-toast';
 import { db } from '@/lib/firebase';
 import { collection, getDocs, query, orderBy, Timestamp } from 'firebase/firestore';
 import type { Match, TeamType } from '@/types';
-import { Loader2, ArrowLeft, Pencil } from 'lucide-react';
+import { Loader2, ArrowLeft, Pencil, PlusCircle } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose, DialogDescription } from '@/components/ui/dialog';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { Checkbox } from '@/components/ui/checkbox';
 import { recordMatchResult } from '@/ai/flows/record-match-result-flow';
 
 
 const scoreFormSchema = z.object({
-  score: z.string().regex(/^\d{1,2}-\d{1,2}$/, { message: "Score must be in format '10-21' or 'BYE'" }),
   winnerId: z.string({ required_error: "Please select a winner." }),
+  isForfeited: z.boolean().default(false),
+  scores: z.array(z.object({
+    team1: z.coerce.number().int().min(0, "Score must be positive").max(100),
+    team2: z.coerce.number().int().min(0, "Score must be positive").max(100),
+  })).optional(),
+}).refine(data => {
+    // If not forfeited, scores must be provided
+    if (!data.isForfeited && (!data.scores || data.scores.length === 0)) {
+        return false;
+    }
+    return true;
+}, {
+    message: "At least one set score is required unless the match is forfeited.",
+    path: ["scores"],
 });
+
 
 // Function to get the total number of rounds for a knockout tournament
 const getTotalRounds = (teamCount: number) => {
@@ -57,6 +72,15 @@ export default function UmpirePage() {
 
     const form = useForm<z.infer<typeof scoreFormSchema>>({
         resolver: zodResolver(scoreFormSchema),
+        defaultValues: {
+            isForfeited: false,
+            scores: [{team1: 0, team2: 0}],
+        }
+    });
+
+    const { fields, append, remove } = useFieldArray({
+        control: form.control,
+        name: "scores"
     });
     
     const getRoundName = useCallback((round: number, eventType: TeamType) => {
@@ -108,7 +132,11 @@ export default function UmpirePage() {
     
     useEffect(() => {
         if (selectedMatch) {
-            form.reset({ score: selectedMatch.score || '', winnerId: selectedMatch.winnerId || undefined });
+            form.reset({
+                winnerId: selectedMatch.winnerId || undefined,
+                isForfeited: !!selectedMatch.forfeitedById,
+                scores: selectedMatch.scores && selectedMatch.scores.length > 0 ? selectedMatch.scores : [{team1: 0, team2: 0}],
+            });
             setIsDialogOpen(true);
         }
     }, [selectedMatch, form]);
@@ -127,8 +155,9 @@ export default function UmpirePage() {
         try {
             await recordMatchResult({
                 matchId: selectedMatch.id,
-                score: values.score,
+                scores: values.scores,
                 winnerId: values.winnerId,
+                isForfeited: values.isForfeited
             });
 
             toast({
@@ -159,6 +188,8 @@ export default function UmpirePage() {
     }, [matches]);
 
     const courtNames = useMemo(() => Object.keys(groupedMatchesByCourt).sort(), [groupedMatchesByCourt]);
+
+    const watchIsForfeited = form.watch('isForfeited');
 
 
     if (isLoading) {
@@ -254,19 +285,68 @@ export default function UmpirePage() {
                 </DialogHeader>
                 <Form {...form}>
                     <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+                        
                         <FormField
                             control={form.control}
-                            name="score"
+                            name="isForfeited"
                             render={({ field }) => (
-                                <FormItem>
-                                    <FormLabel>Final Score</FormLabel>
-                                    <FormControl>
-                                        <Input placeholder="e.g. 21-18" {...field} />
-                                    </FormControl>
+                                <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4">
+                                <FormControl>
+                                    <Checkbox
+                                    checked={field.value}
+                                    onCheckedChange={field.onChange}
+                                    />
+                                </FormControl>
+                                <div className="space-y-1 leading-none">
+                                    <FormLabel>
+                                    Match was forfeited
+                                    </FormLabel>
                                     <FormMessage />
+                                </div>
                                 </FormItem>
                             )}
                         />
+
+                        {!watchIsForfeited && (
+                            <div className="space-y-4">
+                                {fields.map((item, index) => (
+                                    <div key={item.id} className="flex items-center gap-2">
+                                        <FormLabel className="w-16">Set {index + 1}:</FormLabel>
+                                        <FormField
+                                            control={form.control}
+                                            name={`scores.${index}.team1`}
+                                            render={({ field }) => (
+                                                <FormItem>
+                                                    <FormControl><Input type="number" placeholder={selectedMatch?.team1Name} {...field} /></FormControl>
+                                                </FormItem>
+                                            )}
+                                        />
+                                        <span>-</span>
+                                        <FormField
+                                            control={form.control}
+                                            name={`scores.${index}.team2`}
+                                            render={({ field }) => (
+                                                <FormItem>
+                                                    <FormControl><Input type="number" placeholder={selectedMatch?.team2Name} {...field} /></FormControl>
+                                                </FormItem>
+                                            )}
+                                        />
+                                         <Button type="button" variant="ghost" size="sm" onClick={() => remove(index)}>X</Button>
+                                    </div>
+                                ))}
+                                 <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    className="mt-2"
+                                    onClick={() => append({ team1: 0, team2: 0 })}
+                                >
+                                    <PlusCircle className="mr-2 h-4 w-4" /> Add Set
+                                </Button>
+                                 <FormMessage>{form.formState.errors.scores?.message}</FormMessage>
+                            </div>
+                        )}
+                        
                          <FormField
                             control={form.control}
                             name="winnerId"
@@ -316,5 +396,3 @@ export default function UmpirePage() {
         </Card>
     );
 }
-
-    

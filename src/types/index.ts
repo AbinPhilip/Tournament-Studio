@@ -69,6 +69,8 @@ export interface Match {
     startTime: Date | Timestamp;
     status: MatchStatus;
     winnerId?: string;
-    score?: string;
+    score?: string; // e.g., "2-1" for sets, or "Forfeited"
+    scores?: { team1: number, team2: number }[]; // Array of scores per set
+    forfeitedById?: string;
     round?: number; // For knockout tournaments
 }

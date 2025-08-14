@@ -16,8 +16,12 @@ import type { Match, Tournament } from '@/types';
 
 const RecordMatchResultInputSchema = z.object({
   matchId: z.string(),
-  score: z.string().regex(/^\d{1,2}-\d{1,2}$/),
+  scores: z.array(z.object({
+      team1: z.coerce.number().int().min(0),
+      team2: z.coerce.number().int().min(0),
+  })).optional(),
   winnerId: z.string(),
+  isForfeited: z.boolean().optional(),
 });
 export type RecordMatchResultInput = z.infer<typeof RecordMatchResultInputSchema>;
 
@@ -56,10 +60,26 @@ const recordMatchResultFlow = ai.defineFlow(
     }
     const completedMatch = matchSnap.data() as Match;
 
+    let scoreSummary = '';
+    if (input.isForfeited) {
+        scoreSummary = 'Forfeited';
+    } else if (input.scores && input.scores.length > 0) {
+        let team1Sets = 0;
+        let team2Sets = 0;
+        input.scores.forEach(set => {
+            if(set.team1 > set.team2) team1Sets++;
+            else team2Sets++;
+        });
+        scoreSummary = `${team1Sets}-${team2Sets}`;
+    }
+
+
     batch.update(matchRef, {
-        score: input.score,
+        scores: input.scores || [],
+        score: scoreSummary,
         winnerId: input.winnerId,
         status: 'COMPLETED',
+        forfeitedById: input.isForfeited ? (input.winnerId === completedMatch.team1Id ? completedMatch.team2Id : completedMatch.team1Id) : null,
     });
 
     // 2. Check if this was a knockout match and if we need to schedule the next round
@@ -167,5 +187,3 @@ const recordMatchResultFlow = ai.defineFlow(
 export async function recordMatchResult(input: RecordMatchResultInput): Promise<void> {
     await recordMatchResultFlow(input);
 }
-
-    
