@@ -115,13 +115,13 @@ const schedulePrompt = ai.definePrompt({
         **A. If 'tournamentType' is 'knockout':**
 
         Follow this "picking of lots" procedure for EACH event type category:
-        1.  **Identify Teams:** Get the list of all N players/teams for the category.
-        2.  **Calculate Byes:** A "bye" is a pass to the next round. A bye is needed if N is not a power of 2.
+        1.  **Sort Teams:** First, take all teams for the event and sort them in ascending order based on their 'lotNumber'.
+        2.  **Calculate Byes:** A "bye" is a pass to the next round. A bye is needed if the total number of teams (N) is not a power of 2.
             *   Find the next highest power of 2 (P). (e.g., if N=13, P=16).
             *   Number of byes = P - N. (if N=13, byes = 3).
         3.  **Assign Byes and Matches:**
-            *   The teams with the lowest lot numbers from 1 up to the number of byes (P-N) receive a bye. Do NOT generate a match for them. They are considered winners of round 1.
-            *   The remaining teams are paired up sequentially based on their lot numbers. For example, the team with the next lot number plays the one after it, and so on.
+            *   The teams with the lowest lot numbers (from the sorted list) receive a bye. Do NOT generate a match for them. They are considered winners of round 1. The number of byes is equal to (P - N).
+            *   The remaining teams are paired up sequentially based on their position in the sorted list. For example, the team with the next lowest lot number plays the one after it, and so on.
         4.  **Set Round Number:** For all generated matches, set the 'round' field to 1.
 
         **B. If 'tournamentType' is 'round-robin':**
