@@ -1,7 +1,7 @@
 
 "use client";
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -23,7 +23,7 @@ import {
     SelectValue,
 } from '@/components/ui/select';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { MoreHorizontal, Trash2, Edit, CheckCircle, Users } from 'lucide-react';
+import { MoreHorizontal, Trash2, Edit, CheckCircle, Users, ArrowUpDown } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import { db } from '@/lib/firebase';
@@ -236,6 +236,7 @@ export default function TeamsPage() {
   const inlineFileInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
   const [originalLotNumbers, setOriginalLotNumbers] = useState<Record<string, number | undefined>>({});
   const [isSuccessModalOpen, setIsSuccessModalOpen] = useState(false);
+  const [sortConfig, setSortConfig] = useState<{ key: string; direction: 'ascending' | 'descending' } | null>(null);
 
   const teamForm = useForm<z.infer<typeof teamFormSchema>>({
     resolver: zodResolver(teamFormSchema),
@@ -310,7 +311,7 @@ export default function TeamsPage() {
         const q = query(teamsRef, 
             where('organizationId', '==', organizationId),
             where('player1Name', '==', player1Name),
-            where('player2Name', '==', (player2Name || null)) // Firestore needs null for non-existence
+            where('player2Name', '==', (player2Name || '')) 
         );
         
         const querySnapshot = await getDocs(q);
@@ -468,6 +469,41 @@ export default function TeamsPage() {
     }
   };
 
+  const sortedTeams = useMemo(() => {
+    let sortableTeams = [...teams];
+    if (sortConfig !== null) {
+      sortableTeams.sort((a, b) => {
+        let aValue: any;
+        let bValue: any;
+
+        if (sortConfig.key === 'organizationName') {
+            aValue = getOrgName(a.organizationId);
+            bValue = getOrgName(b.organizationId);
+        } else {
+            aValue = a[sortConfig.key as keyof Team] ?? '';
+            bValue = b[sortConfig.key as keyof Team] ?? '';
+        }
+
+        if (aValue < bValue) {
+          return sortConfig.direction === 'ascending' ? -1 : 1;
+        }
+        if (aValue > bValue) {
+          return sortConfig.direction === 'ascending' ? 1 : -1;
+        }
+        return 0;
+      });
+    }
+    return sortableTeams;
+  }, [teams, organizations, sortConfig]);
+
+  const requestSort = (key: string) => {
+    let direction: 'ascending' | 'descending' = 'ascending';
+    if (sortConfig && sortConfig.key === key && sortConfig.direction === 'ascending') {
+      direction = 'descending';
+    }
+    setSortConfig({ key, direction });
+  };
+
 
   return (
     <div className="space-y-8 p-4 md:p-8">
@@ -508,16 +544,31 @@ export default function TeamsPage() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Lot #</TableHead>
+                  <TableHead>
+                    <Button variant="ghost" onClick={() => requestSort('lotNumber')}>
+                      Lot #
+                      <ArrowUpDown className="ml-2 h-4 w-4" />
+                    </Button>
+                  </TableHead>
                   <TableHead>Photo</TableHead>
-                  <TableHead>Event</TableHead>
+                  <TableHead>
+                     <Button variant="ghost" onClick={() => requestSort('type')}>
+                        Event
+                        <ArrowUpDown className="ml-2 h-4 w-4" />
+                    </Button>
+                  </TableHead>
                   <TableHead>Players</TableHead>
-                  <TableHead>Organization</TableHead>
+                  <TableHead>
+                    <Button variant="ghost" onClick={() => requestSort('organizationName')}>
+                        Organization
+                        <ArrowUpDown className="ml-2 h-4 w-4" />
+                    </Button>
+                  </TableHead>
                   <TableHead><span className="sr-only">Actions</span></TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {teams.map((t) => (
+                {sortedTeams.map((t) => (
                   <TableRow key={t.id}>
                     <TableCell>
                       <Input
