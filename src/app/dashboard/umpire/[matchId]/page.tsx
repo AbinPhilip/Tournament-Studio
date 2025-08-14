@@ -178,61 +178,22 @@ export default function LiveScorerPage() {
          }
     };
     
-    const pointsToWinSet = tournament?.pointsPerSet || 21;
-    
-    // Game logic calculations
-    const { isDeuce, team1MatchPoint, team2MatchPoint } = useMemo(() => {
-        if (!match?.live) return { isDeuce: false, team1MatchPoint: false, team2MatchPoint: false };
-        const { team1Points, team2Points } = match.live;
-        const deucePoint = pointsToWinSet - 1;
-        
-        const deuce = team1Points >= deucePoint && team1Points === team2Points;
-        const matchPoint = (points: number, otherPoints: number) => {
-            if (points < deucePoint) return false;
-            // The score is 29-29 in a 30-point game, or (pointsToWinSet-1) in others
-            if (points === (pointsToWinSet > 21 ? 29 : deucePoint) && points === otherPoints) return true;
-            if (points >= deucePoint && otherPoints >= deucePoint) return points === otherPoints + 1;
-            return points === deucePoint; // Reaching win-point first
-        };
-        return {
-            isDeuce: deuce,
-            team1MatchPoint: matchPoint(team1Points, team2Points),
-            team2MatchPoint: matchPoint(team2Points, team1Points)
-        };
-    }, [match, pointsToWinSet]);
-    
-    const canFinalizeSet = useMemo(() => {
-        if (!match?.live) return false;
-        const { team1Points, team2Points } = match.live;
-        const p1 = Math.max(team1Points, team2Points);
-        const p2 = Math.min(team1Points, team2Points);
-        
-        // For standard 21 point games, win cap is 30. We can generalize this.
-        const cap = pointsToWinSet > 21 ? 30 : pointsToWinSet + 9; 
-
-        if (p1 >= cap) return true; // Win by reaching cap
-        if (p1 >= pointsToWinSet && (p1 - p2 >= 2)) return true; // Win by 2 points
-        return false;
-    }, [match, pointsToWinSet]);
-    
-    const canFinalizeMatch = useMemo(() => {
-        if (!match || !tournament?.bestOf) return false;
-        const setsToWin = Math.ceil(tournament.bestOf / 2);
-        
-        let team1Sets = 0;
-        let team2Sets = 0;
-        (match.scores || []).forEach(set => {
-            if (set.team1 > set.team2) team1Sets++;
-            else team2Sets++;
+    const { team1SetsWon, team2SetsWon } = useMemo(() => {
+        if (!match || !match.scores) return { team1SetsWon: 0, team2SetsWon: 0 };
+        let team1SetsWon = 0;
+        let team2SetsWon = 0;
+        match.scores.forEach(set => {
+            if (set.team1 > set.team2) team1SetsWon++;
+            else team2SetsWon++;
         });
-
-        return team1Sets >= setsToWin || team2Sets >= setsToWin;
-    }, [match, tournament]);
-
+        return { team1SetsWon, team2SetsWon };
+    }, [match]);
 
     if (isLoading || !match || !tournament) {
         return <div className="flex h-screen w-full items-center justify-center"><Loader2 className="h-16 w-16 animate-spin" /></div>;
     }
+    
+    const { team1Points = 0, team2Points = 0, servingTeamId, currentSet = 1 } = match.live || {};
 
     return (
         <div className="container mx-auto p-4 md:p-8">
@@ -241,7 +202,7 @@ export default function LiveScorerPage() {
                     <div className="flex justify-between items-start flex-wrap gap-4">
                         <div>
                             <CardTitle className="text-2xl md:text-3xl">Live Scorer</CardTitle>
-                            <CardDescription>Court: {match.courtName} / Best of {tournament.bestOf} sets / {pointsToWinSet} points per set</CardDescription>
+                            <CardDescription>Court: {match.courtName}</CardDescription>
                         </div>
                          <Button variant="outline" onClick={() => router.push('/dashboard/umpire')}>
                             <ArrowLeft /> Back to Umpire View
@@ -253,27 +214,20 @@ export default function LiveScorerPage() {
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-8 items-start text-center">
                        <TeamScorePanel 
                             teamName={match.team1Name} 
-                            points={match.live?.team1Points || 0}
-                            isServing={match.live?.servingTeamId === match.team1Id}
+                            points={team1Points}
+                            setsWon={team1SetsWon}
+                            isServing={servingTeamId === match.team1Id}
                             onPointChange={(delta) => handlePointChange('team1', delta)}
-                            isMatchPoint={team1MatchPoint}
                        />
                        <TeamScorePanel 
                             teamName={match.team2Name} 
-                            points={match.live?.team2Points || 0}
-                            isServing={match.live?.servingTeamId === match.team2Id}
+                            points={team2Points}
+                            setsWon={team2SetsWon}
+                            isServing={servingTeamId === match.team2Id}
                             onPointChange={(delta) => handlePointChange('team2', delta)}
-                            isMatchPoint={team2MatchPoint}
                        />
                     </div>
                     
-                    {/* Game State Indicator */}
-                    {(isDeuce || team1MatchPoint || team2MatchPoint) &&
-                        <div className="text-center font-bold text-2xl text-accent animate-pulse">
-                            {isDeuce ? "DEUCE" : "MATCH POINT"}
-                        </div>
-                    }
-
                     {/* Previous Sets */}
                     {match.scores && match.scores.length > 0 && (
                         <div className="text-center">
@@ -287,17 +241,17 @@ export default function LiveScorerPage() {
                     {/* Controls */}
                     <div className="border-t pt-6 space-y-4">
                         <div className="flex flex-wrap gap-4 justify-center">
-                             <Button variant="secondary" onClick={handleServiceChange} disabled={isSubmitting || canFinalizeMatch}>
+                             <Button variant="secondary" onClick={handleServiceChange} disabled={isSubmitting}>
                                 <Repeat className="mr-2"/> Change Service
                             </Button>
-                            <Button variant="default" onClick={handleFinalizeSet} disabled={!canFinalizeSet || isSubmitting || canFinalizeMatch}>
-                                <Send className="mr-2"/> Finalize Set {match.live?.currentSet}
+                            <Button variant="default" onClick={handleFinalizeSet} disabled={isSubmitting}>
+                                <Send className="mr-2"/> Finalize Set {currentSet}
                             </Button>
                         </div>
                         
                          <AlertDialog>
                             <AlertDialogTrigger asChild>
-                                <Button variant="destructive" className="w-full" disabled={isSubmitting || !canFinalizeMatch}>Finalize Match</Button>
+                                <Button variant="destructive" className="w-full" disabled={isSubmitting}>Finalize Match</Button>
                             </AlertDialogTrigger>
                             <AlertDialogContent>
                                 <AlertDialogHeader>
@@ -308,11 +262,10 @@ export default function LiveScorerPage() {
                                 </AlertDialogHeader>
                                 <div className="space-y-4 py-4">
                                      <Button 
-                                        onClick={() => handleFinalizeMatch(match.live && match.live.team1Points > match.live.team2Points ? match.team1Id : match.team2Id)} 
+                                        onClick={() => handleFinalizeMatch(team1Points > team2Points ? match.team1Id : match.team2Id)} 
                                         className="w-full bg-green-600 hover:bg-green-700"
-                                        disabled={!canFinalizeSet}
                                      >
-                                         <CheckCircle className="mr-2"/> Declare Winner & Save Score
+                                         <CheckCircle className="mr-2"/> Declare Winner & Save Final Score
                                     </Button>
                                     <div className="relative">
                                         <div className="absolute inset-0 flex items-center"><span className="w-full border-t" /></div>
@@ -341,11 +294,12 @@ export default function LiveScorerPage() {
 
 
 // Helper component for team panel
-function TeamScorePanel({ teamName, points, isServing, onPointChange, isMatchPoint }: { teamName: string, points: number, isServing: boolean, onPointChange: (delta: 1 | -1) => void, isMatchPoint: boolean }) {
+function TeamScorePanel({ teamName, points, setsWon, isServing, onPointChange }: { teamName: string, points: number, setsWon: number, isServing: boolean, onPointChange: (delta: 1 | -1) => void }) {
     return (
         <div className={`p-6 rounded-lg border-4 transition-all ${isServing ? 'border-primary shadow-lg' : 'border-muted'}`}>
-            <h3 className="text-xl font-semibold mb-4 truncate h-6">{teamName}</h3>
-            <p className={`text-7xl font-bold mb-4 transition-colors ${isMatchPoint ? 'text-accent' : 'text-foreground'}`}>{points}</p>
+            <h3 className="text-xl font-semibold mb-2 truncate h-6">{teamName}</h3>
+            <p className="text-sm font-bold text-muted-foreground mb-2">Sets Won: {setsWon}</p>
+            <p className="text-7xl font-bold mb-4">{points}</p>
             <div className="flex justify-center gap-2">
                 <Button onClick={() => onPointChange(1)} size="lg" className="w-16 text-xl">+</Button>
                 <Button onClick={() => onPointChange(-1)} size="lg" variant="outline" className="w-16 text-xl">-</Button>

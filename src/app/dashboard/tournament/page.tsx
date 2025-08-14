@@ -69,8 +69,6 @@ const tournamentFormSchema = z.object({
   tournamentType: z.enum(['round-robin', 'knockout'], { required_error: 'Tournament type is required.' }),
   numberOfCourts: z.coerce.number().min(1, { message: 'There must be at least 1 court.' }).max(50, { message: "Cannot exceed 50 courts."}),
   courtNames: z.array(z.object({ name: z.string().min(1, {message: 'Court name cannot be empty.'}) })),
-  bestOf: z.coerce.number().int().min(1, "Must be at least 1 set.").max(9, "Cannot exceed 9 sets.").refine(val => val % 2 !== 0, { message: "Number of sets must be an odd number." }),
-  pointsPerSet: z.coerce.number().int().min(1, "Points must be at least 1.").max(100, "Cannot exceed 100 points."),
 });
 
 const organizationFormSchema = z.object({
@@ -147,8 +145,6 @@ export default function TournamentSettingsPage() {
       tournamentType: 'knockout',
       numberOfCourts: 4,
       courtNames: Array.from({ length: 4 }, () => ({ name: '' })),
-      bestOf: 3,
-      pointsPerSet: 21,
     },
   });
   
@@ -198,8 +194,6 @@ export default function TournamentSettingsPage() {
           form.reset({
             ...data,
             date: data.date.toDate(),
-            bestOf: data.bestOf || 3,
-            pointsPerSet: data.pointsPerSet || 21,
           });
         } else {
             setTournamentDocRef(null);
@@ -808,25 +802,12 @@ export default function TournamentSettingsPage() {
                         />
                          <FormField
                             control={form.control}
-                            name="bestOf"
+                            name="numberOfCourts"
                             render={({ field }) => (
                                 <FormItem>
-                                <FormLabel>Best of Sets</FormLabel>
+                                <FormLabel>Number of Courts</FormLabel>
                                 <FormControl>
-                                    <Input type="number" min="1" step="2" {...field} />
-                                </FormControl>
-                                <FormMessage />
-                                </FormItem>
-                            )}
-                        />
-                        <FormField
-                            control={form.control}
-                            name="pointsPerSet"
-                            render={({ field }) => (
-                                <FormItem>
-                                <FormLabel>Points per Set</FormLabel>
-                                <FormControl>
-                                    <Input type="number" min="1" {...field} />
+                                    <Input type="number" min="1" max="50" {...field} />
                                 </FormControl>
                                 <FormMessage />
                                 </FormItem>
@@ -834,20 +815,6 @@ export default function TournamentSettingsPage() {
                         />
                     </div>
                     
-
-                    <FormField
-                      control={form.control}
-                      name="numberOfCourts"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Number of Courts</FormLabel>
-                          <FormControl>
-                            <Input type="number" min="1" max="50" {...field} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
 
                     <div>
                       <FormLabel>Court Names</FormLabel>

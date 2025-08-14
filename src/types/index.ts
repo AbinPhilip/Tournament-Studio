@@ -54,8 +54,6 @@ export interface Tournament {
     date: Date | Timestamp;
     status?: TournamentStatus;
     startedAt?: Date | Timestamp;
-    bestOf?: number;
-    pointsPerSet?: number;
 }
 
 export type MatchStatus = 'PENDING' | 'SCHEDULED' | 'IN_PROGRESS' | 'COMPLETED';
