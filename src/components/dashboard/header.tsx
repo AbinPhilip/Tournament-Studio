@@ -5,7 +5,7 @@ import Link from "next/link";
 import { Logo } from '@/components/logo';
 import { UserNav } from '@/components/dashboard/user-nav';
 import type { User } from '@/types';
-import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { Menu } from "lucide-react";
 import { MainNav } from "./main-nav";
@@ -23,6 +23,9 @@ export function DashboardHeader({ user }: { user: User | null }) {
                     </Button>
                 </SheetTrigger>
                 <SheetContent side="left">
+                    <SheetHeader>
+                        <SheetTitle className="sr-only">Main Menu</SheetTitle>
+                    </SheetHeader>
                     <Link href="/dashboard" className="mb-6">
                         <Logo />
                     </Link>
