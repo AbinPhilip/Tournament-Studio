@@ -26,31 +26,25 @@ export function MainNav({ user, isMobile = false }: { user: User | null, isMobil
 
   useEffect(() => {
     const fetchPermissions = async () => {
-        if (user?.role && user.role !== 'court') { // Court umpires don't need nav items
+        if (user?.role && user.role !== 'court') {
             try {
                 const permDocRef = doc(db, 'rolePermissions', user.role);
                 const permDocSnap = await getDoc(permDocRef);
                 if (permDocSnap.exists()) {
                     setAllowedModules(permDocSnap.data().modules);
                 } else {
-                    const defaultPerms = {
-                        super: ['dashboard', 'tournament', 'scheduler', 'umpire', 'standings', 'settings'],
-                        admin: ['dashboard', 'tournament', 'scheduler', 'umpire', 'standings', 'settings'],
-                        update: ['dashboard', 'umpire', 'standings'],
+                    // Fallback permissions if no document is found in Firestore
+                    if (user.role === 'super' || user.role === 'admin') {
+                        setAllowedModules(allNavItems.map(item => item.id));
+                        return;
+                    }
+                    const defaultPerms: any = {
+                        update: ['dashboard', 'court-view', 'standings'],
                         inquiry: ['dashboard', 'standings'],
                         individual: ['dashboard', 'standings'],
                     };
-
-                    const modules = defaultPerms[user.role as keyof typeof defaultPerms] || ['dashboard'];
+                     const modules = defaultPerms[user.role] || ['dashboard'];
                     setAllowedModules(modules);
-                    
-                    // Save default permissions to Firestore if they don't exist
-                    const batch = writeBatch(db);
-                    Object.entries(defaultPerms).forEach(([role, modules]) => {
-                        const docRef = doc(db, 'rolePermissions', role);
-                        batch.set(docRef, { modules });
-                    });
-                    await batch.commit();
                 }
             } catch (error) {
                 console.error("Failed to fetch permissions, using fallback.", error);
