@@ -90,8 +90,10 @@ export default function CourtViewPage() {
     };
 
     const groupedMatchesByCourt = useMemo(() => {
-        return matches.reduce((acc, match) => {
-            const courtName = match.courtName || "Unassigned";
+        // Filter out unassigned matches before grouping
+        const assignedMatches = matches.filter(match => match.courtName);
+        return assignedMatches.reduce((acc, match) => {
+            const courtName = match.courtName; // No need for "Unassigned" fallback
             if (!acc[courtName]) {
                 acc[courtName] = [];
             }
@@ -101,11 +103,8 @@ export default function CourtViewPage() {
     }, [matches]);
 
     const courtNames = useMemo(() => {
-        const sortedNames = Object.keys(groupedMatchesByCourt).sort((a, b) => {
-            if (a === 'Unassigned') return 1;
-            if (b === 'Unassigned') return -1;
-            return a.localeCompare(b);
-        });
+        // Sort the court names alphabetically
+        const sortedNames = Object.keys(groupedMatchesByCourt).sort((a, b) => a.localeCompare(b));
         return sortedNames;
     }, [groupedMatchesByCourt]);
 
@@ -135,11 +134,11 @@ export default function CourtViewPage() {
                 </div>
             </CardHeader>
             <CardContent className="space-y-6">
-                {matches.length === 0 ? (
+                {Object.keys(groupedMatchesByCourt).length === 0 ? (
                     <div className="text-center py-12">
-                        <p className="text-muted-foreground">No matches scheduled.</p>
-                        <Button className="mt-4" onClick={() => router.push('/dashboard/tournament')}>
-                            Go to Tournament Setup
+                        <p className="text-muted-foreground">No matches have been assigned to courts yet.</p>
+                        <Button className="mt-4" onClick={() => router.push('/dashboard/scheduler')}>
+                            Go to Scheduler
                         </Button>
                     </div>
                 ) : (
@@ -176,7 +175,7 @@ export default function CourtViewPage() {
                                                     </Badge>
                                                 </TableCell>
                                                 <TableCell className="text-right">
-                                                    <Button variant="ghost" size="icon" onClick={() => handleScorerClick(match)} disabled={match.status === 'COMPLETED' || courtName === 'Unassigned'}>
+                                                    <Button variant="ghost" size="icon" onClick={() => handleScorerClick(match)} disabled={match.status === 'COMPLETED'}>
                                                         <Gamepad2 className="h-5 w-5"/>
                                                     </Button>
                                                 </TableCell>
