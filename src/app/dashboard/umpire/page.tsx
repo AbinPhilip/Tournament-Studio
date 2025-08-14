@@ -280,7 +280,8 @@ export default function UmpirePage() {
                 <DialogHeader>
                     <DialogTitle>Record Score</DialogTitle>
                     <DialogDescription>
-                        Enter the final score for: <span className="font-semibold">{selectedMatch?.team1Name} vs {selectedMatch?.team2Name}</span>
+                        Enter the final score for: <span className="font-semibold">{selectedMatch?.team1Name} vs {selectedMatch?.team2Name}</span>.
+                        Manually selecting a winner is the final authority, especially for tie-breakers.
                     </DialogDescription>
                 </DialogHeader>
                 <Form {...form}>
@@ -352,7 +353,7 @@ export default function UmpirePage() {
                             name="winnerId"
                             render={({ field }) => (
                                 <FormItem className="space-y-3">
-                                <FormLabel>Select Winner</FormLabel>
+                                <FormLabel>Select Winner (Final Decision)</FormLabel>
                                 <FormControl>
                                     <RadioGroup
                                     onValueChange={field.onChange}
