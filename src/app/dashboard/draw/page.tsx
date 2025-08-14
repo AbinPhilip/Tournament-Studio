@@ -115,6 +115,38 @@ export default function DrawPage() {
         );
     }
 
+    const MatchCard = ({ match }: { match: Match }) => {
+        const isBye = match.team2Id === 'BYE';
+        return (
+            <div key={match.id} className="border-2 rounded-xl p-4 text-base bg-background shadow-md transition-all hover:shadow-lg">
+                <div className={`flex flex-col ${match.winnerId === match.team1Id ? 'font-extrabold text-foreground' : 'text-muted-foreground'}`}>
+                    <span className="text-lg">{match.team1Name}</span>
+                    <span className="text-sm font-bold">{match.team1OrgName}</span>
+                </div>
+                <div className="flex items-center my-3">
+                    <div className="flex-grow border-t border-dashed"></div>
+                    <span className="flex-shrink mx-3 text-sm font-bold text-muted-foreground">VS</span>
+                    <div className="flex-grow border-t border-dashed"></div>
+                </div>
+                {isBye ? (
+                    <div className="flex flex-col items-center justify-center h-[56px]">
+                        <span className="text-lg font-bold text-primary">BYE</span>
+                    </div>
+                ) : (
+                    <div className={`flex flex-col ${match.winnerId === match.team2Id ? 'font-extrabold text-foreground' : 'text-muted-foreground'}`}>
+                        <span className="text-lg">{match.team2Name}</span>
+                        <span className="text-sm font-bold">{match.team2OrgName}</span>
+                    </div>
+                )}
+                {match.status === 'COMPLETED' && !isBye && (
+                    <div className="text-center mt-3 pt-3 border-t">
+                        <Badge variant="secondary" className="text-base px-4 py-1">{match.score}</Badge>
+                    </div>
+                )}
+            </div>
+        );
+    };
+
     return (
         <div className="space-y-8">
              <div className="p-4 md:p-0">
@@ -166,26 +198,7 @@ export default function DrawPage() {
                                                             <h4 className="text-xl font-bold text-center text-primary tracking-wider uppercase mb-2">{getRoundName(roundNumber, eventType, totalTeams)}</h4>
                                                             <div className="space-y-4">
                                                                 {roundMatches.map(match => (
-                                                                    <div key={match.id} className="border-2 rounded-xl p-4 text-base bg-background shadow-md transition-all hover:shadow-lg">
-                                                                        <div className={`flex flex-col ${match.winnerId === match.team1Id ? 'font-extrabold text-foreground' : 'text-muted-foreground'}`}>
-                                                                            <span className="text-lg">{match.team1Name}</span>
-                                                                            <span className="text-sm font-bold">{match.team1OrgName}</span>
-                                                                        </div>
-                                                                        <div className="flex items-center my-3">
-                                                                            <div className="flex-grow border-t border-dashed"></div>
-                                                                            <span className="flex-shrink mx-3 text-sm font-bold text-muted-foreground">VS</span>
-                                                                            <div className="flex-grow border-t border-dashed"></div>
-                                                                        </div>
-                                                                        <div className={`flex flex-col ${match.winnerId === match.team2Id ? 'font-extrabold text-foreground' : 'text-muted-foreground'}`}>
-                                                                             <span className="text-lg">{match.team2Name}</span>
-                                                                             <span className="text-sm font-bold">{match.team2OrgName}</span>
-                                                                        </div>
-                                                                        {match.status === 'COMPLETED' && (
-                                                                             <div className="text-center mt-3 pt-3 border-t">
-                                                                                <Badge variant="secondary" className="text-base px-4 py-1">{match.score}</Badge>
-                                                                            </div>
-                                                                        )}
-                                                                    </div>
+                                                                    <MatchCard key={match.id} match={match} />
                                                                 ))}
                                                             </div>
                                                         </div>

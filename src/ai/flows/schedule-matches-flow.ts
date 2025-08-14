@@ -76,6 +76,7 @@ const MatchSchema = z.object({
     eventType: z.enum(['singles', 'mens_doubles', 'womens_doubles', 'mixed_doubles']),
     status: z.enum(['PENDING', 'SCHEDULED', 'IN_PROGRESS', 'COMPLETED']),
     round: z.number().optional(),
+    winnerId: z.string().optional(),
 });
 
 const ScheduleMatchesOutputSchema = z.object({
@@ -106,9 +107,8 @@ const schedulePrompt = ai.definePrompt({
 
         General Rules:
         1.  **Group by Event:** All scheduling must happen independently for each event type (e.g., 'mens_doubles', 'singles'). Matches must only be between teams of the same type.
-        2.  **Initial Status:** Set the initial 'status' of all generated matches to 'PENDING'.
-        3.  **Organization Names**: You MUST use the 'organizationName' field provided for each team to populate team1OrgName and team2OrgName in the output.
-        4.  **Use Lot Numbers**: All pairings must be determined by the provided 'lotNumber' for each team. Do not shuffle or randomize. Pair lot #1 vs lot #2, #3 vs #4, etc.
+        2.  **Organization Names**: You MUST use the 'organizationName' field provided for each team to populate team1OrgName and team2OrgName in the output.
+        3.  **Use Lot Numbers**: All pairings must be determined by the provided 'lotNumber' for each team. Do not shuffle or randomize. Pair lot #1 vs lot #2, #3 vs #4, etc.
 
         --- SCHEDULING ALGORITHM BY TOURNAMENT TYPE ---
 
@@ -119,16 +119,21 @@ const schedulePrompt = ai.definePrompt({
         2.  **Calculate Byes:** A "bye" is a pass to the next round. A bye is needed if the total number of teams (N) is not a power of 2.
             *   Find the next highest power of 2 (P). (e.g., if N=13, P=16).
             *   Number of byes = P - N. (if N=13, byes = 3).
-        3.  **Assign Byes and Matches:**
-            *   The teams with the lowest lot numbers (from the sorted list) receive a bye. Do NOT generate a match for them. They are considered winners of round 1. The number of byes is equal to (P - N).
-            *   The remaining teams are paired up sequentially based on their position in the sorted list. For example, the team with the next lowest lot number plays the one after it, and so on.
-        4.  **Set Round Number:** For all generated matches, set the 'round' field to 1.
+        3.  **Assign Byes and Matches for Round 1:**
+            *   The teams with the *lowest* lot numbers (from the sorted list) receive a bye. For each of these teams, you MUST generate a match object.
+            *   In this "bye" match, set 'team1Id' to the team's ID and 'team2Id' to the literal string "BYE".
+            *   Set 'team2Name' and 'team2OrgName' to "BYE".
+            *   Set the match 'status' to 'COMPLETED' and the 'winnerId' to the 'team1Id'.
+            *   The remaining teams (those that did not get a bye) are paired up sequentially based on their position in the sorted list. For example, the team with the next lowest lot number plays the one after it, and so on.
+            *   For these regular matches, set the initial 'status' of all generated matches to 'PENDING'.
+        4.  **Set Round Number:** For ALL matches generated in this process (including bye matches), set the 'round' field to 1.
 
         **B. If 'tournamentType' is 'round-robin':**
         
         Follow this procedure for EACH event type category:
         1.  **Generate All Pairings:** Create a list of all possible unique pairings based on lot number.
-        2.  **Order by Lot Number**: Ensure the generated matches are ordered logically based on the lot numbers (e.g., pairings involving lower lot numbers appear first).
+        2.  **Set Initial Status:** Set the initial 'status' of all generated matches to 'PENDING'.
+        3.  **Order by Lot Number**: Ensure the generated matches are ordered logically based on the lot numbers (e.g., pairings involving lower lot numbers appear first).
 
         Now, generate the complete list of matches in the required JSON format according to these rules.
     `,
@@ -169,7 +174,3 @@ export async function scheduleMatches(input: ScheduleMatchesInput): Promise<Omit
     const result = await scheduleMatchesFlow(input);
     return result.matches;
 }
-
-    
-
-    
