@@ -86,6 +86,7 @@ export default function SchedulerPage() {
         const busy = new Set(matches
             .filter(m => m.status === 'SCHEDULED' || m.status === 'IN_PROGRESS')
             .map(m => m.courtName)
+            .filter(Boolean)
         );
         return { unassignedMatches: unassigned, busyCourts: busy };
     }, [matches]);
@@ -218,7 +219,7 @@ export default function SchedulerPage() {
                             <TableHeader>
                                 <TableRow>
                                     <TableHead>Event</TableHead>
-                                    <TableHead>Players</TableHead>
+                                    <TableHead>Match</TableHead>
                                     <TableHead>Assign Court</TableHead>
                                 </TableRow>
                             </TableHeader>
@@ -263,3 +264,5 @@ export default function SchedulerPage() {
         </div>
     );
 }
+
+    
