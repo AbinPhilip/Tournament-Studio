@@ -135,29 +135,13 @@ const scheduleMatchesFlow = ai.defineFlow(
     outputSchema: ScheduleMatchesOutputSchema,
   },
   async (input) => {
-    // The AI prompt is now responsible for including the org names.
+    // The AI prompt is now solely responsible for including the org names.
     // This flow simply calls the AI and returns the result.
     const { output } = await schedulePrompt(input);
     if (!output) {
       throw new Error('Failed to generate a schedule.');
     }
-    
-    // Create a map for quick org name lookup
-    const orgNameMap = new Map(input.organizations.map(org => [org.id, org.name]));
-    const teamMap = new Map(input.teams.map(team => [team.id, team]));
-
-    // Post-process to ensure correctness of org names, just in case AI missed it
-    const augmentedMatches = output.matches.map(match => {
-        const team1 = teamMap.get(match.team1Id);
-        const team2 = teamMap.get(match.team2Id);
-        return {
-            ...match,
-            team1OrgName: team1 ? orgNameMap.get(team1.organizationId) || 'N/A' : 'N/A',
-            team2OrgName: team2 ? orgNameMap.get(team2.organizationId) || 'N/A' : 'N/A',
-        };
-    });
-
-    return { matches: augmentedMatches };
+    return output;
   }
 );
 
