@@ -25,6 +25,7 @@ export function DashboardHeader({ user, onToggleCollapse, isCollapsed }: { user:
                 </SheetTrigger>
                 <SheetContent side="left" className="p-0">
                     <SheetHeader className="p-4 border-b">
+                       <SheetTitle className="sr-only">Navigation Menu</SheetTitle>
                         <Link href="/dashboard" className="flex">
                            <Logo />
                         </Link>
