@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -67,7 +67,6 @@ import {
 import { useToast } from '@/hooks/use-toast';
 import { db } from '@/lib/firebase';
 import { collection, getDocs, addDoc, deleteDoc, doc, query, where, updateDoc, writeBatch } from 'firebase/firestore';
-import { useRouter } from 'next/navigation';
 import { mockUsers, mockAppData, mockOrganizations, mockTeams } from '@/lib/mock-data';
 
 function RoleBadge({ role }: { role: UserRole }) {
@@ -108,14 +107,14 @@ export default function SettingsPage() {
   const [isSeeding, setIsSeeding] = useState(false);
   const [isSeedAlertOpen, setIsSeedAlertOpen] = useState(false);
 
+  const fetchUsers = async () => {
+    const usersSnap = await getDocs(collection(db, 'users'));
+    setUsers(usersSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as User)));
+  };
 
-  useState(() => {
-    const fetchUsers = async () => {
-        const usersSnap = await getDocs(collection(db, 'users'));
-        setUsers(usersSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as User)));
-    };
+  useEffect(() => {
     fetchUsers();
-  });
+  }, []);
 
   const userForm = useForm<z.infer<typeof userFormSchema>>({
     resolver: zodResolver(userFormSchema),
@@ -123,12 +122,12 @@ export default function SettingsPage() {
   });
 
 
-  useState(() => {
+  useEffect(() => {
     if (userToEdit) {
       userForm.reset(userToEdit);
       setIsEditUserOpen(true);
     }
-  });
+  }, [userToEdit, userForm]);
   
   const handleDeleteUser = async () => {
     if(!userToDelete || userToDelete.id === user?.id) return;
@@ -242,7 +241,7 @@ export default function SettingsPage() {
             title: 'Database Reset!',
             description: 'Your database has been cleared and re-seeded with mock data.',
         });
-        setUsers(mockUsers.map(u => ({id: '', ...u}))); // Refresh local state
+        await fetchUsers();
 
     } catch (error) {
         console.error("Seeding failed:", error);
