@@ -133,11 +133,14 @@ const recordMatchResultFlow = ai.defineFlow(
             matchesRef,
             where('eventType', '==', completedMatch.eventType),
             where('round', '==', completedMatch.round),
-            where('status', '==', 'COMPLETED'),
-            where('winnerId', '!=', 'BYE'),
-            where('winnerId', '!=', currentWinnerId)
+            where('status', '==', 'COMPLETED')
         );
         const opponentSnap = await getDocs(opponentQuery);
+        
+        const potentialOpponents = opponentSnap.docs
+            .map(doc => doc.data())
+            .filter(match => match.winnerId && match.winnerId !== 'BYE' && match.winnerId !== currentWinnerId);
+
 
         const nextRoundQuery = query(matchesRef, where('round', '==', completedMatch.round + 1), where('eventType', '==', completedMatch.eventType));
         const nextRoundSnap = await getDocs(nextRoundQuery);
@@ -148,14 +151,14 @@ const recordMatchResultFlow = ai.defineFlow(
             await batch.commit();
             return;
         }
+        
+        const opponentDocData = potentialOpponents.find(match => !scheduledIds.has(match.winnerId));
 
-        const opponentDoc = opponentSnap.docs.find(doc => !scheduledIds.has(doc.data().winnerId));
-
-        if (opponentDoc) {
-             const opponentWinnerId = opponentDoc.data().winnerId;
+        if (opponentDocData) {
+             const opponentWinnerId = opponentDocData.winnerId;
             // We have a pair! Schedule the next match.
             const winnerTeamRef = doc(db, 'teams', currentWinnerId);
-            const opponentTeamRef = doc(db, 'teams', opponentWinnerId);
+            const opponentTeamRef = doc(db, 'teams', opponentWinnerId!);
             
             const [winnerTeamSnap, opponentTeamSnap] = await Promise.all([getDoc(winnerTeamRef), getDoc(opponentTeamRef)]);
             if (!winnerTeamSnap.exists() || !opponentTeamSnap.exists()) {
@@ -194,7 +197,7 @@ const recordMatchResultFlow = ai.defineFlow(
                 const newMatchRef = doc(collection(db, 'matches'));
                 const newMatchData: Omit<Match, 'id'> = {
                     team1Id: currentWinnerId,
-                    team2Id: opponentWinnerId,
+                    team2Id: opponentWinnerId!,
                     team1Name: winnerTeam.player1Name + (winnerTeam.player2Name ? ` & ${winnerTeam.player2Name}` : ''),
                     team2Name: opponentTeam.player1Name + (opponentTeam.player2Name ? ` & ${opponentTeam.player2Name}` : ''),
                     eventType: completedMatch.eventType,
