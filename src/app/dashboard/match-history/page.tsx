@@ -13,63 +13,89 @@ import {
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
 import { db } from '@/lib/firebase';
-import { collection, getDocs, query, where } from 'firebase/firestore';
+import { collection, getDocs, query, where, orderBy, limit, startAfter, DocumentData, endBefore, limitToLast } from 'firebase/firestore';
 import type { Match, TeamType } from '@/types';
-import { Loader2 } from 'lucide-react';
+import { Loader2, ArrowLeft, ArrowRight } from 'lucide-react';
 import { getRoundName } from '@/lib/utils';
 import { EventBadge } from '@/components/ui/event-badge';
+import { Button } from '@/components/ui/button';
+
+const PAGE_SIZE = 10;
 
 export default function MatchHistoryPage() {
     const { toast } = useToast();
     const [isLoading, setIsLoading] = useState(true);
     const [matches, setMatches] = useState<Match[]>([]);
     const [teamCounts, setTeamCounts] = useState<Record<TeamType, number>>({
-        singles: 0,
-        mens_doubles: 0,
-        womens_doubles: 0,
-        mixed_doubles: 0,
+        singles: 0, mens_doubles: 0, womens_doubles: 0, mixed_doubles: 0,
     });
+    const [lastVisible, setLastVisible] = useState<DocumentData | null>(null);
+    const [firstVisible, setFirstVisible] = useState<DocumentData | null>(null);
+    const [isLastPage, setIsLastPage] = useState(false);
+    const [isFirstPage, setIsFirstPage] = useState(true);
+    const [currentPage, setCurrentPage] = useState(1);
+
+    const fetchMatches = async (direction: 'next' | 'prev' | 'initial' = 'initial') => {
+        setIsLoading(true);
+        try {
+            const matchesRef = collection(db, 'matches');
+            let q;
+
+            if (direction === 'next' && lastVisible) {
+                q = query(matchesRef, where('status', '==', 'COMPLETED'), orderBy('lastUpdateTime', 'desc'), startAfter(lastVisible), limit(PAGE_SIZE));
+            } else if (direction === 'prev' && firstVisible) {
+                q = query(matchesRef, where('status', '==', 'COMPLETED'), orderBy('lastUpdateTime', 'desc'), endBefore(firstVisible), limitToLast(PAGE_SIZE));
+            } else {
+                q = query(matchesRef, where('status', '==', 'COMPLETED'), orderBy('lastUpdateTime', 'desc'), limit(PAGE_SIZE));
+            }
+
+            const matchesSnap = await getDocs(q);
+            const matchesData = matchesSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Match));
+            
+            setMatches(matchesData);
+            setFirstVisible(matchesSnap.docs[0]);
+            setLastVisible(matchesSnap.docs[matchesSnap.docs.length - 1]);
+            
+            // Check if it's the last page
+            if (direction === 'next' || direction === 'initial') {
+                const nextQuery = query(matchesRef, where('status', '==', 'COMPLETED'), orderBy('lastUpdateTime', 'desc'), startAfter(matchesSnap.docs[matchesSnap.docs.length - 1]), limit(1));
+                const nextSnap = await getDocs(nextQuery);
+                setIsLastPage(nextSnap.empty);
+            } else {
+                 setIsLastPage(false);
+            }
+             
+            if (direction === 'initial') setCurrentPage(1);
+            else if (direction === 'next') setCurrentPage(p => p + 1);
+            else if (direction === 'prev') setCurrentPage(p => p - 1);
+
+
+        } catch (error) {
+            console.error("Error fetching standings:", error);
+            toast({ title: 'Error', description: 'Failed to fetch match history.', variant: 'destructive' });
+        } finally {
+            setIsLoading(false);
+        }
+    };
+    
+     useEffect(() => {
+        setIsFirstPage(currentPage === 1);
+     }, [currentPage])
 
     useEffect(() => {
-        const fetchStandings = async () => {
-            setIsLoading(true);
-            try {
-                const [matchesSnap, teamsSnap] = await Promise.all([
-                     getDocs(query(
-                        collection(db, 'matches'),
-                        where('status', '==', 'COMPLETED'))
-                    ),
-                    getDocs(collection(db, 'teams'))
-                ]);
-
-                const matchesData = matchesSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Match));
-                
-                matchesData.sort((a, b) => {
-                    if (a.eventType < b.eventType) return -1;
-                    if (a.eventType > b.eventType) return 1;
-                    return (b.round || 0) - (a.round || 0);
-                });
-
-                setMatches(matchesData);
-                
-                const counts: Record<TeamType, number> = { singles: 0, mens_doubles: 0, womens_doubles: 0, mixed_doubles: 0 };
+        const fetchInitialData = async () => {
+             const teamsSnap = await getDocs(collection(db, 'teams'));
+             const counts: Record<TeamType, number> = { singles: 0, mens_doubles: 0, womens_doubles: 0, mixed_doubles: 0 };
                 teamsSnap.forEach(doc => {
                     const team = doc.data() as { type: TeamType };
                     if (counts[team.type] !== undefined) {
                         counts[team.type]++;
                     }
                 });
-                setTeamCounts(counts);
-
-            } catch (error) {
-                console.error("Error fetching standings:", error);
-                toast({ title: 'Error', description: 'Failed to fetch match history.', variant: 'destructive' });
-            } finally {
-                setIsLoading(false);
-            }
+            setTeamCounts(counts);
+            fetchMatches('initial');
         };
-
-        fetchStandings();
+        fetchInitialData();
     }, [toast]);
 
     const groupedMatches = useMemo(() => {
@@ -86,7 +112,7 @@ export default function MatchHistoryPage() {
     const eventOrder: TeamType[] = ['singles', 'mens_doubles', 'womens_doubles', 'mixed_doubles'];
 
 
-    if (isLoading) {
+    if (isLoading && matches.length === 0) {
         return (
             <div className="flex h-full w-full items-center justify-center">
                 <Loader2 className="h-12 w-12 animate-spin text-primary" />
@@ -108,7 +134,8 @@ export default function MatchHistoryPage() {
                     </CardContent>
                 </Card>
             ) : (
-                eventOrder.map(eventType => {
+                <>
+                {eventOrder.map(eventType => {
                     const eventMatches = groupedMatches[eventType];
                     if (!eventMatches || eventMatches.length === 0) return null;
 
@@ -160,9 +187,18 @@ export default function MatchHistoryPage() {
                             </CardContent>
                         </Card>
                     )
-                })
+                })}
+                 <div className="flex justify-between items-center mt-4">
+                    <Button onClick={() => fetchMatches('prev')} disabled={isFirstPage || isLoading}>
+                        <ArrowLeft className="mr-2" /> Previous
+                    </Button>
+                    <span className="text-sm text-muted-foreground">Page {currentPage}</span>
+                    <Button onClick={() => fetchMatches('next')} disabled={isLastPage || isLoading}>
+                        Next <ArrowRight className="ml-2" />
+                    </Button>
+                </div>
+                </>
             )}
-
         </div>
     )
 }

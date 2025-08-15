@@ -23,6 +23,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import { Separator } from '@/components/ui/separator';
 
 export default function LiveScorerPage() {
     const params = useParams();
@@ -203,12 +204,20 @@ export default function LiveScorerPage() {
                        />
                     </div>
                     
+                    <Separator />
+                    
+                     <div className="text-center space-y-4">
+                        <h3 className="font-semibold text-lg">Set {currentSet} Score</h3>
+                        <p className="text-4xl font-bold">{team1Points} - {team2Points}</p>
+                     </div>
+                    
                     {match.scores && match.scores.length > 0 && (
                         <div className="text-center">
                             <h3 className="font-semibold text-lg mb-2">Previous Sets</h3>
                             <div className="flex gap-4 justify-center text-muted-foreground">
                                 {match.scores.map((s, i) => <span key={i} className="text-sm">Set {i+1}: <span className="font-bold">{s.team1} - {s.team2}</span></span>)}
                             </div>
+                             <p className="text-xl font-bold mt-2">Match Score: {team1SetsWon} - {team2SetsWon}</p>
                         </div>
                     )}
 
@@ -274,7 +283,7 @@ export default function LiveScorerPage() {
 function TeamScorePanel({ teamName, points, setsWon, isServing, onPointChange }: { teamName: string, points: number, setsWon: number, isServing: boolean, onPointChange: (delta: 1 | -1) => void }) {
     return (
         <div className={`p-6 rounded-lg border-4 transition-all ${isServing ? 'border-primary shadow-lg' : 'border-muted'}`}>
-            <div className="text-lg font-semibold mb-2 min-h-[56px] flex items-center justify-center break-words">
+            <div className="text-lg font-semibold mb-2 min-h-[56px] flex items-center justify-center break-words text-2xl">
                 {teamName}
             </div>
             <p className="text-sm font-bold text-muted-foreground mb-2">Sets Won: {setsWon}</p>

@@ -13,6 +13,7 @@ import Autoplay from "embla-carousel-autoplay";
 import { getRoundName } from '@/lib/utils';
 import { EventBadge } from '../ui/event-badge';
 import { Logo } from '../logo';
+import Image from 'next/image';
 
 const WelcomeSlide = ({ tournament }: { tournament: Tournament | null }) => (
     <div className="flex flex-col items-center justify-center h-full text-center p-8 text-white">
@@ -48,7 +49,7 @@ const LiveMatchSlide = ({ match, teamCounts }: { match: Match, teamCounts: Recor
                 animate={{ y: 0, opacity: 1 }}
                 exit={{ y: 40, opacity: 0 }}
                 transition={{ type: "spring", stiffness: 500, damping: 30 }}
-                className="text-8xl md:text-9xl lg:text-[12rem] font-black leading-none text-white"
+                className="text-7xl md:text-8xl lg:text-[10rem] font-black leading-none text-white"
             >
                 {score}
             </m.div>
@@ -60,7 +61,7 @@ const LiveMatchSlide = ({ match, teamCounts }: { match: Match, teamCounts: Recor
             <div className="h-8 mb-2">
                  {isServing && <p className="font-bold text-yellow-300 animate-pulse text-lg md:text-xl tracking-widest">SERVING</p>}
             </div>
-            <h3 className="text-2xl md:text-3xl lg:text-4xl font-bold text-white break-words" title={name}>{name}</h3>
+            <h3 className="text-xl md:text-2xl lg:text-3xl font-bold text-white break-words" title={name}>{name}</h3>
             <p className="text-base md:text-lg lg:text-xl text-slate-300 mt-2">{org}</p>
          </div>
     );
@@ -70,7 +71,9 @@ const LiveMatchSlide = ({ match, teamCounts }: { match: Match, teamCounts: Recor
             {Array.from({length: setsWon}).map((_, i) => (
                 <div key={i} className="w-5 h-5 rounded-full bg-yellow-400" />
             ))}
-            {setsWon === 0 && <div className="w-5 h-5 rounded-full bg-white/20" />}
+             {Array.from({length: Math.max(0, 2 - setsWon)}).map((_, i) => (
+                <div key={`empty-${i}`} className="w-5 h-5 rounded-full bg-white/20" />
+            ))}
         </div>
     );
 
@@ -103,24 +106,24 @@ const LiveMatchSlide = ({ match, teamCounts }: { match: Match, teamCounts: Recor
     );
 };
 
-const UpcomingMatchesSlide = ({ matches, teamCounts }: { matches: Match[], teamCounts: Record<TeamType, number>}) => (
+const AllFixturesSlide = ({ matches, teamCounts }: { matches: Match[], teamCounts: Record<TeamType, number>}) => (
     <div className="h-full flex flex-col bg-black/30 rounded-2xl border border-white/20 p-8">
         <header className="text-center mb-8">
-            <h2 className="text-4xl md:text-5xl font-bold flex items-center justify-center gap-4 text-white"><ListChecks /> Upcoming Matches</h2>
-            <p className="text-lg md:text-xl text-slate-300">Next on the schedule</p>
+            <h2 className="text-4xl md:text-5xl font-bold flex items-center justify-center gap-4 text-white"><ListChecks /> All Fixtures</h2>
+            <p className="text-lg md:text-xl text-slate-300">Overview of all non-completed matches</p>
         </header>
-        <div className="flex-grow grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {matches.slice(0, 6).map(match => (
+        <div className="flex-grow grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+            {matches.map(match => (
                 <div key={match.id} className="bg-white/10 p-4 rounded-lg flex flex-col justify-center text-center text-white">
                     <div className="flex justify-between items-center w-full px-2 mb-2">
                       <EventBadge eventType={match.eventType}/>
                       <span className="font-semibold text-slate-200">{getRoundName(match.round || 0, match.eventType, teamCounts[match.eventType])}</span>
                     </div>
-                    <p className="text-lg font-bold truncate">{match.team1Name}</p>
-                    <p className="text-sm text-slate-300 mb-1">{match.team1OrgName}</p>
+                    <p className="text-base font-bold truncate">{match.team1Name}</p>
+                    <p className="text-xs text-slate-300 mb-1">{match.team1OrgName}</p>
                     <p className="font-bold text-yellow-400 my-1">VS</p>
-                    <p className="text-lg font-bold truncate">{match.team2Name}</p>
-                    <p className="text-sm text-slate-300">{match.team2OrgName}</p>
+                    <p className="text-base font-bold truncate">{match.team2Name}</p>
+                    <p className="text-xs text-slate-300">{match.team2OrgName}</p>
                 </div>
             ))}
         </div>
@@ -182,7 +185,7 @@ export function PresenterShell() {
   }, [toast]);
 
   const liveMatches = matches.filter(m => m.status === 'IN_PROGRESS').sort((a,b) => (a.courtName || '').localeCompare(b.courtName || ''));
-  const upcomingMatches = matches.filter(m => m.status !== 'COMPLETED').sort((a, b) => (a.startTime as any) - (b.startTime as any));
+  const allNonCompletedMatches = matches.filter(m => m.status !== 'COMPLETED').sort((a, b) => (a.startTime as any) - (b.startTime as any));
 
   if (isLoading) {
     return (
@@ -202,7 +205,7 @@ export function PresenterShell() {
     );
   }
   
-  const hasSlides = liveMatches.length > 0 || upcomingMatches.length > 0;
+  const hasSlides = liveMatches.length > 0 || allNonCompletedMatches.length > 0;
 
   return (
     <div className="h-screen w-screen bg-gradient-to-br from-gray-900 to-blue-900/50 font-sans flex flex-col p-4 relative">
@@ -211,7 +214,7 @@ export function PresenterShell() {
         ) : (
              <Carousel 
                 className="h-full w-full"
-                plugins={[Autoplay({ delay: 10000, stopOnInteraction: false })]}
+                plugins={[Autoplay({ delay: 3000, stopOnInteraction: false })]}
                 opts={{ loop: true }}
              >
                 <CarouselContent className="h-full">
@@ -225,9 +228,9 @@ export function PresenterShell() {
                         </CarouselItem>
                     ))}
 
-                    {upcomingMatches.length > 0 && (
+                    {allNonCompletedMatches.length > 0 && (
                         <CarouselItem>
-                           <UpcomingMatchesSlide matches={upcomingMatches} teamCounts={teamCounts} />
+                           <AllFixturesSlide matches={allNonCompletedMatches} teamCounts={teamCounts} />
                         </CarouselItem>
                     )}
                 </CarouselContent>
