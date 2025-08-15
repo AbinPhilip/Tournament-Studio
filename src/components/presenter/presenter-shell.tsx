@@ -130,31 +130,44 @@ const AllFixturesSlide = ({ matches, teamCounts, page, totalPages }: { matches: 
 );
 
 const CompletedMatchSlide = ({ matches, teamCounts }: { matches: Match[], teamCounts: Record<TeamType, number>}) => (
-    <div className="h-full flex flex-col bg-black/30 rounded-2xl border border-white/20 p-8">
+    <div className="h-full flex flex-col bg-black/30 rounded-2xl border border-white/20 p-8 text-white">
         <header className="text-center mb-8">
             <h2 className="text-4xl md:text-5xl font-bold flex items-center justify-center gap-4 text-white"><Trophy /> Recent Results</h2>
             <p className="text-lg md:text-xl text-slate-300">Overview of the latest completed matches</p>
         </header>
-        <div className="flex-grow grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-            {matches.map(match => {
-                const winnerIsTeam1 = match.winnerId === match.team1Id;
-                const winner = winnerIsTeam1 ? match.team1Name : match.team2Name;
-                const loser = winnerIsTeam1 ? match.team2Name : match.team1Name;
-                
-                return (
-                    <div key={match.id} className="bg-white/10 p-4 rounded-lg flex flex-col justify-center text-center text-white">
-                        <div className="flex justify-between items-center w-full px-2 mb-2 text-slate-200">
-                          <EventBadge eventType={match.eventType}/>
-                          <span className="font-semibold">{getRoundName(match.round || 0, match.eventType, teamCounts[match.eventType] || 0)}</span>
+        <div className="flex-grow overflow-y-auto">
+            <div className="grid grid-cols-[1fr_1fr_2fr_2fr_1fr] gap-x-4 gap-y-2 text-lg text-left px-4 py-3 border-b-2 border-white/30 font-bold uppercase text-slate-300">
+                <span>Event</span>
+                <span>Round</span>
+                <span>Winner</span>
+                <span>Runner-up</span>
+                <span className="text-center">Score</span>
+            </div>
+            <div className="space-y-2 mt-2">
+                {matches.map(match => {
+                    const winnerIsTeam1 = match.winnerId === match.team1Id;
+                    const winnerName = winnerIsTeam1 ? match.team1Name : match.team2Name;
+                    const winnerOrg = winnerIsTeam1 ? match.team1OrgName : match.team2OrgName;
+                    const loserName = winnerIsTeam1 ? match.team2Name : match.team1Name;
+                    const loserOrg = winnerIsTeam1 ? match.team2OrgName : match.team1OrgName;
+                    
+                    return (
+                        <div key={match.id} className="grid grid-cols-[1fr_1fr_2fr_2fr_1fr] gap-x-4 items-center text-xl bg-white/5 p-3 rounded-lg">
+                            <div><EventBadge eventType={match.eventType}/></div>
+                            <div className="font-semibold text-slate-200">{getRoundName(match.round || 0, match.eventType, teamCounts[match.eventType] || 0)}</div>
+                            <div className="truncate">
+                                <p className="font-bold text-yellow-300 truncate">{winnerName}</p>
+                                <p className="text-sm text-slate-400 truncate">{winnerOrg}</p>
+                            </div>
+                             <div className="truncate">
+                                <p className="font-semibold text-slate-300 truncate">{loserName}</p>
+                                <p className="text-sm text-slate-400 truncate">{loserOrg}</p>
+                            </div>
+                            <div className="text-center font-bold text-2xl">{match.score}</div>
                         </div>
-                        <div className="mt-2">
-                            <p className="text-base font-bold text-yellow-300 truncate">Winner: {winner}</p>
-                            <p className="text-sm text-slate-300 truncate">Defeated: {loser}</p>
-                        </div>
-                        <p className="font-bold text-lg text-white mt-2">{match.score}</p>
-                    </div>
-                );
-            })}
+                    );
+                })}
+            </div>
         </div>
     </div>
 );
