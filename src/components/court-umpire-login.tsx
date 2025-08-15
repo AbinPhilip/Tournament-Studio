@@ -23,7 +23,7 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, ShieldCheck } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 import { db } from '@/lib/firebase';
 import { collection, getDocs } from 'firebase/firestore';
 import type { Tournament } from '@/types';
@@ -97,7 +97,7 @@ export function CourtUmpireLogin() {
     <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
       <DialogTrigger asChild>
         <Button variant="outline" className="w-full">
-            <ShieldCheck className="mr-2" /> Court Umpire Login
+            Login as Umpire
         </Button>
       </DialogTrigger>
       <DialogContent>
@@ -129,7 +129,7 @@ export function CourtUmpireLogin() {
           </DialogClose>
           <Button onClick={handleLogin} disabled={isLoading || !selectedCourt}>
             {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            Login
+            Proceed to Scorer
           </Button>
         </DialogFooter>
       </DialogContent>

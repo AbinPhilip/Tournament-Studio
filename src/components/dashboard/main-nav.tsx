@@ -16,6 +16,7 @@ type NavItem = {
     href: string;
     label: string;
     icon: React.ElementType;
+    target?: string;
 }
 
 const allNavItems: NavItem[] = [
@@ -27,7 +28,7 @@ const allNavItems: NavItem[] = [
     { id: "umpire", href: "/dashboard/umpire", label: "Umpire View", icon: Shield },
     { id: "draw", href: "/dashboard/draw", label: "Tournament Draw", icon: GitBranch },
     { id: "match-history", href: "/dashboard/match-history", label: "Match History", icon: Trophy },
-    { id: "presenter", href: "/presenter", label: "Presenter View", icon: MonitorPlay },
+    { id: "presenter", href: "/presenter", label: "Presenter View", icon: MonitorPlay, target: "_blank" },
     { id: "settings", href: "/dashboard/settings", label: "System Settings", icon: Settings },
 ];
 
@@ -60,11 +61,12 @@ export function MainNav({ user, isMobile = false, isCollapsed = false }: { user:
             return;
         }
         const fetchedPerms = snapshot.docs.reduce((acc, doc) => {
-            acc[doc.id as UserRole] = doc.data().modules;
+            const modules = doc.data().modules || [];
             // ensure presenter is always available
-            if (!acc[doc.id as UserRole].includes('presenter')) {
-                acc[doc.id as UserRole].push('presenter');
+            if (!modules.includes('presenter')) {
+                modules.push('presenter');
             }
+            acc[doc.id as UserRole] = modules;
             return acc;
         }, {} as RolePermissions);
         setPermissions(fetchedPerms);
@@ -95,7 +97,7 @@ export function MainNav({ user, isMobile = false, isCollapsed = false }: { user:
                         <TooltipTrigger asChild>
                             <Link 
                                 href={item.href}
-                                target={item.id === 'presenter' ? '_blank' : '_self'}
+                                target={item.target}
                                 className={cn(
                                     "flex items-center justify-center h-10 w-10 rounded-lg text-muted-foreground transition-colors hover:text-primary hover:bg-muted",
                                     getIsActive(item.href, pathname) && "bg-muted text-primary",
@@ -121,7 +123,7 @@ export function MainNav({ user, isMobile = false, isCollapsed = false }: { user:
             <Link 
                 key={item.href}
                 href={item.href}
-                target={item.id === 'presenter' ? '_blank' : '_self'}
+                target={item.target}
                 className={cn(
                     "flex items-center gap-3 rounded-lg px-3 py-2 text-muted-foreground transition-all hover:text-primary",
                     getIsActive(item.href, pathname) && "bg-muted text-primary",
