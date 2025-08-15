@@ -117,10 +117,18 @@ export default function DrawPage() {
 
     const MatchCard = ({ match }: { match: Match }) => {
         const isBye = match.team2Id === 'BYE';
+        const team1 = teams.find(t => t.id === match.team1Id);
+        const team2 = teams.find(t => t.id === match.team2Id);
+
         return (
             <div key={match.id} className="border-2 rounded-xl p-4 text-base bg-background shadow-md transition-all hover:shadow-lg min-h-[190px]">
                 <div className={`flex flex-col ${match.winnerId === match.team1Id ? 'font-extrabold text-foreground' : 'text-muted-foreground'}`}>
-                    <span className="text-lg">{match.team1Name}</span>
+                    <div className="flex justify-between items-baseline">
+                        <span className="text-lg">{match.team1Name}</span>
+                        {match.round === 1 && team1?.lotNumber && (
+                            <span className="text-xs font-mono bg-muted px-1.5 py-0.5 rounded-sm">#{team1.lotNumber}</span>
+                        )}
+                    </div>
                     <span className="text-sm font-bold">{match.team1OrgName}</span>
                 </div>
                 <div className="flex items-center my-3">
@@ -140,7 +148,12 @@ export default function DrawPage() {
                     </div>
                 ) : (
                     <div className={`flex flex-col ${match.winnerId === match.team2Id ? 'font-extrabold text-foreground' : 'text-muted-foreground'}`}>
-                        <span className="text-lg">{match.team2Name}</span>
+                        <div className="flex justify-between items-baseline">
+                             <span className="text-lg">{match.team2Name}</span>
+                             {match.round === 1 && team2?.lotNumber && (
+                                <span className="text-xs font-mono bg-muted px-1.5 py-0.5 rounded-sm">#{team2.lotNumber}</span>
+                             )}
+                        </div>
                         <span className="text-sm font-bold">{match.team2OrgName}</span>
                     </div>
                 )}
