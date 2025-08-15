@@ -31,6 +31,7 @@ const LiveMatchSlide = ({ match, teamCounts }: { match: Match, teamCounts: Recor
                     exit={{ y: 40, opacity: 0 }}
                     transition={{ type: "spring", stiffness: 500, damping: 30 }}
                     className="text-7xl md:text-8xl font-black leading-none text-white font-headline"
+                    style={{ textShadow: '2px 2px 8px rgba(0,0,0,0.7)' }}
                 >
                     {score}
                 </m.div>
@@ -41,13 +42,13 @@ const LiveMatchSlide = ({ match, teamCounts }: { match: Match, teamCounts: Recor
     const PlayerDisplay = ({ name, org, isServing, setsWon }: { name: string, org?: string, isServing: boolean, setsWon: number }) => (
          <div className={cn("p-4 rounded-xl transition-all duration-300 w-full text-center flex flex-col items-center justify-center", isServing ? 'bg-white/10' : '')}>
             <div className="h-8 mb-2">
-                 {isServing && <p className="font-bold text-yellow-300 animate-pulse text-lg md:text-xl tracking-widest font-headline">SERVING</p>}
+                 {isServing && <p className="font-bold text-yellow-300 animate-pulse text-lg md:text-xl tracking-widest font-headline" style={{ textShadow: '1px 1px 4px rgba(0,0,0,0.5)' }}>SERVING</p>}
             </div>
              <div className="flex items-center gap-4">
-                 <h3 className="text-2xl md:text-4xl font-bold text-white break-words font-headline" title={name}>{name}</h3>
-                 <span className="text-4xl md:text-6xl font-bold text-yellow-400 font-headline">{setsWon}</span>
+                 <h3 className="text-2xl md:text-4xl font-bold text-white break-words font-headline" title={name} style={{ textShadow: '2px 2px 8px rgba(0,0,0,0.7)' }}>{name}</h3>
+                 <span className="text-4xl md:text-6xl font-bold text-yellow-400 font-headline" style={{ textShadow: '2px 2px 8px rgba(0,0,0,0.7)' }}>{setsWon}</span>
              </div>
-            <p className="text-base md:text-xl text-slate-300 mt-2">{org}</p>
+            <p className="text-base md:text-xl text-slate-200 mt-2" style={{ textShadow: '1px 1px 4px rgba(0,0,0,0.5)' }}>{org}</p>
          </div>
     );
     
@@ -58,7 +59,7 @@ const LiveMatchSlide = ({ match, teamCounts }: { match: Match, teamCounts: Recor
             animate={{opacity: 1, scale: 1}}
             transition={{duration: 0.5}}
         >
-            <header className="flex justify-between items-center text-slate-200">
+            <header className="flex justify-between items-center text-slate-200" style={{ textShadow: '1px 1px 4px rgba(0,0,0,0.5)' }}>
                 <EventBadge eventType={match.eventType} />
                 <span className="font-bold text-xl md:text-3xl text-white font-headline">Court: {match.courtName}</span>
                 <span className="font-semibold text-lg md:text-2xl">{getRoundName(match.round || 0, match.eventType, teamCounts[match.eventType] || 0)}</span>
@@ -68,7 +69,7 @@ const LiveMatchSlide = ({ match, teamCounts }: { match: Match, teamCounts: Recor
                 <PlayerDisplay name={match.team1Name} org={match.team1OrgName} isServing={servingTeamId === match.team1Id} setsWon={team1SetsWon}/>
                 <div className="flex items-center justify-center gap-2 md:gap-4 my-4 md:my-0">
                      <Score score={team1Points} />
-                    <span className="text-6xl md:text-8xl font-light text-white/50 font-headline">-</span>
+                    <span className="text-6xl md:text-8xl font-light text-white/50 font-headline" style={{ textShadow: '2px 2px 8px rgba(0,0,0,0.7)' }}>-</span>
                     <Score score={team2Points} />
                 </div>
                 <PlayerDisplay name={match.team2Name} org={match.team2OrgName} isServing={servingTeamId === match.team2Id} setsWon={team2SetsWon}/>
@@ -76,7 +77,7 @@ const LiveMatchSlide = ({ match, teamCounts }: { match: Match, teamCounts: Recor
 
             <footer className="text-center text-slate-400">
                {match.scores && match.scores.length > 0 && (
-                    <div className="flex justify-center items-center gap-4 text-lg">
+                    <div className="flex justify-center items-center gap-4 text-lg" style={{ textShadow: '1px 1px 4px rgba(0,0,0,0.5)' }}>
                         <span className="font-semibold">Previous Sets:</span>
                         <div className="flex gap-3">
                         {match.scores.map((s, i) => (
@@ -99,25 +100,25 @@ const FixtureSlide = ({ match, teamCounts }: { match: Match, teamCounts: Record<
             animate={{opacity: 1, scale: 1}}
             transition={{duration: 0.5}}
         >
-            <header className="flex justify-between items-center text-slate-200">
+            <header className="flex justify-between items-center text-slate-200" style={{ textShadow: '1px 1px 4px rgba(0,0,0,0.5)' }}>
                 <EventBadge eventType={match.eventType} />
                 <span className="font-bold text-xl md:text-3xl text-white font-headline">Court: {match.courtName}</span>
                  <span className="font-semibold text-lg md:text-2xl">{getRoundName(match.round || 0, match.eventType, teamCounts[match.eventType] || 0)}</span>
             </header>
             
             <main className="flex-grow flex flex-col items-center justify-center text-white text-center">
-                 <div className="w-full">
+                 <div className="w-full" style={{ textShadow: '2px 2px 8px rgba(0,0,0,0.7)' }}>
                     <h3 className="text-3xl md:text-5xl font-bold text-white break-words font-headline">{match.team1Name}</h3>
-                    <p className="text-lg md:text-2xl text-slate-300 mt-2">{match.team1OrgName}</p>
+                    <p className="text-lg md:text-2xl text-slate-200 mt-2">{match.team1OrgName}</p>
                  </div>
-                 <h4 className="text-4xl md:text-6xl font-bold text-yellow-300 my-8 font-headline">VS</h4>
-                 <div className="w-full">
+                 <h4 className="text-4xl md:text-6xl font-bold text-yellow-300 my-8 font-headline" style={{ textShadow: '2px 2px 8px rgba(0,0,0,0.7)' }}>VS</h4>
+                 <div className="w-full" style={{ textShadow: '2px 2px 8px rgba(0,0,0,0.7)' }}>
                     <h3 className="text-3xl md:text-5xl font-bold text-white break-words font-headline">{match.team2Name}</h3>
-                    <p className="text-lg md:text-2xl text-slate-300 mt-2">{match.team2OrgName}</p>
+                    <p className="text-lg md:text-2xl text-slate-200 mt-2">{match.team2OrgName}</p>
                  </div>
             </main>
 
-            <footer className="text-center text-slate-400">
+            <footer className="text-center text-slate-400" style={{ textShadow: '1px 1px 4px rgba(0,0,0,0.5)' }}>
                 Upcoming Match
             </footer>
         </m.div>
@@ -137,12 +138,14 @@ const WelcomeSlide = ({ tournament }: { tournament: Tournament | null }) => (
         <m.h1 
             className="text-5xl md:text-7xl lg:text-8xl font-bold mt-8 tracking-tight font-headline"
             initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.4, duration: 0.5 }}
+            style={{ textShadow: '3px 3px 10px rgba(0,0,0,0.7)' }}
         >
             {tournament?.name || 'Welcome'}
         </m.h1>
         <m.p 
-            className="text-xl md:text-2xl lg:text-3xl text-slate-300 mt-4"
+            className="text-xl md:text-2xl lg:text-3xl text-slate-200 mt-4"
             initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.6, duration: 0.5 }}
+            style={{ textShadow: '2px 2px 8px rgba(0,0,0,0.7)' }}
         >
             Hosted by: {tournament?.hostName}
         </m.p>
@@ -156,13 +159,13 @@ const CompletedMatchesSlide = ({ matches, teamCounts }: { matches: Match[], team
         animate={{opacity: 1, scale: 1}}
         transition={{duration: 0.5}}
     >
-        <header className="text-center mb-6">
+        <header className="text-center mb-6" style={{ textShadow: '2px 2px 8px rgba(0,0,0,0.7)' }}>
             <h2 className="text-4xl md:text-5xl font-bold text-white font-headline flex items-center justify-center gap-4">
                 <Trophy className="text-yellow-400" />
                 Recent Results
             </h2>
         </header>
-        <main className="text-white">
+        <main className="text-white" style={{ textShadow: '1px 1px 4px rgba(0,0,0,0.5)' }}>
             <Table className="text-lg">
                 <TableHeader>
                     <TableRow className="border-white/20 hover:bg-transparent">
@@ -219,28 +222,31 @@ const WinnerSlide = ({ match }: { match: Match }) => {
             transition={{duration: 0.7, type: 'spring', stiffness: 100}}
         >
             <m.div initial={{scale: 0}} animate={{scale: 1, rotate: -15}} transition={{delay: 0.3, duration: 0.5}}>
-                <Crown className="h-24 w-24 text-yellow-400" />
+                <Crown className="h-24 w-24 text-yellow-400" style={{ filter: 'drop-shadow(0 0 10px #facc15)' }} />
             </m.div>
             <m.h2 
                 className="text-6xl md:text-8xl font-bold text-yellow-300 mt-4 tracking-wider font-headline"
                 initial={{y: 20, opacity: 0}} animate={{y: 0, opacity: 1}} transition={{delay: 0.5}}
+                 style={{ textShadow: '3px 3px 10px rgba(0,0,0,0.7)' }}
             >
                 WINNER
             </m.h2>
             <m.div
                 className="mt-8"
                 initial={{y: 20, opacity: 0}} animate={{y: 0, opacity: 1}} transition={{delay: 0.7}}
+                 style={{ textShadow: '2px 2px 8px rgba(0,0,0,0.7)' }}
             >
                 <h3 className="text-4xl md:text-6xl font-bold text-white font-headline">{winnerName}</h3>
-                <p className="text-2xl md:text-3xl text-slate-300 mt-2">{winnerOrg}</p>
+                <p className="text-2xl md:text-3xl text-slate-200 mt-2">{winnerOrg}</p>
             </m.div>
             <m.p 
                 className="mt-6 text-3xl font-bold text-white bg-black/40 px-6 py-2 rounded-lg font-headline"
                 initial={{y: 20, opacity: 0}} animate={{y: 0, opacity: 1}} transition={{delay: 0.9}}
+                 style={{ textShadow: '2px 2px 8px rgba(0,0,0,0.7)' }}
             >
                 Final Score: {match.score}
             </m.p>
-             <footer className="text-slate-400 text-lg mt-8">
+             <footer className="text-slate-400 text-lg mt-8" style={{ textShadow: '1px 1px 4px rgba(0,0,0,0.5)' }}>
                 From Court: {match.courtName}
             </footer>
         </m.div>
@@ -367,7 +373,7 @@ export function PresenterShell() {
   }
   
   return (
-    <div className="h-screen w-screen bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-gray-700 via-gray-900 to-black font-sans flex flex-col p-4 relative">
+    <div className="h-screen w-screen bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-gray-900 via-black to-black font-sans flex flex-col p-4 relative">
        {slides.length <= 1 ? ( // Only welcome slide exists
             <WelcomeSlide tournament={tournament} />
         ) : (
@@ -384,3 +390,6 @@ export function PresenterShell() {
     </div>
   );
 }
+
+
+    
