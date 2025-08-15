@@ -1,5 +1,5 @@
 
-import type { User, AppData, Team, Organization } from '@/types';
+import type { User, AppData, Team, Organization, TeamType } from '@/types';
 
 // This file now only contains the structure for seeding data.
 // The actual data is managed in Firestore.
@@ -120,3 +120,5 @@ export const mockTeams: (Omit<Team, 'id' | 'organizationId'> & { organizationNam
     const lotNumber = lotNumberCounters[team.type]++;
     return { ...team, lotNumber };
 });
+
+    
