@@ -184,10 +184,11 @@ const recordMatchResultFlow = ai.defineFlow(
                 const winnerId = match.winnerId!;
                 let pointDiff = 0;
 
-                // For bye matches, give a high score to prioritize them if needed, but not over actual play.
+                // For bye matches, assign a very large point differential to prioritize them if needed, but not over actual play results.
                 if (match.team2Id === 'BYE') {
                     pointDiff = 999; 
                 } else if (match.scores && match.scores.length > 0) {
+                    // Sum up all points scored by winner and loser across all sets.
                     const totalScoreWinner = match.scores.reduce((sum, set) => sum + (winnerId === match.team1Id ? set.team1 : set.team2), 0);
                     const totalScoreLoser = match.scores.reduce((sum, set) => sum + (winnerId === match.team1Id ? set.team2 : set.team1), 0);
                     pointDiff = totalScoreWinner - totalScoreLoser;
@@ -284,3 +285,5 @@ const recordMatchResultFlow = ai.defineFlow(
 export async function recordMatchResult(input: RecordMatchResultInput): Promise<void> {
     await recordMatchResultFlow(input);
 }
+
+    
