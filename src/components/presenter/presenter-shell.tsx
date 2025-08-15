@@ -61,8 +61,8 @@ const LiveMatchSlide = ({ match, teamCounts }: { match: Match, teamCounts: Recor
             <div className="h-8 mb-2">
                  {isServing && <p className="font-bold text-yellow-300 animate-pulse text-lg md:text-xl tracking-widest">SERVING</p>}
             </div>
-            <h3 className="text-xl md:text-2xl lg:text-3xl font-bold text-white break-words" title={name}>{name}</h3>
-            <p className="text-base md:text-lg lg:text-xl text-slate-300 mt-2">{org}</p>
+            <h3 className="text-xl md:text-2xl font-bold text-white break-words" title={name}>{name}</h3>
+            <p className="text-base md:text-lg text-slate-300 mt-2">{org}</p>
          </div>
     );
     
@@ -185,7 +185,7 @@ export function PresenterShell() {
   }, [toast]);
 
   const liveMatches = matches.filter(m => m.status === 'IN_PROGRESS').sort((a,b) => (a.courtName || '').localeCompare(b.courtName || ''));
-  const allNonCompletedMatches = matches.filter(m => m.status !== 'COMPLETED').sort((a, b) => (a.startTime as any) - (b.startTime as any));
+  const allNonCompletedMatches = matches.filter(m => m.status !== 'COMPLETED').sort((a, b) => (a.startTime as any) - (b.startTime as any)).slice(0, 8);
 
   if (isLoading) {
     return (
@@ -214,7 +214,7 @@ export function PresenterShell() {
         ) : (
              <Carousel 
                 className="h-full w-full"
-                plugins={[Autoplay({ delay: 3000, stopOnInteraction: false })]}
+                plugins={[Autoplay({ delay: 15000, stopOnInteraction: false })]}
                 opts={{ loop: true }}
              >
                 <CarouselContent className="h-full">
