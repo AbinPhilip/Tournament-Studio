@@ -5,7 +5,7 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, Loader2, Play, XCircle, TimerOff } from 'lucide-react';
+import { ArrowLeft, Loader2, Play, XCircle, TimerOff, ArrowUpDown } from 'lucide-react';
 import type { Match, Team, TeamType, Tournament } from '@/types';
 import { db } from '@/lib/firebase';
 import { collection, doc, writeBatch, query, Timestamp, onSnapshot, getDocs, updateDoc } from 'firebase/firestore';
@@ -101,6 +101,9 @@ export default function SchedulerPage() {
     const [teamCounts, setTeamCounts] = useState<Record<TeamType, number>>({
         singles: 0, mens_doubles: 0, womens_doubles: 0, mixed_doubles: 0,
     });
+    const [eventFilter, setEventFilter] = useState<TeamType | 'all'>('all');
+    const [sortConfig, setSortConfig] = useState<{ key: keyof Match | 'lastPlayed'; direction: 'ascending' | 'descending' } | null>(null);
+
     const { toast } = useToast();
     const router = useRouter();
 
@@ -223,27 +226,51 @@ export default function SchedulerPage() {
             }
         });
 
-        ready.sort((a, b) => {
-            const getRoundStage = (round: number, teamCount: number) => {
-                if (teamCount < 2) return 3; 
-                const totalRounds = Math.ceil(Math.log2(teamCount));
-                if (round === totalRounds) return 2; // Final
-                if (round === totalRounds - 1) return 1; // Semi-Final
-                return 0; // Preliminary round
-            };
+        // Filter before sorting
+        let filteredReady = ready;
+        if (eventFilter !== 'all') {
+            filteredReady = ready.filter(m => m.eventType === eventFilter);
+        }
+        
+        // Sorting logic
+        if (sortConfig) {
+            filteredReady.sort((a,b) => {
+                let aVal: any;
+                let bVal: any;
+                if (sortConfig.key === 'lastPlayed') {
+                    aVal = Math.max(a.team1LastPlayed || 0, a.team2LastPlayed || 0);
+                    bVal = Math.max(b.team1LastPlayed || 0, b.team2LastPlayed || 0);
+                } else {
+                    aVal = a[sortConfig.key as keyof Match] ?? 0;
+                    bVal = b[sortConfig.key as keyof Match] ?? 0;
+                }
+                if (aVal < bVal) return sortConfig.direction === 'ascending' ? -1 : 1;
+                if (aVal > bVal) return sortConfig.direction === 'ascending' ? 1 : -1;
+                return 0;
+            });
+        } else {
+            // Default sort: Finals > Semis > Prelims, then by round number
+            filteredReady.sort((a, b) => {
+                const getRoundStage = (round: number, teamCount: number) => {
+                    if (teamCount < 2) return 3; 
+                    const totalRounds = Math.ceil(Math.log2(teamCount));
+                    if (round === totalRounds) return 2; // Final
+                    if (round === totalRounds - 1) return 1; // Semi-Final
+                    return 0; // Preliminary round
+                };
+                const aRound = a.round || 0;
+                const bRound = b.round || 0;
+                const aTeamCount = teamCounts[a.eventType] || 0;
+                const bTeamCount = teamCounts[b.eventType] || 0;
+                const aStage = getRoundStage(aRound, aTeamCount);
+                const bStage = getRoundStage(bRound, bTeamCount);
 
-            const aRound = a.round || 0;
-            const bRound = b.round || 0;
-            const aTeamCount = teamCounts[a.eventType] || 0;
-            const bTeamCount = teamCounts[b.eventType] || 0;
+                if (aStage !== bStage) return bStage - aStage;
+                if (aRound !== bRound) return aRound - bRound;
+                return a.eventType.localeCompare(b.eventType);
+            });
+        }
 
-            const aStage = getRoundStage(aRound, aTeamCount);
-            const bStage = getRoundStage(bRound, bTeamCount);
-
-            if (aStage !== bStage) return bStage - aStage; // Higher stage (final) comes first
-            if (aRound !== bRound) return aRound - bRound; // Lower round number first
-            return a.eventType.localeCompare(b.eventType);
-        });
 
         const inProgressOrScheduled = new Set(matches
             .filter(m => (m.status === 'IN_PROGRESS' || m.status === 'SCHEDULED') && m.courtName)
@@ -265,8 +292,8 @@ export default function SchedulerPage() {
         }, {} as Record<TeamType, Record<number, number>>);
 
 
-        return { unassignedMatches: ready, busyCourts: inProgressOrScheduled, restingTeams: resting, pendingSummary: summary };
-    }, [matches, teams, teamCounts, assignedMatches, tournament]);
+        return { unassignedMatches: filteredReady, busyCourts: inProgressOrScheduled, restingTeams: resting, pendingSummary: summary };
+    }, [matches, teams, teamCounts, assignedMatches, tournament, eventFilter, sortConfig]);
 
     const handleCourtChange = useCallback((matchId: string, courtName: string) => {
         setAssignedMatches(current => {
@@ -354,6 +381,20 @@ export default function SchedulerPage() {
         return tournament?.courtNames.filter(c => !busyCourts.has(c.name) && !currentlyAssignedCourts.has(c.name)) || [];
     }, [tournament, busyCourts, currentlyAssignedCourts]);
     
+    const requestSort = (key: keyof Match | 'lastPlayed') => {
+        let direction: 'ascending' | 'descending' = 'ascending';
+        if (sortConfig && sortConfig.key === key && sortConfig.direction === 'ascending') {
+            direction = 'descending';
+        }
+        setSortConfig({ key, direction });
+    };
+
+    const SortableHeader = ({ sortKey, children }: { sortKey: keyof Match | 'lastPlayed', children: React.ReactNode }) => (
+        <Button variant="ghost" onClick={() => requestSort(sortKey)}>
+            {children}
+            <ArrowUpDown className="ml-2 h-4 w-4" />
+        </Button>
+    );
 
     if (isLoading) {
         return (
@@ -369,6 +410,7 @@ export default function SchedulerPage() {
 
     const isAdmin = user?.role === 'admin' || user?.role === 'super';
     const eventOrder: TeamType[] = ['singles', 'mens_doubles', 'womens_doubles', 'mixed_doubles'];
+    const availableEventFilters = Array.from(new Set(matches.filter(m => m.status === 'PENDING').map(m => m.eventType)));
 
     return (
         <div className="space-y-8 p-4 md:p-8">
@@ -516,8 +558,25 @@ export default function SchedulerPage() {
 
             <Card>
                 <CardHeader>
-                    <CardTitle>Unassigned Matches</CardTitle>
-                    <CardDescription>Matches that are ready to be scheduled.</CardDescription>
+                     <div className="flex justify-between items-center flex-wrap gap-4">
+                        <div>
+                            <CardTitle>Unassigned Matches</CardTitle>
+                            <CardDescription>Matches that are ready to be scheduled.</CardDescription>
+                        </div>
+                        <div className="flex items-center gap-2">
+                             <Select value={eventFilter} onValueChange={(value) => setEventFilter(value as TeamType | 'all')}>
+                                <SelectTrigger className="w-[200px]">
+                                    <SelectValue placeholder="Filter by event" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="all">All Events</SelectItem>
+                                    {availableEventFilters.map(event => (
+                                        <SelectItem key={event} value={event} className="capitalize">{event.replace(/_/g, ' ')}</SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+                     </div>
                 </CardHeader>
                 <CardContent>
                     {unassignedMatches.length > 0 ? (
@@ -525,9 +584,9 @@ export default function SchedulerPage() {
                             <TableHeader>
                                 <TableRow>
                                     <TableHead>Event</TableHead>
-                                    <TableHead>Round</TableHead>
+                                    <TableHead><SortableHeader sortKey="round">Round</SortableHeader></TableHead>
                                     <TableHead>Match</TableHead>
-                                    <TableHead>Last Played</TableHead>
+                                    <TableHead><SortableHeader sortKey="lastPlayed">Last Played</SortableHeader></TableHead>
                                     <TableHead>Assign Court</TableHead>
                                 </TableRow>
                             </TableHeader>
@@ -574,7 +633,12 @@ export default function SchedulerPage() {
                             </TableBody>
                         </Table>
                     ) : (
-                         <p className="text-sm text-muted-foreground py-4 text-center">All matches have been assigned to a court.</p>
+                         <p className="text-sm text-muted-foreground py-4 text-center">
+                            {eventFilter === 'all'
+                                ? 'All matches have been assigned to a court.'
+                                : `No pending matches for ${eventFilter.replace(/_/g, ' ')}.`
+                            }
+                         </p>
                     )}
                 </CardContent>
             </Card>
