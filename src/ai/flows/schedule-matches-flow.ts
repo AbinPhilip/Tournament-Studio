@@ -103,10 +103,8 @@ const scheduleMatchesFlow = ai.defineFlow(
             const nextPowerOf2 = Math.pow(2, Math.ceil(Math.log2(teamCount)));
             const byes = nextPowerOf2 - teamCount;
 
-            // Teams with the lowest lot numbers get byes.
             const teamsWithByes = eventTeams.slice(0, byes);
             const teamsInMatches = eventTeams.slice(byes);
-
 
             // Create "BYE" matches for the teams that get a pass to the next round.
             for (const team of teamsWithByes) {
@@ -157,7 +155,6 @@ const scheduleMatchesFlow = ai.defineFlow(
                         team2OrgName: orgNameMap.get(team2.organizationId) || '',
                         eventType: eventType,
                         status: 'PENDING',
-                        // round is not typically used in round-robin like this, but can be set to 1
                         round: 1 
                     });
                 }
