@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { ArrowLeft, Loader2, Play, XCircle, TimerOff } from 'lucide-react';
 import type { Match, Team, TeamType, Tournament } from '@/types';
 import { db } from '@/lib/firebase';
-import { collection, doc, writeBatch, query, Timestamp, onSnapshot } from 'firebase/firestore';
+import { collection, doc, writeBatch, query, Timestamp, onSnapshot, getDocs } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
 import { useRouter } from 'next/navigation';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -239,7 +239,7 @@ export default function SchedulerPage() {
         setIsSaving(true);
         try {
             const batch = writeBatch(db);
-            const matchesQuery = await collection(db, 'matches');
+            const matchesQuery = collection(db, 'matches');
             const matchesSnapshot = await getDocs(matchesQuery);
             matchesSnapshot.forEach(doc => batch.delete(doc.ref));
 
