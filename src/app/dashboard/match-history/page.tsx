@@ -52,16 +52,24 @@ export default function MatchHistoryPage() {
             }
 
             const matchesSnap = await getDocs(q);
+            if (matchesSnap.empty) {
+                if (direction === 'next') setIsLastPage(true);
+                setMatches([]);
+                setIsLoading(false);
+                return;
+            }
+
             const matchesData = matchesSnap.docs
                 .map(doc => ({ id: doc.id, ...doc.data() } as Match))
                 .filter(m => m.status === 'COMPLETED'); // Filter on client
             
             setMatches(matchesData);
             setFirstVisible(matchesSnap.docs[0]);
-            setLastVisible(matchesSnap.docs[matchesSnap.docs.length - 1]);
+            const newLastVisible = matchesSnap.docs[matchesSnap.docs.length - 1];
+            setLastVisible(newLastVisible);
             
-            if (direction === 'next' || direction === 'initial') {
-                const nextQuery = query(matchesRef, orderBy('lastUpdateTime', 'desc'), startAfter(matchesSnap.docs[matchesSnap.docs.length - 1]), limit(1));
+            if ((direction === 'next' || direction === 'initial') && newLastVisible) {
+                const nextQuery = query(matchesRef, orderBy('lastUpdateTime', 'desc'), startAfter(newLastVisible), limit(1));
                 const nextSnap = await getDocs(nextQuery);
                 setIsLastPage(nextSnap.empty);
             } else {
