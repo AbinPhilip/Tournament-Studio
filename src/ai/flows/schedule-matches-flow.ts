@@ -110,25 +110,27 @@ const schedulePrompt = ai.definePrompt({
         General Rules:
         1.  **Group by Event:** All scheduling must happen independently for each event type (e.g., 'mens_doubles', 'singles'). Matches must only be between teams of the same type.
         2.  **Organization Names**: You MUST use the 'organizationName' field provided for each team to populate team1OrgName and team2OrgName in the output.
-        3.  **Use Lot Numbers**: All pairings must be determined by the provided 'lotNumber' for each team. Do not shuffle or randomize. Pair lot #1 vs lot #2, #3 vs #4, etc.
+        3.  **Use Lot Numbers**: All pairings must be determined by the provided 'lotNumber' for each team. Do not shuffle or randomize.
 
         --- SCHEDULING ALGORITHM BY TOURNAMENT TYPE ---
 
         **A. If 'tournamentType' is 'knockout':**
 
         Follow this "picking of lots" procedure for EACH event type category:
-        1.  **Sort Teams:** First, take all teams for the event and sort them in ascending order based on their 'lotNumber'.
-        2.  **Calculate Byes:** A "bye" is a pass to the next round. A bye is needed if the total number of teams (N) is not a power of 2.
-            *   Find the next highest power of 2 (P). (e.g., if N=13, P=16).
-            *   Number of byes = P - N. (if N=13, byes = 3).
-        3.  **Assign Byes and Matches for Round 1:**
-            *   The teams with the *lowest* lot numbers (from the sorted list) receive a bye. For each of these teams, you MUST generate a match object. This rule is absolute and must be followed for all categories.
+        1.  **Sort Teams:** For the specific event category, take all teams and sort them in ascending order based on their 'lotNumber'.
+        2.  **Calculate Byes:** A "bye" is a pass to the next round. Byes are needed if the total number of teams (N) is not a power of 2.
+            *   Find the next highest power of 2 (P). For example, if N=13, P=16. If N=8, P=8.
+            *   The number of byes to be assigned is P - N. For example, if N=13, there are 16 - 13 = 3 byes.
+        3.  **Assign Byes for Round 1:**
+            *   The teams with the *lowest* lot numbers (from the sorted list) receive a bye. The number of byes assigned must exactly match the number calculated in the previous step.
+            *   For each team that gets a bye, you MUST generate a match object.
             *   In this "bye" match, set 'team1Id' to the team's ID and 'team2Id' to the literal string "BYE".
             *   Set 'team2Name' and 'team2OrgName' to "BYE".
             *   Set the match 'status' to 'COMPLETED' and the 'winnerId' to the 'team1Id'.
+        4.  **Assign Matches for Round 1:**
             *   The remaining teams (those that did not get a bye) are paired up sequentially based on their position in the sorted list. For example, the team with the next lowest lot number plays the one after it, and so on.
             *   For these regular matches, set the initial 'status' of all generated matches to 'PENDING'.
-        4.  **Set Round Number:** For ALL matches generated in this process (including bye matches), set the 'round' field to 1.
+        5.  **Set Round Number:** For ALL matches generated in this process (including bye matches), set the 'round' field to 1.
 
         **B. If 'tournamentType' is 'round-robin':**
         
