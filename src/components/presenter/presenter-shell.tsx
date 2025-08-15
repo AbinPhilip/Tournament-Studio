@@ -13,7 +13,7 @@ import Autoplay from "embla-carousel-autoplay";
 import { getRoundName } from '@/lib/utils';
 import { EventBadge } from '../ui/event-badge';
 import { Logo } from '../logo';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import Image from 'next/image';
 
 const WelcomeSlide = ({ tournament }: { tournament: Tournament | null }) => (
     <div className="flex flex-col items-center justify-center h-full text-center p-8 text-white">
@@ -49,7 +49,7 @@ const LiveMatchSlide = ({ match, teamCounts }: { match: Match, teamCounts: Recor
                 animate={{ y: 0, opacity: 1 }}
                 exit={{ y: 40, opacity: 0 }}
                 transition={{ type: "spring", stiffness: 500, damping: 30 }}
-                className="text-8xl md:text-9xl lg:text-[10rem] font-black leading-none text-white"
+                className="text-8xl md:text-9xl lg:text-[12rem] font-black leading-none text-white"
             >
                 {score}
             </m.div>
@@ -59,10 +59,10 @@ const LiveMatchSlide = ({ match, teamCounts }: { match: Match, teamCounts: Recor
     const PlayerDisplay = ({ name, org, isServing }: { name: string, org?: string, isServing: boolean }) => (
          <div className={`p-4 rounded-xl transition-all duration-300 w-full text-center flex flex-col items-center justify-center ${isServing ? 'bg-white/10' : ''}`}>
             <div className="h-8 mb-2">
-                 {isServing && <p className="font-bold text-yellow-300 animate-pulse text-lg tracking-widest">SERVING</p>}
+                 {isServing && <p className="font-bold text-yellow-300 animate-pulse text-lg md:text-xl tracking-widest">SERVING</p>}
             </div>
-            <h3 className="text-3xl md:text-4xl lg:text-6xl font-bold text-white break-words" title={name}>{name}</h3>
-            <p className="text-base md:text-lg lg:text-2xl text-slate-300 mt-2">{org}</p>
+            <h3 className="text-3xl md:text-5xl lg:text-7xl font-bold text-white break-words" title={name}>{name}</h3>
+            <p className="text-base md:text-xl lg:text-2xl text-slate-300 mt-2">{org}</p>
          </div>
     );
     
@@ -71,6 +71,7 @@ const LiveMatchSlide = ({ match, teamCounts }: { match: Match, teamCounts: Recor
             {Array.from({length: setsWon}).map((_, i) => (
                 <div key={i} className="w-5 h-5 rounded-full bg-yellow-400" />
             ))}
+            {setsWon === 0 && <div className="w-5 h-5 rounded-full bg-white/20" />}
         </div>
     );
 
@@ -78,21 +79,21 @@ const LiveMatchSlide = ({ match, teamCounts }: { match: Match, teamCounts: Recor
         <div className="h-full flex flex-col justify-between p-4 sm:p-6 md:p-8 bg-black/30 rounded-2xl border border-white/20">
             <header className="flex justify-between items-center text-slate-200">
                 <EventBadge eventType={match.eventType} />
-                <span className="font-bold text-xl md:text-2xl text-white">Court: {match.courtName}</span>
-                <span className="font-semibold text-lg md:text-xl">{getRoundName(match.round || 0, match.eventType, teamCounts[match.eventType] || 0)}</span>
+                <span className="font-bold text-xl md:text-3xl text-white">Court: {match.courtName}</span>
+                <span className="font-semibold text-lg md:text-2xl">{getRoundName(match.round || 0, match.eventType, teamCounts[match.eventType] || 0)}</span>
             </header>
 
             <main className="flex-grow grid grid-cols-1 md:grid-cols-[1fr_auto_1fr] items-center gap-4 py-4">
-                <div className="flex flex-col items-center justify-between h-full">
+                <div className="flex flex-col items-center justify-between h-full gap-4">
                     <PlayerDisplay name={match.team1Name} org={match.team1OrgName} isServing={servingTeamId === match.team1Id} />
                     <SetTracker setsWon={team1SetsWon}/>
                 </div>
                 <div className="flex items-center justify-center gap-4 md:gap-8 my-4 md:my-0">
                      <Score score={team1Points} />
-                    <span className="text-6xl font-light text-white/50">-</span>
+                    <span className="text-6xl md:text-8xl font-light text-white/50">-</span>
                     <Score score={team2Points} />
                 </div>
-                <div className="flex flex-col items-center justify-between h-full">
+                <div className="flex flex-col items-center justify-between h-full gap-4">
                     <PlayerDisplay name={match.team2Name} org={match.team2OrgName} isServing={servingTeamId === match.team2Id} />
                     <SetTracker setsWon={team2SetsWon}/>
                 </div>
@@ -133,6 +134,12 @@ export function PresenterShell() {
   const [tournament, setTournament] = useState<Tournament | null>(null);
   const [teamCounts, setTeamCounts] = useState<Record<TeamType, number>>({});
   const [isLoading, setIsLoading] = useState(true);
+  const [qrCodeUrl, setQrCodeUrl] = useState('');
+
+  useEffect(() => {
+    // This runs only on the client, after the component mounts
+    setQrCodeUrl(window.location.href);
+  }, []);
 
   useEffect(() => {
     const matchesQuery = query(collection(db, 'matches'));
@@ -205,7 +212,7 @@ export function PresenterShell() {
   const hasSlides = liveMatches.length > 0 || upcomingMatches.length > 0;
 
   return (
-    <div className="h-screen w-screen bg-gradient-to-br from-gray-900 to-blue-900/50 font-sans flex flex-col p-4">
+    <div className="h-screen w-screen bg-gradient-to-br from-gray-900 to-blue-900/50 font-sans flex flex-col p-4 relative">
         { !hasSlides ? (
             <WelcomeSlide tournament={tournament} />
         ) : (
@@ -233,6 +240,19 @@ export function PresenterShell() {
                 </CarouselContent>
             </Carousel>
         )}
+        {qrCodeUrl && (
+          <div className="absolute bottom-4 left-4 bg-white p-2 rounded-lg shadow-lg">
+            <Image
+                src={`https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=${encodeURIComponent(qrCodeUrl)}`}
+                alt="QR Code for Mobile View"
+                width={120}
+                height={120}
+                data-ai-hint="qr code"
+            />
+          </div>
+        )}
     </div>
   );
 }
+
+    
