@@ -6,14 +6,13 @@ import { db } from '@/lib/firebase';
 import { collection, onSnapshot, query, Timestamp } from 'firebase/firestore';
 import type { Match, Tournament, TeamType } from '@/types';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, MonitorPlay, WifiOff, ListChecks } from 'lucide-react';
+import { Loader2, MonitorPlay, WifiOff, ListChecks, Trophy } from 'lucide-react';
 import { AnimatePresence, m } from 'framer-motion';
 import { Carousel, CarouselContent, CarouselItem } from "@/components/ui/carousel";
 import Autoplay from "embla-carousel-autoplay";
 import { getRoundName } from '@/lib/utils';
 import { EventBadge } from '../ui/event-badge';
 import { Logo } from '../logo';
-import Image from 'next/image';
 
 const WelcomeSlide = ({ tournament }: { tournament: Tournament | null }) => (
     <div className="flex flex-col items-center justify-center h-full text-center p-8 text-white">
@@ -106,18 +105,18 @@ const LiveMatchSlide = ({ match, teamCounts }: { match: Match, teamCounts: Recor
     );
 };
 
-const AllFixturesSlide = ({ matches, teamCounts }: { matches: Match[], teamCounts: Record<TeamType, number>}) => (
+const AllFixturesSlide = ({ matches, teamCounts, page, totalPages }: { matches: Match[], teamCounts: Record<TeamType, number>, page: number, totalPages: number}) => (
     <div className="h-full flex flex-col bg-black/30 rounded-2xl border border-white/20 p-8">
         <header className="text-center mb-8">
             <h2 className="text-4xl md:text-5xl font-bold flex items-center justify-center gap-4 text-white"><ListChecks /> All Fixtures</h2>
-            <p className="text-lg md:text-xl text-slate-300">Overview of all non-completed matches</p>
+            <p className="text-lg md:text-xl text-slate-300">Overview of all non-completed matches ({`Page ${page} of ${totalPages}`})</p>
         </header>
         <div className="flex-grow grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
             {matches.map(match => (
                 <div key={match.id} className="bg-white/10 p-4 rounded-lg flex flex-col justify-center text-center text-white">
                     <div className="flex justify-between items-center w-full px-2 mb-2">
                       <EventBadge eventType={match.eventType}/>
-                      <span className="font-semibold text-slate-200">{getRoundName(match.round || 0, match.eventType, teamCounts[match.eventType])}</span>
+                      <span className="font-semibold text-slate-200">{getRoundName(match.round || 0, match.eventType, teamCounts[match.eventType] || 0)}</span>
                     </div>
                     <p className="text-base font-bold truncate">{match.team1Name}</p>
                     <p className="text-xs text-slate-300 mb-1">{match.team1OrgName}</p>
@@ -129,6 +128,37 @@ const AllFixturesSlide = ({ matches, teamCounts }: { matches: Match[], teamCount
         </div>
     </div>
 );
+
+const CompletedMatchSlide = ({ matches, teamCounts }: { matches: Match[], teamCounts: Record<TeamType, number>}) => (
+    <div className="h-full flex flex-col bg-black/30 rounded-2xl border border-white/20 p-8">
+        <header className="text-center mb-8">
+            <h2 className="text-4xl md:text-5xl font-bold flex items-center justify-center gap-4 text-white"><Trophy /> Recent Results</h2>
+            <p className="text-lg md:text-xl text-slate-300">Overview of the latest completed matches</p>
+        </header>
+        <div className="flex-grow grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+            {matches.map(match => {
+                const winnerIsTeam1 = match.winnerId === match.team1Id;
+                const winner = winnerIsTeam1 ? match.team1Name : match.team2Name;
+                const loser = winnerIsTeam1 ? match.team2Name : match.team1Name;
+                
+                return (
+                    <div key={match.id} className="bg-white/10 p-4 rounded-lg flex flex-col justify-center text-center text-white">
+                        <div className="flex justify-between items-center w-full px-2 mb-2 text-slate-200">
+                          <EventBadge eventType={match.eventType}/>
+                          <span className="font-semibold">{getRoundName(match.round || 0, match.eventType, teamCounts[match.eventType] || 0)}</span>
+                        </div>
+                        <div className="mt-2">
+                            <p className="text-base font-bold text-yellow-300 truncate">Winner: {winner}</p>
+                            <p className="text-sm text-slate-300 truncate">Defeated: {loser}</p>
+                        </div>
+                        <p className="font-bold text-lg text-white mt-2">{match.score}</p>
+                    </div>
+                );
+            })}
+        </div>
+    </div>
+);
+
 
 export function PresenterShell() {
   const { toast } = useToast();
@@ -143,11 +173,15 @@ export function PresenterShell() {
     const teamsQuery = query(collection(db, 'teams'));
 
     const unsubscribeMatches = onSnapshot(matchesQuery, (snapshot) => {
-      const matchesData = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data(),
-        startTime: (doc.data().startTime as Timestamp)?.toDate()
-      } as Match));
+      const matchesData = snapshot.docs.map(doc => {
+        const data = doc.data();
+        return {
+          id: doc.id,
+          ...data,
+          startTime: (data.startTime as Timestamp)?.toDate(),
+          lastUpdateTime: (data.lastUpdateTime as Timestamp)?.toDate(),
+        } as Match;
+      });
       setMatches(matchesData);
     }, (error) => {
       console.error("Error fetching matches:", error);
@@ -185,7 +219,24 @@ export function PresenterShell() {
   }, [toast]);
 
   const liveMatches = matches.filter(m => m.status === 'IN_PROGRESS').sort((a,b) => (a.courtName || '').localeCompare(b.courtName || ''));
-  const allNonCompletedMatches = matches.filter(m => m.status !== 'COMPLETED').sort((a, b) => (a.startTime as any) - (b.startTime as any)).slice(0, 8);
+  const allNonCompletedMatches = matches.filter(m => m.status !== 'COMPLETED').sort((a, b) => (a.startTime as any) - (b.startTime as any));
+  
+  const completedMatches = matches
+    .filter(m => m.status === 'COMPLETED' && m.lastUpdateTime)
+    .sort((a, b) => b.lastUpdateTime!.getTime() - a.lastUpdateTime!.getTime())
+    .slice(0, 8);
+
+
+  const chunkArray = <T,>(array: T[], size: number): T[][] => {
+    const chunkedArr: T[][] = [];
+    for (let i = 0; i < array.length; i += size) {
+      chunkedArr.push(array.slice(i, i + size));
+    }
+    return chunkedArr;
+  };
+  
+  const fixturePages = chunkArray(allNonCompletedMatches, 8);
+
 
   if (isLoading) {
     return (
@@ -205,7 +256,7 @@ export function PresenterShell() {
     );
   }
   
-  const hasSlides = liveMatches.length > 0 || allNonCompletedMatches.length > 0;
+  const hasSlides = liveMatches.length > 0 || allNonCompletedMatches.length > 0 || completedMatches.length > 0;
 
   return (
     <div className="h-screen w-screen bg-gradient-to-br from-gray-900 to-blue-900/50 font-sans flex flex-col p-4 relative">
@@ -228,11 +279,18 @@ export function PresenterShell() {
                         </CarouselItem>
                     ))}
 
-                    {allNonCompletedMatches.length > 0 && (
-                        <CarouselItem>
-                           <AllFixturesSlide matches={allNonCompletedMatches} teamCounts={teamCounts} />
+                    {fixturePages.map((page, index) => (
+                         <CarouselItem key={`fixture-page-${index}`}>
+                           <AllFixturesSlide matches={page} teamCounts={teamCounts} page={index+1} totalPages={fixturePages.length}/>
+                        </CarouselItem>
+                    ))}
+
+                    {completedMatches.length > 0 && (
+                         <CarouselItem>
+                           <CompletedMatchSlide matches={completedMatches} teamCounts={teamCounts} />
                         </CarouselItem>
                     )}
+
                 </CarouselContent>
             </Carousel>
         )}
