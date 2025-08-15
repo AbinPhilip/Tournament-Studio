@@ -72,7 +72,8 @@ export interface Match {
     team2OrgName?: string;
     eventType: TeamType;
     courtName: string;
-    startTime: Date | Timestamp;
+    startTime: Date;
+    lastUpdateTime?: Date | null;
     status: MatchStatus;
     winnerId?: string;
     score?: string; // e.g., "2-1" for sets, or "Forfeited"
@@ -86,4 +87,5 @@ export interface Match {
         servingTeamId: string;
         currentSet: number;
     } | null;
+    restEndTime?: number; // Client-side property for countdown
 }

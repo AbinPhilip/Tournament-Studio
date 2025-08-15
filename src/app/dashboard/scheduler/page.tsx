@@ -4,7 +4,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, Loader2, Play, XCircle } from 'lucide-react';
+import { ArrowLeft, Loader2, Play, XCircle, TimerOff, ShieldCheck } from 'lucide-react';
 import type { Match, Team, TeamType, Tournament } from '@/types';
 import { db } from '@/lib/firebase';
 import { collection, getDocs, doc, writeBatch, query, Timestamp } from 'firebase/firestore';
@@ -32,8 +32,39 @@ import {
 } from '@/components/ui/select';
 import { EventBadge } from '@/components/ui/event-badge';
 import { getRoundName } from '@/lib/utils';
+import { useAuth } from '@/hooks/use-auth';
+
+const MIN_REST_TIME_MS = 10 * 60 * 1000; // 10 minutes
+
+const CountdownTimer = ({ endTime }: { endTime: number }) => {
+    const [timeLeft, setTimeLeft] = useState(endTime - Date.now());
+
+    useEffect(() => {
+        const interval = setInterval(() => {
+            const newTimeLeft = endTime - Date.now();
+            if (newTimeLeft <= 0) {
+                setTimeLeft(0);
+                clearInterval(interval);
+            } else {
+                setTimeLeft(newTimeLeft);
+            }
+        }, 1000);
+        return () => clearInterval(interval);
+    }, [endTime]);
+
+    if (timeLeft <= 0) {
+        return <span className="text-green-500 font-bold">Ready</span>;
+    }
+
+    const minutes = Math.floor(timeLeft / 60000);
+    const seconds = Math.floor((timeLeft % 60000) / 1000).toString().padStart(2, '0');
+
+    return <span>{minutes}:{seconds}</span>;
+};
+
 
 export default function SchedulerPage() {
+    const { user } = useAuth();
     const [tournament, setTournament] = useState<Tournament | null>(null);
     const [matches, setMatches] = useState<Match[]>([]);
     const [isLoading, setIsLoading] = useState(true);
@@ -68,7 +99,8 @@ export default function SchedulerPage() {
                   const data = doc.data();
                   // Firestore Timestamps need to be converted to JS Date objects
                   const startTime = data.startTime instanceof Timestamp ? data.startTime.toDate() : new Date();
-                  return { id: doc.id, ...data, startTime } as Match;
+                  const lastUpdateTime = data.lastUpdateTime instanceof Timestamp ? data.lastUpdateTime.toDate() : null;
+                  return { id: doc.id, ...data, startTime, lastUpdateTime } as Match;
                 });
                 setMatches(allMatches);
 
@@ -91,12 +123,43 @@ export default function SchedulerPage() {
         fetchAndSetData();
     }, [toast, router]);
 
-    const { unassignedMatches, busyCourts } = useMemo(() => {
+    const { unassignedMatches, busyCourts, restingTeams } = useMemo(() => {
         const unassigned = matches.filter(m => m.status === 'PENDING');
         
-        unassigned.sort((a, b) => {
+        const now = Date.now();
+        const completedMatchesMap = new Map(
+            matches.filter(m => m.status === 'COMPLETED' && m.lastUpdateTime)
+                   .map(m => [m.id, m.lastUpdateTime!.getTime()])
+        );
+
+        const teamLastPlayed = new Map<string, number>();
+        matches.forEach(m => {
+            if (m.status === 'COMPLETED' && m.lastUpdateTime) {
+                const completedTime = m.lastUpdateTime!.getTime();
+                teamLastPlayed.set(m.team1Id, completedTime);
+                teamLastPlayed.set(m.team2Id, completedTime);
+            }
+        });
+
+        const resting: Match[] = [];
+        const ready: Match[] = [];
+
+        unassigned.forEach(m => {
+            const team1LastPlayed = teamLastPlayed.get(m.team1Id);
+            const team2LastPlayed = teamLastPlayed.get(m.team2Id);
+            const lastMatchTime = Math.max(team1LastPlayed || 0, team2LastPlayed || 0);
+
+            if (lastMatchTime > 0 && (now - lastMatchTime) < MIN_REST_TIME_MS) {
+                m.restEndTime = lastMatchTime + MIN_REST_TIME_MS;
+                resting.push(m);
+            } else {
+                ready.push(m);
+            }
+        });
+
+        ready.sort((a, b) => {
             const getRoundStage = (round: number, teamCount: number) => {
-                if (teamCount < 2) return 3; // Not enough teams for a full match
+                if (teamCount < 2) return 3; 
                 const totalRounds = Math.ceil(Math.log2(teamCount));
                 if (round === totalRounds) return 2; // Final
                 if (round === totalRounds - 1) return 1; // Semi-Final
@@ -112,25 +175,21 @@ export default function SchedulerPage() {
             const bStage = getRoundStage(bRound, bTeamCount);
 
             if (aStage !== bStage) {
-                return aStage - bStage; // Sort stages: Preliminary (0) < Semi-Final (1) < Final (2)
+                return aStage - bStage;
             }
 
-            // If stages are the same, sort by round number (lower rounds first)
             if (aRound !== bRound) {
                 return aRound - bRound;
             }
-
-            // Finally, sort by event type
             return a.eventType.localeCompare(b.eventType);
         });
 
-        // A court is busy if it has a match that is SCHEDULED, IN_PROGRESS, or has been assigned a court in the current UI state.
         const busy = new Set(matches
             .filter(m => m.status === 'IN_PROGRESS' || (m.status === 'SCHEDULED' && m.courtName))
             .map(m => m.courtName)
             .filter((name): name is string => !!name)
         );
-        return { unassignedMatches: unassigned, busyCourts: busy };
+        return { unassignedMatches: ready, busyCourts: busy, restingTeams: resting };
     }, [matches, teamCounts]);
 
     const handleCourtChange = (matchId: string, courtName: string) => {
@@ -141,15 +200,10 @@ export default function SchedulerPage() {
             
             const oldCourtName = newMatches[matchIndex].courtName;
 
-            // Free up the old court if it was previously assigned in this UI state
             if(oldCourtName) {
                  const otherMatchWithOldCourt = newMatches.find(m => m.id !== matchId && m.courtName === oldCourtName);
-                 if (!otherMatchWithOldCourt) {
-                    // Logic to make court available again if needed
-                 }
+                 if (!otherMatchWithOldCourt) { }
             }
-
-            // Un-assign from other matches if this court was selected for another match
             for (let i = 0; i < newMatches.length; i++) {
                 if (newMatches[i].courtName === courtName && newMatches[i].id !== matchId) {
                     newMatches[i].courtName = '';
@@ -166,6 +220,22 @@ export default function SchedulerPage() {
 
             return newMatches;
         });
+    };
+    
+    const handleOverride = (matchId: string) => {
+        const match = restingTeams.find(m => m.id === matchId);
+        if (!match) return;
+
+        // Force a state update by creating new objects.
+        const newResting = restingTeams.filter(m => m.id !== matchId);
+        const newUnassigned = [...unassignedMatches, match];
+
+        // This is a client-side only state change to move the match between lists.
+        // It's a bit of a trick to force re-render. We create a temporary merged list.
+        const otherMatches = matches.filter(m => m.status !== 'PENDING');
+        setMatches([...otherMatches, ...newResting, ...newUnassigned]);
+        
+        toast({ title: 'Override Applied', description: `Match is now available for scheduling.`});
     };
 
     const handleSaveSchedule = async () => {
@@ -184,7 +254,7 @@ export default function SchedulerPage() {
                 batch.update(matchRef, {
                     status: 'SCHEDULED',
                     courtName: match.courtName,
-                    startTime: match.startTime // This is now a Date object
+                    startTime: match.startTime 
                 });
             });
             await batch.commit();
@@ -220,7 +290,6 @@ export default function SchedulerPage() {
         }
     };
     
-    // Get courts that are occupied in the CURRENT UI state for a match yet to be saved.
     const assignedButNotSavedCourts = new Set(
         matches.filter(m => m.status === 'SCHEDULED' && m.courtName).map(m => m.courtName)
     );
@@ -237,6 +306,8 @@ export default function SchedulerPage() {
             </div>
         )
     }
+
+    const isAdmin = user?.role === 'admin' || user?.role === 'super';
 
     return (
         <div className="space-y-8 p-4 md:p-8">
@@ -275,10 +346,55 @@ export default function SchedulerPage() {
                 </div>
             </div>
 
+            {restingTeams.length > 0 && (
+                 <Card>
+                    <CardHeader>
+                        <CardTitle>Teams on Rest Period</CardTitle>
+                        <CardDescription>These teams are on a mandatory 10-minute break before their next match.</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                         <Table>
+                            <TableHeader>
+                                <TableRow>
+                                    <TableHead>Match</TableHead>
+                                    <TableHead>Time Left</TableHead>
+                                    {isAdmin && <TableHead className="text-right">Action</TableHead>}
+                                </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                                {restingTeams.map(match => (
+                                    <TableRow key={match.id}>
+                                         <TableCell>
+                                            <div>
+                                                <span>{match.team1Name} vs {match.team2Name}</span>
+                                                <p className="text-sm text-muted-foreground">
+                                                    <EventBadge eventType={match.eventType} className="mr-2" />
+                                                    {getRoundName(match.round || 0, match.eventType, teamCounts[match.eventType])}
+                                                </p>
+                                            </div>
+                                        </TableCell>
+                                        <TableCell>
+                                            <CountdownTimer endTime={match.restEndTime!} />
+                                        </TableCell>
+                                        {isAdmin && (
+                                            <TableCell className="text-right">
+                                                <Button variant="secondary" size="sm" onClick={() => handleOverride(match.id)}>
+                                                    <TimerOff className="mr-2"/> Override
+                                                </Button>
+                                            </TableCell>
+                                        )}
+                                    </TableRow>
+                                ))}
+                            </TableBody>
+                         </Table>
+                    </CardContent>
+                </Card>
+            )}
+
             <Card>
                 <CardHeader>
                     <CardTitle>Unassigned Matches</CardTitle>
-                    <CardDescription>Matches that need to be scheduled.</CardDescription>
+                    <CardDescription>Matches that are ready to be scheduled.</CardDescription>
                 </CardHeader>
                 <CardContent>
                     {unassignedMatches.length > 0 ? (
@@ -293,7 +409,6 @@ export default function SchedulerPage() {
                             </TableHeader>
                             <TableBody>
                                 {unassignedMatches.map((match) => {
-                                    // An available court is one that isn't busy in the DB and hasn't been assigned in the current unsaved UI state.
                                     const availableCourtsForThisMatch = tournament?.courtNames.filter(c => 
                                         !busyCourts.has(c.name) && 
                                         (!assignedButNotSavedCourts.has(c.name) || match.courtName === c.name)
@@ -341,3 +456,4 @@ export default function SchedulerPage() {
         </div>
     );
 }
+

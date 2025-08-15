@@ -147,7 +147,7 @@ const recordMatchResultFlow = ai.defineFlow(
         const currentRoundSnap = await getDocs(currentRoundQuery);
         
         const roundMatchesMap = new Map(currentRoundSnap.docs.map(doc => [doc.id, doc.data() as Match]));
-        roundMatchesMap.set(input.matchId, { ...completedMatch, ...updates, lastUpdateTime: Timestamp.now() });
+        roundMatchesMap.set(input.matchId, { ...completedMatch, ...updates, lastUpdateTime: Timestamp.now() } as Match);
 
         const allMatchesInRoundCompleted = Array.from(roundMatchesMap.values()).every(
             match => match.status === 'COMPLETED'
@@ -243,6 +243,7 @@ const recordMatchResultFlow = ai.defineFlow(
                     eventType: completedMatch.eventType,
                     courtName: '', // No court for a bye
                     startTime: Timestamp.now(),
+                    lastUpdateTime: Timestamp.now(),
                     status: 'COMPLETED',
                     winnerId: byeWinnerId,
                     round: completedMatch.round + 1,
@@ -277,9 +278,9 @@ const recordMatchResultFlow = ai.defineFlow(
             const orgsCollection = await getDocs(collection(db, 'organizations'));
             const orgNameMap = new Map(orgsCollection.docs.map(doc => [doc.id, doc.data().name]));
 
-            // Ensure a minimum 60-minute rest period.
+            // Ensure a minimum 10-minute rest period.
             const minStartTime = new Date();
-            minStartTime.setMinutes(minStartTime.getMinutes() + 60);
+            minStartTime.setMinutes(minStartTime.getMinutes() + 10);
 
             let matchTime = new Date(minStartTime.getTime());
             let availableCourt: string | null = null;
