@@ -1,12 +1,12 @@
 
 "use client";
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { db } from '@/lib/firebase';
 import { collection, onSnapshot, query, Timestamp } from 'firebase/firestore';
-import type { Match, Tournament, TeamType } from '@/types';
+import type { Match, Tournament, Team, TeamType } from '@/types';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, MonitorPlay, WifiOff } from 'lucide-react';
+import { Loader2, MonitorPlay, WifiOff, Trophy } from 'lucide-react';
 import { AnimatePresence, m } from 'framer-motion';
 import { Carousel, CarouselContent, CarouselItem } from "@/components/ui/carousel";
 import Autoplay from "embla-carousel-autoplay";
@@ -14,6 +14,8 @@ import { getRoundName } from '@/lib/utils';
 import { EventBadge } from '../ui/event-badge';
 import { Logo } from '../logo';
 import { cn } from '@/lib/utils';
+import { Table, TableBody, TableCell, TableHeader, TableRow, TableHead } from '../ui/table';
+import { Badge } from '../ui/badge';
 
 const LiveMatchSlide = ({ match, teamCounts }: { match: Match, teamCounts: Record<TeamType, number> }) => {
     const { team1Points = 0, team2Points = 0, servingTeamId } = match.live || {};
@@ -120,7 +122,12 @@ const FixtureSlide = ({ match, teamCounts }: { match: Match, teamCounts: Record<
 }
 
 const WelcomeSlide = ({ tournament }: { tournament: Tournament | null }) => (
-    <div className="flex flex-col items-center justify-center h-full text-center p-8 text-white">
+    <m.div
+        className="h-full flex flex-col justify-center items-center p-8 text-white text-center bg-black/30 rounded-2xl border border-white/20"
+        initial={{opacity: 0, scale: 0.95}}
+        animate={{opacity: 1, scale: 1}}
+        transition={{duration: 0.5}}
+    >
         <m.div initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ delay: 0.2, duration: 0.5 }}>
             <Logo />
         </m.div>
@@ -136,7 +143,58 @@ const WelcomeSlide = ({ tournament }: { tournament: Tournament | null }) => (
         >
             Hosted by: {tournament?.hostName}
         </m.p>
-    </div>
+    </m.div>
+);
+
+const CompletedMatchesSlide = ({ matches, teamCounts }: { matches: Match[], teamCounts: Record<TeamType, number> }) => (
+     <m.div
+        className="h-full flex flex-col justify-center p-4 sm:p-6 md:p-8 bg-black/30 rounded-2xl border border-white/20"
+        initial={{opacity: 0, scale: 0.95}}
+        animate={{opacity: 1, scale: 1}}
+        transition={{duration: 0.5}}
+    >
+        <header className="text-center mb-6">
+            <h2 className="text-4xl md:text-5xl font-bold text-white font-headline flex items-center justify-center gap-4">
+                <Trophy className="text-yellow-400" />
+                Recent Results
+            </h2>
+        </header>
+        <main className="text-white">
+            <Table className="text-lg">
+                <TableHeader>
+                    <TableRow className="border-white/20 hover:bg-transparent">
+                        <TableHead className="text-white/80 font-headline text-xl">Event</TableHead>
+                        <TableHead className="text-white/80 font-headline text-xl">Winner</TableHead>
+                        <TableHead className="text-white/80 font-headline text-xl">Runner-up</TableHead>
+                        <TableHead className="text-center text-white/80 font-headline text-xl">Score</TableHead>
+                    </TableRow>
+                </TableHeader>
+                <TableBody>
+                     {matches.map(match => {
+                        const winnerIsTeam1 = match.winnerId === match.team1Id;
+                        const winnerName = winnerIsTeam1 ? match.team1Name : match.team2Name;
+                        const winnerOrg = winnerIsTeam1 ? match.team1OrgName : match.team2OrgName;
+                        const loserName = winnerIsTeam1 ? match.team2Name : match.team1Name;
+                        const loserOrg = winnerIsTeam1 ? match.team2OrgName : match.team1OrgName;
+                        return (
+                             <TableRow key={match.id} className="border-white/20 hover:bg-white/5">
+                                <TableCell><EventBadge eventType={match.eventType} /></TableCell>
+                                <TableCell>
+                                    <p className="font-bold">{winnerName}</p>
+                                    <p className="text-sm text-slate-300">{winnerOrg}</p>
+                                </TableCell>
+                                <TableCell>
+                                     <p>{loserName}</p>
+                                     <p className="text-sm text-slate-300">{loserOrg}</p>
+                                </TableCell>
+                                <TableCell className="text-center font-bold text-yellow-300 text-xl font-headline">{match.score}</TableCell>
+                            </TableRow>
+                        )
+                     })}
+                </TableBody>
+            </Table>
+        </main>
+     </m.div>
 );
 
 
@@ -171,7 +229,11 @@ export function PresenterShell() {
     const unsubscribeTournament = onSnapshot(tournamentQuery, (snapshot) => {
       if (!snapshot.empty) {
         const docData = snapshot.docs[0].data();
-        const tourneyData = { id: snapshot.docs[0].id, ...docData } as Tournament;
+        const tourneyData = { 
+            id: snapshot.docs[0].id, 
+            ...docData, 
+            date: (docData.date as Timestamp)?.toDate().toISOString() 
+        } as Tournament;
         setTournament(tourneyData);
       } else {
         setTournament(null);
@@ -198,9 +260,33 @@ export function PresenterShell() {
     };
   }, [toast]);
 
-  const liveMatches = matches.filter(m => m.status === 'IN_PROGRESS' && m.courtName).sort((a,b) => (a.courtName || '').localeCompare(b.courtName || ''));
-  const scheduledFixtures = matches.filter(m => m.status === 'SCHEDULED' && m.courtName).sort((a, b) => (a.startTime as any) - (b.startTime as any));
-  const allDisplayableMatches = [...liveMatches, ...scheduledFixtures];
+  const slides = useMemo(() => {
+    const liveMatches = matches.filter(m => m.status === 'IN_PROGRESS' && m.courtName).sort((a,b) => (a.courtName || '').localeCompare(b.courtName || ''));
+    const scheduledFixtures = matches.filter(m => m.status === 'SCHEDULED' && m.courtName).sort((a, b) => (a.startTime as any) - (b.startTime as any));
+    const recentCompleted = matches.filter(m => m.status === 'COMPLETED').sort((a, b) => (b.lastUpdateTime?.getTime() || 0) - (a.lastUpdateTime?.getTime() || 0)).slice(0, 8);
+    
+    const slideComponents = [];
+
+    // Always add Welcome slide
+    slideComponents.push(<CarouselItem key="welcome"><WelcomeSlide tournament={tournament} /></CarouselItem>);
+
+    // Add Live matches
+    liveMatches.forEach(match => slideComponents.push(
+        <CarouselItem key={match.id}><LiveMatchSlide match={match} teamCounts={teamCounts}/></CarouselItem>
+    ));
+
+    // Add Scheduled fixtures
+    scheduledFixtures.forEach(match => slideComponents.push(
+        <CarouselItem key={match.id}><FixtureSlide match={match} teamCounts={teamCounts} /></CarouselItem>
+    ));
+
+    // Add Completed matches slide if there are any
+    if (recentCompleted.length > 0) {
+        slideComponents.push(<CarouselItem key="completed"><CompletedMatchesSlide matches={recentCompleted} teamCounts={teamCounts} /></CarouselItem>);
+    }
+    
+    return slideComponents;
+  }, [matches, tournament, teamCounts]);
   
   if (isLoading) {
     return (
@@ -222,7 +308,7 @@ export function PresenterShell() {
   
   return (
     <div className="h-screen w-screen bg-gradient-to-br from-[#020024] via-[#090979] to-[#00d4ff] font-sans flex flex-col p-4 relative">
-        {allDisplayableMatches.length === 0 ? (
+       {slides.length <= 1 ? ( // Only welcome slide exists
             <WelcomeSlide tournament={tournament} />
         ) : (
              <Carousel 
@@ -231,18 +317,12 @@ export function PresenterShell() {
                 opts={{ loop: true }}
              >
                 <CarouselContent className="h-full">
-                    {allDisplayableMatches.map(match => (
-                        <CarouselItem key={match.id}>
-                            {match.status === 'IN_PROGRESS' ? (
-                                <LiveMatchSlide match={match} teamCounts={teamCounts}/>
-                            ) : (
-                                <FixtureSlide match={match} teamCounts={teamCounts} />
-                            )}
-                        </CarouselItem>
-                    ))}
+                    {slides}
                 </CarouselContent>
             </Carousel>
         )}
     </div>
   );
 }
+
+    
