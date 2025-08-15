@@ -193,11 +193,12 @@ const recordMatchResultFlow = ai.defineFlow(
                 const winnerId = match.winnerId!;
                 let pointDiff = 0;
 
-                // For bye matches, assign a very large point differential to prioritize them if needed, but not over actual play results.
-                if (match.team2Id === 'BYE') {
-                    pointDiff = 999; 
+                if (match.team2Id === 'BYE' && match.round === 1) {
+                    // Give a neutral point differential for first-round BYEs so they don't get undue advantage.
+                    pointDiff = 0; 
+                } else if (match.pointDifferential) {
+                    pointDiff = match.pointDifferential;
                 } else if (match.scores && match.scores.length > 0) {
-                    // Sum up all points scored by winner and loser across all sets.
                     const totalScoreWinner = match.scores.reduce((sum, set) => sum + (winnerId === match.team1Id ? set.team1 : set.team2), 0);
                     const totalScoreLoser = match.scores.reduce((sum, set) => sum + (winnerId === match.team1Id ? set.team2 : set.team1), 0);
                     pointDiff = totalScoreWinner - totalScoreLoser;
@@ -248,21 +249,25 @@ const recordMatchResultFlow = ai.defineFlow(
 
         const finalWinnersToSchedule = winnersToSchedule.filter(id => !scheduledIds.has(id));
 
-        for (let i = 0; i < finalWinnersToSchedule.length; i += 2) {
-             if (i + 1 >= finalWinnersToSchedule.length) continue; 
+        // Implement seeded pairing: 1 vs n, 2 vs n-1, etc.
+        let left = 0;
+        let right = finalWinnersToSchedule.length - 1;
 
-             const team1Id = finalWinnersToSchedule[i];
-             const team2Id = finalWinnersToSchedule[i+1];
+        while (left < right) {
+             const team1Id = finalWinnersToSchedule[left];
+             const team2Id = finalWinnersToSchedule[right];
 
-            const winnerTeamSnap = await getDoc(doc(db, 'teams', team1Id));
-            const opponentTeamSnap = await getDoc(doc(db, 'teams', team2Id));
+            const team1Snap = await getDoc(doc(db, 'teams', team1Id));
+            const team2Snap = await getDoc(doc(db, 'teams', team2Id));
 
-            if (!winnerTeamSnap.exists() || !opponentTeamSnap.exists()) {
-                 console.warn("Could not find winning teams to schedule next round.");
+            if (!team1Snap.exists() || !team2Snap.exists()) {
+                 console.warn("Could not find one or both winning teams to schedule next round.");
+                 left++;
+                 right--;
                  continue;
             }
-            const winnerTeam = winnerTeamSnap.data() as Team;
-            const opponentTeam = opponentTeamSnap.data() as Team;
+            const team1 = team1Snap.data() as Team;
+            const team2 = team2Snap.data() as Team;
 
             const orgsCollection = await getDocs(collection(db, 'organizations'));
             const orgNameMap = new Map(orgsCollection.docs.map(doc => [doc.id, doc.data().name]));
@@ -272,10 +277,10 @@ const recordMatchResultFlow = ai.defineFlow(
             const newMatchData: Omit<Match, 'id'> = {
                 team1Id: team1Id,
                 team2Id: team2Id,
-                team1Name: winnerTeam.player1Name + (winnerTeam.player2Name ? ` & ${winnerTeam.player2Name}` : ''),
-                team2Name: opponentTeam.player1Name + (opponentTeam.player2Name ? ` & ${opponentTeam.player2Name}` : ''),
-                team1OrgName: orgNameMap.get(winnerTeam.organizationId) || '',
-                team2OrgName: orgNameMap.get(opponentTeam.organizationId) || '',
+                team1Name: team1.player1Name + (team1.player2Name ? ` & ${team1.player2Name}` : ''),
+                team2Name: team2.player1Name + (team2.player2Name ? ` & ${team2.player2Name}` : ''),
+                team1OrgName: orgNameMap.get(team1.organizationId) || '',
+                team2OrgName: orgNameMap.get(team2.organizationId) || '',
                 eventType: completedMatch.eventType,
                 courtName: '', // Left blank for manual assignment
                 startTime: Timestamp.now(), // Placeholder time
@@ -283,6 +288,9 @@ const recordMatchResultFlow = ai.defineFlow(
                 round: completedMatch.round + 1,
             };
             batch.set(newMatchRef, newMatchData);
+            
+            left++;
+            right--;
         }
     }
 
