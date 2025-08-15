@@ -194,7 +194,6 @@ const recordMatchResultFlow = ai.defineFlow(
                 let pointDiff = 0;
 
                 if (match.team2Id === 'BYE' && match.round === 1) {
-                    // Give a neutral point differential for first-round BYEs so they don't get undue advantage.
                     pointDiff = 0; 
                 } else if (match.pointDifferential) {
                     pointDiff = match.pointDifferential;
@@ -206,40 +205,50 @@ const recordMatchResultFlow = ai.defineFlow(
                 return { winnerId, pointDiff };
             });
 
-        // Sort winners: highest point differential first
         winnersWithScores.sort((a, b) => b.pointDiff - a.pointDiff);
         
-        let winnersToSchedule = winnersWithScores.map(w => w.winnerId);
+        let winnersToSchedule = winnersWithScores;
         
         // If there's an odd number of winners, the top scorer gets a bye
         if (winnersToSchedule.length % 2 !== 0 && winnersToSchedule.length > 1) {
-            const byeWinnerId = winnersToSchedule.shift()!; // Remove top scorer
             
-            const byeWinnerTeamSnap = await getDoc(doc(db, 'teams', byeWinnerId));
-            if (byeWinnerTeamSnap.exists()) {
-                const byeWinnerTeam = byeWinnerTeamSnap.data() as Team;
-                 const orgsCollection = await getDocs(collection(db, 'organizations'));
-                const orgNameMap = new Map(orgsCollection.docs.map(doc => [doc.id, doc.data().name]));
+            // Find teams that have already had a BYE in this event
+            const byeHistoryQuery = query(matchesRef, where('eventType', '==', completedMatch.eventType), where('team2Id', '==', 'BYE'));
+            const byeHistorySnap = await getDocs(byeHistoryQuery);
+            const teamsWithPastByes = new Set(byeHistorySnap.docs.map(doc => doc.data().team1Id));
 
-                // Create a bye match for the top scorer
-                const byeMatchRef = doc(collection(db, 'matches'));
-                const byeMatchData: Omit<Match, 'id'> = {
-                    team1Id: byeWinnerId,
-                    team2Id: 'BYE',
-                    team1Name: byeWinnerTeam.player1Name + (byeWinnerTeam.player2Name ? ` & ${byeWinnerTeam.player2Name}` : ''),
-                    team2Name: 'BYE',
-                    team1OrgName: orgNameMap.get(byeWinnerTeam.organizationId) || '',
-                    team2OrgName: 'BYE',
-                    eventType: completedMatch.eventType,
-                    courtName: '', // No court for a bye
-                    startTime: Timestamp.now(),
-                    lastUpdateTime: Timestamp.now(),
-                    status: 'COMPLETED',
-                    winnerId: byeWinnerId,
-                    round: completedMatch.round + 1,
-                    score: 'BYE'
-                };
-                batch.set(byeMatchRef, byeMatchData);
+            // Find the highest-ranked winner who hasn't had a BYE yet
+            const byeWinnerIndex = winnersToSchedule.findIndex(w => !teamsWithPastByes.has(w.winnerId));
+
+            if (byeWinnerIndex !== -1) {
+                const [byeWinner] = winnersToSchedule.splice(byeWinnerIndex, 1); // Remove the eligible winner
+                const byeWinnerId = byeWinner.winnerId;
+
+                const byeWinnerTeamSnap = await getDoc(doc(db, 'teams', byeWinnerId));
+                if (byeWinnerTeamSnap.exists()) {
+                    const byeWinnerTeam = byeWinnerTeamSnap.data() as Team;
+                    const orgsCollection = await getDocs(collection(db, 'organizations'));
+                    const orgNameMap = new Map(orgsCollection.docs.map(doc => [doc.id, doc.data().name]));
+
+                    const byeMatchRef = doc(collection(db, 'matches'));
+                    const byeMatchData: Omit<Match, 'id'> = {
+                        team1Id: byeWinnerId,
+                        team2Id: 'BYE',
+                        team1Name: byeWinnerTeam.player1Name + (byeWinnerTeam.player2Name ? ` & ${byeWinnerTeam.player2Name}` : ''),
+                        team2Name: 'BYE',
+                        team1OrgName: orgNameMap.get(byeWinnerTeam.organizationId) || '',
+                        team2OrgName: 'BYE',
+                        eventType: completedMatch.eventType,
+                        courtName: '', 
+                        startTime: Timestamp.now(),
+                        lastUpdateTime: Timestamp.now(),
+                        status: 'COMPLETED',
+                        winnerId: byeWinnerId,
+                        round: completedMatch.round + 1,
+                        score: 'BYE'
+                    };
+                    batch.set(byeMatchRef, byeMatchData);
+                }
             }
         }
 
@@ -247,7 +256,7 @@ const recordMatchResultFlow = ai.defineFlow(
         const nextRoundSnap = await getDocs(nextRoundQuery);
         const scheduledIds = new Set(nextRoundSnap.docs.flatMap(d => [d.data().team1Id, d.data().team2Id]));
 
-        const finalWinnersToSchedule = winnersToSchedule.filter(id => !scheduledIds.has(id));
+        const finalWinnersToSchedule = winnersToSchedule.map(w => w.winnerId).filter(id => !scheduledIds.has(id));
 
         // Implement seeded pairing: 1 vs n, 2 vs n-1, etc.
         let left = 0;
