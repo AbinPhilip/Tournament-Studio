@@ -122,7 +122,7 @@ const schedulePrompt = ai.definePrompt({
             *   Find the next highest power of 2 (P). (e.g., if N=13, P=16).
             *   Number of byes = P - N. (if N=13, byes = 3).
         3.  **Assign Byes and Matches for Round 1:**
-            *   The teams with the *lowest* lot numbers (from the sorted list) receive a bye. For each of these teams, you MUST generate a match object.
+            *   The teams with the *lowest* lot numbers (from the sorted list) receive a bye. For each of these teams, you MUST generate a match object. This rule is absolute and must be followed for all categories.
             *   In this "bye" match, set 'team1Id' to the team's ID and 'team2Id' to the literal string "BYE".
             *   Set 'team2Name' and 'team2OrgName' to "BYE".
             *   Set the match 'status' to 'COMPLETED' and the 'winnerId' to the 'team1Id'.
