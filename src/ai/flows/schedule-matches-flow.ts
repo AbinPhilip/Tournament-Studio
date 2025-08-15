@@ -27,6 +27,8 @@ const TeamSchema = z.object({
 
 const TournamentSchema = z.object({
     id: z.string(),
+    name: z.string(),
+    hostName: z.string().optional(),
     location: z.string(),
     numberOfCourts: z.number(),
     courtNames: z.array(z.object({ name: z.string() })),
@@ -39,7 +41,7 @@ const TournamentSchema = z.object({
 const OrganizationSchema = z.object({
     id: z.string(),
     name: z.string(),
-    location: z.string(),
+    location: z.string().optional(),
 });
 
 const EventTeamCountSchema = z.object({

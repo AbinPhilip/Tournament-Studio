@@ -10,7 +10,7 @@
 import { ai } from '@/ai/genkit';
 import { z } from 'zod';
 import { db } from '@/lib/firebase';
-import { collection, doc, getDoc, getDocs, writeBatch, query, where, Timestamp } from 'firebase/firestore';
+import { collection, doc, getDoc, getDocs, writeBatch, query, where, Timestamp, updateDoc } from 'firebase/firestore';
 import type { Match, Tournament, Organization, Team, TeamType } from '@/types';
 
 
@@ -48,7 +48,7 @@ const recordMatchResultFlow = ai.defineFlow(
     }
     const completedMatch = matchSnap.data() as Match;
     
-    const updates: Partial<Match> = {};
+    const updates: Partial<Match> & { 'live.currentSet'?: number, 'live.team1Points'?: number, 'live.team2Points'?: number } = {};
     
     if (input.status === 'COMPLETED') {
         let finalWinnerId = input.winnerId;
@@ -91,12 +91,13 @@ const recordMatchResultFlow = ai.defineFlow(
       finalUpdates['live.currentSet'] = updates.scores.length + 1;
       finalUpdates['live.team1Points'] = 0;
       finalUpdates['live.team2Points'] = 0;
-    } else {
-        delete finalUpdates.scores; // Avoid overwriting scores if not provided for completion
-        Object.assign(finalUpdates, updates); // ensure all updates are applied
+    } else if (updates.status === 'COMPLETED') {
+        // Use a non-batched update here to ensure live is cleared before batch commit
+        await updateDoc(matchRef, { live: null, lastUpdateTime: Timestamp.now() });
+        delete finalUpdates.live;
     }
 
-    batch.update(matchRef, { ...finalUpdates, lastUpdateTime: Timestamp.now() });
+    batch.update(matchRef, { ...finalUpdates });
 
     // 2. If match is COMPLETED, check if it was a knockout match and if we need to schedule the next round
     const currentWinnerId = updates.winnerId;
