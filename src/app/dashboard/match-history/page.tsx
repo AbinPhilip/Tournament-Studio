@@ -13,9 +13,9 @@ import {
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
 import { db } from '@/lib/firebase';
-import { collection, getDocs, query, where, orderBy, limit, startAfter, DocumentData, endBefore, limitToLast } from 'firebase/firestore';
+import { collection, getDocs, query, where, orderBy, limit, startAfter, DocumentData } from 'firebase/firestore';
 import type { Match, TeamType } from '@/types';
-import { Loader2, ArrowLeft, ArrowRight } from 'lucide-react';
+import { Loader2, ArrowRight } from 'lucide-react';
 import { getRoundName } from '@/lib/utils';
 import { EventBadge } from '@/components/ui/event-badge';
 import { Button } from '@/components/ui/button';
@@ -31,80 +31,55 @@ export default function MatchHistoryPage() {
         singles: 0, mens_doubles: 0, womens_doubles: 0, mixed_doubles: 0,
     });
     const [lastVisible, setLastVisible] = useState<DocumentData | null>(null);
-    const [firstVisible, setFirstVisible] = useState<DocumentData | null>(null);
     const [isLastPage, setIsLastPage] = useState(false);
-    const [isFirstPage, setIsFirstPage] = useState(true);
     const [currentPage, setCurrentPage] = useState(1);
 
-    const fetchMatches = async (direction: 'next' | 'prev' | 'initial' = 'initial') => {
+    const fetchMatches = async (nextPage = false) => {
         setIsLoading(true);
         try {
             const matchesRef = collection(db, 'matches');
-            let q;
-
             const baseQuery = query(matchesRef, where('status', '==', 'COMPLETED'), orderBy('lastUpdateTime', 'desc'));
-
-            if (direction === 'next' && lastVisible) {
+            
+            let q;
+            if (nextPage && lastVisible) {
                 q = query(baseQuery, startAfter(lastVisible), limit(PAGE_SIZE));
-            } else if (direction === 'prev' && firstVisible) {
-                q = query(matchesRef, where('status', '==', 'COMPLETED'), orderBy('lastUpdateTime', 'desc'), endBefore(firstVisible), limitToLast(PAGE_SIZE));
             } else {
                 q = query(baseQuery, limit(PAGE_SIZE));
             }
 
             const matchesSnap = await getDocs(q);
-            if (matchesSnap.empty && direction !== 'initial') {
-                if (direction === 'next') setIsLastPage(true);
-                 if (direction === 'prev') setIsFirstPage(true);
-                setIsLoading(false);
-                return;
-            }
-            
-             if (matchesSnap.empty && direction === 'initial') {
-                setMatches([]);
-                setIsLastPage(true);
-                setIsFirstPage(true);
+
+            if (matchesSnap.empty) {
+                if (nextPage) {
+                    setIsLastPage(true);
+                } else {
+                    setMatches([]);
+                }
                 setIsLoading(false);
                 return;
             }
 
-            const matchesData = matchesSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Match));
+            const newMatches = matchesSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Match));
             
-            setMatches(matchesData);
-            setFirstVisible(matchesSnap.docs[0]);
+            setMatches(prev => nextPage ? [...prev, ...newMatches] : newMatches);
+            
             const newLastVisible = matchesSnap.docs[matchesSnap.docs.length - 1];
             setLastVisible(newLastVisible);
-            
-            // Check for next page availability
-            if ((direction === 'next' || direction === 'initial') && newLastVisible) {
+
+            if (matchesSnap.docs.length < PAGE_SIZE) {
+                setIsLastPage(true);
+            } else {
+                 // Check if there's a next page
                 const nextQuery = query(baseQuery, startAfter(newLastVisible), limit(1));
                 const nextSnap = await getDocs(nextQuery);
                 setIsLastPage(nextSnap.empty);
-            } else {
-                 setIsLastPage(false);
             }
 
-            // Update current page number
-            if (direction === 'initial') {
-                setCurrentPage(1);
-                 // Check if it is also the first page
-                const prevQuery = query(baseQuery, endBefore(matchesSnap.docs[0]), limitToLast(1));
-                const prevSnap = await getDocs(prevQuery);
-                setIsFirstPage(prevSnap.empty);
-            }
-            else if (direction === 'next') {
+            if (nextPage) {
                 setCurrentPage(p => p + 1);
-                setIsFirstPage(false);
+            } else {
+                setCurrentPage(1);
             }
-            else if (direction === 'prev') {
-                setCurrentPage(p => p - 1);
-                setIsLastPage(false); // We moved back, so it's not the last page
-                 // Check if it is now the first page
-                const prevQuery = query(baseQuery, endBefore(matchesSnap.docs[0]), limitToLast(1));
-                const prevSnap = await getDocs(prevQuery);
-                setIsFirstPage(prevSnap.empty);
-            }
-
 
         } catch (error) {
             console.error("Error fetching standings:", error);
@@ -126,7 +101,7 @@ export default function MatchHistoryPage() {
                     }
                 });
             setTeamCounts(counts);
-            fetchMatches('initial');
+            fetchMatches(false);
         };
         fetchInitialData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -229,13 +204,10 @@ export default function MatchHistoryPage() {
                         </Card>
                     )
                 })}
-                 <div className="flex justify-between items-center mt-4">
-                    <Button onClick={() => fetchMatches('prev')} disabled={isFirstPage || isLoading}>
-                        <ArrowLeft className="mr-2" /> Previous
-                    </Button>
-                    <span className="text-sm text-muted-foreground">Page {currentPage}</span>
-                    <Button onClick={() => fetchMatches('next')} disabled={isLastPage || isLoading}>
-                        Next <ArrowRight className="ml-2" />
+                 <div className="flex justify-center items-center mt-4">
+                    <Button onClick={() => fetchMatches(true)} disabled={isLastPage || isLoading}>
+                        {isLoading ? <Loader2 className="mr-2 animate-spin" /> : 'Load More'}
+                        {!isLoading && !isLastPage && <ArrowRight className="ml-2" />}
                     </Button>
                 </div>
                 </>
@@ -243,3 +215,4 @@ export default function MatchHistoryPage() {
         </div>
     )
 }
+
