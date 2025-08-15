@@ -171,6 +171,11 @@ const recordMatchResultFlow = ai.defineFlow(
         const totalRounds = getTotalRounds(teamCounts[completedMatch.eventType] || 0);
         const isFinalRound = completedMatch.round === totalRounds;
         const isSemiFinalRound = completedMatch.round === totalRounds - 1;
+        
+        if (completedMatch.round >= totalRounds) {
+            await batch.commit();
+            return; // It was the final round, nothing more to schedule.
+        }
 
         // Hold scheduling for semi-finals and finals
         if (isSemiFinalRound || isFinalRound) {
@@ -191,33 +196,61 @@ const recordMatchResultFlow = ai.defineFlow(
             }
         }
         
-        const roundMatchesWithTime = Array.from(roundMatchesMap.values()).map(m => ({
-            ...m,
-            lastUpdateTime: m.lastUpdateTime instanceof Timestamp ? m.lastUpdateTime : Timestamp.now(),
-        }));
+        const roundMatches = Array.from(roundMatchesMap.values());
         
-        const byeWinners = new Set(
-            roundMatchesWithTime
-                .filter(match => match.team2Id === 'BYE' && match.winnerId)
-                .map(match => match.winnerId!)
-        );
-        
-        const matchWinners = roundMatchesWithTime
-            .filter(match => match.team2Id !== 'BYE' && match.winnerId)
-            .sort((a, b) => a.lastUpdateTime.toMillis() - b.lastUpdateTime.toMillis())
-            .map(match => match.winnerId!);
+        // Get winners and calculate point differentials for sorting
+        const winnersWithScores = roundMatches
+            .filter(match => match.winnerId && match.winnerId !== 'BYE')
+            .map(match => {
+                const winnerId = match.winnerId!;
+                let pointDiff = 0;
 
-        let winnersToSchedule = [];
-        let remainingMatchWinners = [...matchWinners];
+                // For bye matches, give a high score to prioritize them if needed, but not over actual play.
+                if (match.team2Id === 'BYE') {
+                    pointDiff = 999; 
+                } else if (match.scores && match.scores.length > 0) {
+                    const totalScoreWinner = match.scores.reduce((sum, set) => sum + (winnerId === match.team1Id ? set.team1 : set.team2), 0);
+                    const totalScoreLoser = match.scores.reduce((sum, set) => sum + (winnerId === match.team1Id ? set.team2 : set.team1), 0);
+                    pointDiff = totalScoreWinner - totalScoreLoser;
+                }
+                return { winnerId, pointDiff };
+            });
+
+        // Sort winners: highest point differential first
+        winnersWithScores.sort((a, b) => b.pointDiff - a.pointDiff);
         
-        for (const byeWinner of Array.from(byeWinners)) {
-             if (remainingMatchWinners.length > 0) {
-                winnersToSchedule.push(byeWinner, remainingMatchWinners.shift()!);
-            } else {
-                winnersToSchedule.push(byeWinner); // Will get a bye if no one to pair with
+        let winnersToSchedule = winnersWithScores.map(w => w.winnerId);
+        
+        // If there's an odd number of winners, the top scorer gets a bye
+        if (winnersToSchedule.length % 2 !== 0 && winnersToSchedule.length > 1) {
+            const byeWinnerId = winnersToSchedule.shift()!; // Remove top scorer
+            
+            const byeWinnerTeamSnap = await getDoc(doc(db, 'teams', byeWinnerId));
+            if (byeWinnerTeamSnap.exists()) {
+                const byeWinnerTeam = byeWinnerTeamSnap.data() as Team;
+                 const orgsCollection = await getDocs(collection(db, 'organizations'));
+                const orgNameMap = new Map(orgsCollection.docs.map(doc => [doc.id, doc.data().name]));
+
+                // Create a bye match for the top scorer
+                const byeMatchRef = doc(collection(db, 'matches'));
+                const byeMatchData: Omit<Match, 'id'> = {
+                    team1Id: byeWinnerId,
+                    team2Id: 'BYE',
+                    team1Name: byeWinnerTeam.player1Name + (byeWinnerTeam.player2Name ? ` & ${byeWinnerTeam.player2Name}` : ''),
+                    team2Name: 'BYE',
+                    team1OrgName: orgNameMap.get(byeWinnerTeam.organizationId) || '',
+                    team2OrgName: 'BYE',
+                    eventType: completedMatch.eventType,
+                    courtName: '', // No court for a bye
+                    startTime: Timestamp.now(),
+                    status: 'COMPLETED',
+                    winnerId: byeWinnerId,
+                    round: completedMatch.round + 1,
+                    score: 'BYE'
+                };
+                batch.set(byeMatchRef, byeMatchData);
             }
         }
-        winnersToSchedule.push(...remainingMatchWinners);
 
         const nextRoundQuery = query(matchesRef, where('round', '==', completedMatch.round + 1), where('eventType', '==', completedMatch.eventType));
         const nextRoundSnap = await getDocs(nextRoundQuery);
