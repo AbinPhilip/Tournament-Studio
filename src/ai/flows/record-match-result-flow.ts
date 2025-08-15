@@ -149,8 +149,9 @@ const recordMatchResultFlow = ai.defineFlow(
         // All matches in the round are complete, proceed to schedule next round.
         
         const allTeamsSnap = await getDocs(collection(db, "teams"));
-        const teamCounts = allTeamsSnap.docs.reduce((acc, doc) => {
-            const team = doc.data() as Team;
+        const allTeams = allTeamsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Team));
+        const teamMap = new Map(allTeams.map(team => [team.id, team]));
+        const teamCounts = allTeams.reduce((acc, team) => {
             if (!acc[team.type]) acc[team.type] = 0;
             acc[team.type]++;
             return acc;
@@ -202,10 +203,17 @@ const recordMatchResultFlow = ai.defineFlow(
                     const totalScoreLoser = match.scores.reduce((sum, set) => sum + (winnerId === match.team1Id ? set.team2 : set.team1), 0);
                     pointDiff = totalScoreWinner - totalScoreLoser;
                 }
-                return { winnerId, pointDiff };
+                const lotNumber = teamMap.get(winnerId)?.lotNumber ?? Infinity;
+                return { winnerId, pointDiff, lotNumber };
             });
 
-        winnersWithScores.sort((a, b) => b.pointDiff - a.pointDiff);
+        // Sort by point differential (desc), then by lot number (asc) as a tie-breaker
+        winnersWithScores.sort((a, b) => {
+            if (a.pointDiff !== b.pointDiff) {
+                return b.pointDiff - a.pointDiff;
+            }
+            return a.lotNumber - b.lotNumber;
+        });
         
         let winnersToSchedule = winnersWithScores;
         
@@ -224,9 +232,8 @@ const recordMatchResultFlow = ai.defineFlow(
                 const [byeWinner] = winnersToSchedule.splice(byeWinnerIndex, 1); // Remove the eligible winner
                 const byeWinnerId = byeWinner.winnerId;
 
-                const byeWinnerTeamSnap = await getDoc(doc(db, 'teams', byeWinnerId));
-                if (byeWinnerTeamSnap.exists()) {
-                    const byeWinnerTeam = byeWinnerTeamSnap.data() as Team;
+                const byeWinnerTeam = teamMap.get(byeWinnerId);
+                if (byeWinnerTeam) {
                     const orgsCollection = await getDocs(collection(db, 'organizations'));
                     const orgNameMap = new Map(orgsCollection.docs.map(doc => [doc.id, doc.data().name]));
 
@@ -266,18 +273,16 @@ const recordMatchResultFlow = ai.defineFlow(
              const team1Id = finalWinnersToSchedule[left].winnerId;
              const team2Id = finalWinnersToSchedule[right].winnerId;
 
-            const team1Snap = await getDoc(doc(db, 'teams', team1Id));
-            const team2Snap = await getDoc(doc(db, 'teams', team2Id));
+            const team1 = teamMap.get(team1Id);
+            const team2 = teamMap.get(team2Id);
 
-            if (!team1Snap.exists() || !team2Snap.exists()) {
+            if (!team1 || !team2) {
                  console.warn("Could not find one or both winning teams to schedule next round.");
                  left++;
                  right--;
                  continue;
             }
-            const team1 = team1Snap.data() as Team;
-            const team2 = team2Snap.data() as Team;
-
+           
             const orgsCollection = await getDocs(collection(db, 'organizations'));
             const orgNameMap = new Map(orgsCollection.docs.map(doc => [doc.id, doc.data().name]));
             
