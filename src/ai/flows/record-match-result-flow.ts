@@ -106,7 +106,7 @@ const recordMatchResultFlow = ai.defineFlow(
         delete finalUpdates.live;
     }
 
-    batch.update(matchRef, { ...finalUpdates });
+    batch.update(matchRef, { ...finalUpdates, lastUpdateTime: Timestamp.now() });
 
     // 2. If match is COMPLETED, check if it was a knockout match and if we need to schedule the next round
     const currentWinnerId = updates.winnerId;
@@ -256,15 +256,15 @@ const recordMatchResultFlow = ai.defineFlow(
         const nextRoundSnap = await getDocs(nextRoundQuery);
         const scheduledIds = new Set(nextRoundSnap.docs.flatMap(d => [d.data().team1Id, d.data().team2Id]));
 
-        const finalWinnersToSchedule = winnersToSchedule.map(w => w.winnerId).filter(id => !scheduledIds.has(id));
+        const finalWinnersToSchedule = winnersToSchedule.filter(w => !scheduledIds.has(w.winnerId));
 
         // Implement seeded pairing: 1 vs n, 2 vs n-1, etc.
         let left = 0;
         let right = finalWinnersToSchedule.length - 1;
 
         while (left < right) {
-             const team1Id = finalWinnersToSchedule[left];
-             const team2Id = finalWinnersToSchedule[right];
+             const team1Id = finalWinnersToSchedule[left].winnerId;
+             const team2Id = finalWinnersToSchedule[right].winnerId;
 
             const team1Snap = await getDoc(doc(db, 'teams', team1Id));
             const team2Snap = await getDoc(doc(db, 'teams', team2Id));
@@ -311,3 +311,5 @@ const recordMatchResultFlow = ai.defineFlow(
 export async function recordMatchResult(input: RecordMatchResultInput): Promise<void> {
     await recordMatchResultFlow(input);
 }
+
+    
