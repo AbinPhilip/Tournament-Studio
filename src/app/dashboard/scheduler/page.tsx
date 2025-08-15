@@ -149,7 +149,7 @@ export default function SchedulerPage() {
 
     const { unassignedMatches, busyCourts, restingTeams, pendingSummary } = useMemo(() => {
         const allPendingMatches = matches.filter(m => m.status === 'PENDING');
-        const minRestTimeMs = (tournament?.restTime || 10) * 60 * 100;
+        const minRestTimeMs = (tournament?.restTime || 10) * 60 * 1000;
         
         const now = Date.now();
         const teamMap = new Map(teams.map(t => [t.id, t]));
@@ -240,8 +240,8 @@ export default function SchedulerPage() {
             const aStage = getRoundStage(aRound, aTeamCount);
             const bStage = getRoundStage(bRound, bTeamCount);
 
-            if (aStage !== bStage) return aStage - bStage;
-            if (aRound !== bRound) return aRound - bRound;
+            if (aStage !== bStage) return bStage - aStage; // Higher stage (final) comes first
+            if (aRound !== bRound) return aRound - bRound; // Lower round number first
             return a.eventType.localeCompare(b.eventType);
         });
 
@@ -476,25 +476,40 @@ export default function SchedulerPage() {
                     <CardTitle>Pending Queue Summary</CardTitle>
                     <CardDescription>An overview of all matches waiting to be scheduled.</CardDescription>
                 </CardHeader>
-                <CardContent className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                    {eventOrder.map(event => {
-                        const summaryForEvent = pendingSummary[event];
-                        if (!summaryForEvent) return null;
-                        
-                        return (
-                            <div key={event}>
-                                <EventBadge eventType={event} />
-                                <div className="mt-2 space-y-1 text-sm">
-                                    {Object.entries(summaryForEvent).sort(([a], [b]) => Number(a) - Number(b)).map(([round, count]) => (
-                                        <div key={round} className="flex justify-between">
-                                            <span>{getRoundName(Number(round), event, teamCounts[event])}:</span>
-                                            <span className="font-bold">{count} matches</span>
-                                        </div>
-                                    ))}
-                                </div>
-                            </div>
-                        )
-                    })}
+                <CardContent>
+                     <Table>
+                        <TableHeader>
+                            <TableRow>
+                                <TableHead>Event</TableHead>
+                                <TableHead>Round</TableHead>
+                                <TableHead>Pending Matches</TableHead>
+                            </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                            {eventOrder.map(event => {
+                                const summaryForEvent = pendingSummary[event];
+                                if (!summaryForEvent) return null;
+
+                                const rounds = Object.entries(summaryForEvent).sort(([a], [b]) => Number(a) - Number(b));
+                                
+                                return (
+                                    <React.Fragment key={event}>
+                                        {rounds.map(([round, count], index) => (
+                                            <TableRow key={`${event}-${round}`}>
+                                                {index === 0 && (
+                                                    <TableCell rowSpan={rounds.length} className="align-top">
+                                                        <EventBadge eventType={event} />
+                                                    </TableCell>
+                                                )}
+                                                <TableCell>{getRoundName(Number(round), event, teamCounts[event])}</TableCell>
+                                                <TableCell className="font-bold">{count}</TableCell>
+                                            </TableRow>
+                                        ))}
+                                    </React.Fragment>
+                                );
+                            })}
+                        </TableBody>
+                    </Table>
                 </CardContent>
             </Card>
 
@@ -566,4 +581,3 @@ export default function SchedulerPage() {
         </div>
     );
 }
-
