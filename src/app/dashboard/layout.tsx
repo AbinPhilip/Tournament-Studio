@@ -20,13 +20,13 @@ export default function DashboardLayout({
   const [isCollapsed, setIsCollapsed] = useState(false);
 
 
-  const isPublicPage = pathname === '/dashboard/seed-database';
+  const isPublicPage = pathname === '/dashboard/seed-database' || pathname === '/presenter';
 
   useEffect(() => {
     if (!loading && !user && !isPublicPage) {
       router.replace('/login');
     }
-  }, [user, loading, router, isPublicPage]);
+  }, [user, loading, router, isPublicPage, pathname]);
 
   if (loading && !isPublicPage) {
     return (

@@ -4,7 +4,7 @@
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { cn } from "@/lib/utils"
-import { LayoutDashboard, ListOrdered, Shield, Cog, Settings, Trophy, Users, Building, GitBranch } from "lucide-react"
+import { LayoutDashboard, ListOrdered, Shield, Cog, Settings, Trophy, Users, Building, GitBranch, MonitorPlay } from "lucide-react"
 import type { User, UserRole } from "@/types"
 import { useState, useEffect } from "react"
 import { db } from "@/lib/firebase"
@@ -27,6 +27,7 @@ const allNavItems: NavItem[] = [
     { id: "umpire", href: "/dashboard/umpire", label: "Umpire View", icon: Shield },
     { id: "draw", href: "/dashboard/draw", label: "Tournament Draw", icon: GitBranch },
     { id: "match-history", href: "/dashboard/match-history", label: "Match History", icon: Trophy },
+    { id: "presenter", href: "/presenter", label: "Presenter View", icon: MonitorPlay },
     { id: "settings", href: "/dashboard/settings", label: "System Settings", icon: Settings },
 ];
 
@@ -40,15 +41,30 @@ export function MainNav({ user, isMobile = false, isCollapsed = false }: { user:
   });
   
   useEffect(() => {
+    // Add 'presenter' to all roles' permissions by default
+    const allModuleIds = allNavItems.map(m => m.id);
+    const defaultPerms: RolePermissions = {
+        super: allModuleIds,
+        admin: allModuleIds,
+        update: ['dashboard', 'umpire', 'draw', 'match-history', 'presenter'],
+        inquiry: ['dashboard', 'draw', 'match-history', 'presenter'],
+        individual: ['dashboard', 'draw', 'match-history', 'presenter'],
+        court: [],
+    };
+    
     const permsCollectionRef = collection(db, 'rolePermissions');
     const unsubscribe = onSnapshot(permsCollectionRef, (snapshot) => {
         if (snapshot.empty) {
-            console.warn("No role permissions found in Firestore. Using empty defaults.");
-            setPermissions({ super: [], admin: [], update: [], inquiry: [], individual: [], court: [] });
+            console.warn("No role permissions found in Firestore. Using defaults.");
+            setPermissions(defaultPerms);
             return;
         }
         const fetchedPerms = snapshot.docs.reduce((acc, doc) => {
             acc[doc.id as UserRole] = doc.data().modules;
+            // ensure presenter is always available
+            if (!acc[doc.id as UserRole].includes('presenter')) {
+                acc[doc.id as UserRole].push('presenter');
+            }
             return acc;
         }, {} as RolePermissions);
         setPermissions(fetchedPerms);
@@ -60,7 +76,7 @@ export function MainNav({ user, isMobile = false, isCollapsed = false }: { user:
   }, []);
 
   const getIsActive = (href: string, currentPath: string) => {
-    if (href === '/dashboard') return currentPath === href;
+    if (href === '/dashboard' || href === '/presenter') return currentPath === href;
     return currentPath.startsWith(href);
   }
 
@@ -79,6 +95,7 @@ export function MainNav({ user, isMobile = false, isCollapsed = false }: { user:
                         <TooltipTrigger asChild>
                             <Link 
                                 href={item.href}
+                                target={item.id === 'presenter' ? '_blank' : '_self'}
                                 className={cn(
                                     "flex items-center justify-center h-10 w-10 rounded-lg text-muted-foreground transition-colors hover:text-primary hover:bg-muted",
                                     getIsActive(item.href, pathname) && "bg-muted text-primary",
@@ -104,6 +121,7 @@ export function MainNav({ user, isMobile = false, isCollapsed = false }: { user:
             <Link 
                 key={item.href}
                 href={item.href}
+                target={item.id === 'presenter' ? '_blank' : '_self'}
                 className={cn(
                     "flex items-center gap-3 rounded-lg px-3 py-2 text-muted-foreground transition-all hover:text-primary",
                     getIsActive(item.href, pathname) && "bg-muted text-primary",

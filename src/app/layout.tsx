@@ -4,6 +4,7 @@ import './globals.css';
 import { AuthProvider } from '@/components/auth-provider';
 import { Toaster } from '@/components/ui/toaster';
 import { ThemeProvider } from '@/components/theme-provider';
+import { MotionProvider } from '@/components/motion-provider';
 
 export const metadata: Metadata = {
   title: 'Battledore',
@@ -21,7 +22,7 @@ export default function RootLayout({
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
         <link
-          href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
+          href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap"
           rel="stylesheet"
         />
       </head>
@@ -32,10 +33,12 @@ export default function RootLayout({
             enableSystem
             disableTransitionOnChange
         >
+          <MotionProvider>
             <AuthProvider>
             {children}
             <Toaster />
             </AuthProvider>
+          </MotionProvider>
         </ThemeProvider>
       </body>
     </html>
