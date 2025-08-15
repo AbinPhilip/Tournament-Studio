@@ -13,7 +13,6 @@ import Autoplay from "embla-carousel-autoplay";
 import { getRoundName } from '@/lib/utils';
 import { EventBadge } from '../ui/event-badge';
 import { Logo } from '../logo';
-import Image from 'next/image';
 
 const WelcomeSlide = ({ tournament }: { tournament: Tournament | null }) => (
     <div className="flex flex-col items-center justify-center h-full text-center p-8 text-white">
@@ -134,12 +133,6 @@ export function PresenterShell() {
   const [tournament, setTournament] = useState<Tournament | null>(null);
   const [teamCounts, setTeamCounts] = useState<Record<TeamType, number>>({});
   const [isLoading, setIsLoading] = useState(true);
-  const [qrCodeUrl, setQrCodeUrl] = useState('');
-
-  useEffect(() => {
-    // This runs only on the client, after the component mounts
-    setQrCodeUrl(window.location.href);
-  }, []);
 
   useEffect(() => {
     const matchesQuery = query(collection(db, 'matches'));
@@ -239,17 +232,6 @@ export function PresenterShell() {
                     )}
                 </CarouselContent>
             </Carousel>
-        )}
-        {qrCodeUrl && (
-          <div className="absolute bottom-4 left-4 bg-white p-2 rounded-lg shadow-lg">
-            <Image
-                src={`https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=${encodeURIComponent(qrCodeUrl)}`}
-                alt="QR Code for Mobile View"
-                width={120}
-                height={120}
-                data-ai-hint="qr code"
-            />
-          </div>
         )}
     </div>
   );
