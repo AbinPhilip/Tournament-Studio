@@ -34,8 +34,6 @@ import { EventBadge } from '@/components/ui/event-badge';
 import { getRoundName } from '@/lib/utils';
 import { useAuth } from '@/hooks/use-auth';
 
-const MIN_REST_TIME_MS = 10 * 60 * 1000; // 10 minutes
-
 const CountdownTimer = ({ endTime }: { endTime: number }) => {
     const [timeLeft, setTimeLeft] = useState(endTime - Date.now());
 
@@ -111,7 +109,7 @@ export default function SchedulerPage() {
              if (!snapshot.empty) {
                 const tourneyData = snapshot.docs[0].data() as Omit<Tournament, 'id'|'date'> & { date: Timestamp };
                 const date = tourneyData.date.toDate();
-                setTournament({id: snapshot.docs[0].id, ...tourneyData, date });
+                setTournament({id: snapshot.docs[0].id, ...tourneyData, date, restTime: tourneyData.restTime ?? 10 });
             } else {
                  toast({ title: 'No Tournament Found', description: 'Please configure a tournament first.', variant: 'destructive'});
                  router.push('/dashboard/tournament');
@@ -150,6 +148,7 @@ export default function SchedulerPage() {
 
     const { unassignedMatches, busyCourts, restingTeams } = useMemo(() => {
         const pendingMatches = matches.filter(m => m.status === 'PENDING' && !assignedMatches[m.id]);
+        const minRestTimeMs = (tournament?.restTime || 10) * 60 * 1000;
         
         const now = Date.now();
         const teamMap = new Map(teams.map(t => [t.id, t]));
@@ -175,44 +174,41 @@ export default function SchedulerPage() {
         const resting: Match[] = [];
         const ready: Match[] = [];
 
-        pendingMatches.forEach(m => {
-            const match = {...m}; // Create a mutable copy
-            if (match.isRestOverridden) {
-                ready.push(match);
+        pendingMatches.forEach(match => {
+            const m = {...match}; // Create a mutable copy
+            if (m.isRestOverridden) {
+                ready.push(m);
                 return;
             }
 
-            const team1 = teamMap.get(match.team1Id);
-            const team2 = teamMap.get(match.team2Id);
+            const team1 = teamMap.get(m.team1Id);
+            const team2 = teamMap.get(m.team2Id);
 
             const team1Player1LastPlayed = team1 ? playerLastPlayed.get(`${team1.player1Name}|${team1.organizationId}`) : undefined;
             const team1Player2LastPlayed = team1?.player2Name ? playerLastPlayed.get(`${team1.player2Name}|${team1.organizationId}`) : undefined;
             const team2Player1LastPlayed = team2 ? playerLastPlayed.get(`${team2.player1Name}|${team2.organizationId}`) : undefined;
             const team2Player2LastPlayed = team2?.player2Name ? playerLastPlayed.get(`${team2.player2Name}|${team2.organizationId}`) : undefined;
             
-            const team1LastPlayed = Math.max(team1Player1LastPlayed || 0, team1Player2LastPlayed || 0);
-            const team2LastPlayed = Math.max(team2Player1LastPlayed || 0, team2Player2LastPlayed || 0);
+            m.team1LastPlayed = Math.max(team1Player1LastPlayed || 0, team1Player2LastPlayed || 0);
+            m.team2LastPlayed = Math.max(team2Player1LastPlayed || 0, team2Player2LastPlayed || 0);
             
-            match.team1LastPlayed = team1LastPlayed > 0 ? team1LastPlayed : null;
-            match.team2LastPlayed = team2LastPlayed > 0 ? team2LastPlayed : null;
-            
-            const lastMatchTime = Math.max(team1LastPlayed, team2LastPlayed);
+            const lastMatchTime = Math.max(m.team1LastPlayed, m.team2LastPlayed);
 
-            if (lastMatchTime > 0 && (now - lastMatchTime) < MIN_REST_TIME_MS) {
-                match.restEndTime = lastMatchTime + MIN_REST_TIME_MS;
+            if (lastMatchTime > 0 && (now - lastMatchTime) < minRestTimeMs) {
+                m.restEndTime = lastMatchTime + minRestTimeMs;
                 const restingPlayers: string[] = [];
                 if (team1) {
-                    if (team1Player1LastPlayed && (now - team1Player1LastPlayed) < MIN_REST_TIME_MS) restingPlayers.push(team1.player1Name);
-                    if (team1.player2Name && team1Player2LastPlayed && (now - team1Player2LastPlayed) < MIN_REST_TIME_MS) restingPlayers.push(team1.player2Name);
+                    if (team1Player1LastPlayed && (now - team1Player1LastPlayed) < minRestTimeMs) restingPlayers.push(team1.player1Name);
+                    if (team1.player2Name && team1Player2LastPlayed && (now - team1Player2LastPlayed) < minRestTimeMs) restingPlayers.push(team1.player2Name);
                 }
                  if (team2) {
-                    if (team2Player1LastPlayed && (now - team2Player1LastPlayed) < MIN_REST_TIME_MS) restingPlayers.push(team2.player1Name);
-                    if (team2.player2Name && team2Player2LastPlayed && (now - team2Player2LastPlayed) < MIN_REST_TIME_MS) restingPlayers.push(team2.player2Name);
+                    if (team2Player1LastPlayed && (now - team2Player1LastPlayed) < minRestTimeMs) restingPlayers.push(team2.player1Name);
+                    if (team2.player2Name && team2Player2LastPlayed && (now - team2Player2LastPlayed) < minRestTimeMs) restingPlayers.push(team2.player2Name);
                 }
-                match.restingPlayers = restingPlayers;
-                resting.push(match);
+                m.restingPlayers = restingPlayers;
+                resting.push(m);
             } else {
-                ready.push(match);
+                ready.push(m);
             }
         });
 
@@ -245,7 +241,7 @@ export default function SchedulerPage() {
         );
 
         return { unassignedMatches: ready, busyCourts: inProgressOrScheduled, restingTeams: resting };
-    }, [matches, teams, teamCounts, assignedMatches]);
+    }, [matches, teams, teamCounts, assignedMatches, tournament]);
 
     const handleCourtChange = useCallback((matchId: string, courtName: string) => {
         setAssignedMatches(current => {
@@ -267,9 +263,7 @@ export default function SchedulerPage() {
             const matchRef = doc(db, 'matches', matchId);
             await updateDoc(matchRef, { isRestOverridden: true });
             
-            setMatches(prevMatches => prevMatches.map(m => 
-                m.id === matchId ? { ...m, isRestOverridden: true } : m
-            ));
+            // This will trigger the onSnapshot listener and update the local state automatically
             
             toast({ title: 'Override Applied', description: `Match is now available for scheduling.`});
         } catch (error) {
@@ -396,7 +390,7 @@ export default function SchedulerPage() {
                  <Card>
                     <CardHeader>
                         <CardTitle>Teams on Rest Period</CardTitle>
-                        <CardDescription>These teams are on a mandatory 10-minute break before their next match.</CardDescription>
+                        <CardDescription>These teams are on a mandatory {tournament?.restTime || 10}-minute break before their next match.</CardDescription>
                     </CardHeader>
                     <CardContent>
                          <Table>

@@ -58,6 +58,7 @@ const tournamentFormSchema = z.object({
   tournamentType: z.enum(['round-robin', 'knockout'], { required_error: 'Tournament type is required.' }),
   numberOfCourts: z.coerce.number().min(1, { message: 'There must be at least 1 court.' }).max(50, { message: "Cannot exceed 50 courts."}),
   courtNames: z.array(z.object({ name: z.string().min(1, {message: 'Court name cannot be empty.'}) })),
+  restTime: z.coerce.number().min(0, { message: 'Rest time cannot be negative.'}).optional(),
 });
 
 
@@ -83,6 +84,7 @@ export default function TournamentSettingsPage() {
       tournamentType: 'knockout',
       numberOfCourts: 4,
       courtNames: Array.from({ length: 4 }, (_, i) => ({ name: `Court ${i+1}` })),
+      restTime: 10,
     },
   });
   
@@ -119,7 +121,7 @@ export default function TournamentSettingsPage() {
           };
           setTournament(tournamentData as any)
           setTournamentDocRef(tournamentDoc.ref);
-          form.reset({ ...data, date: data.date.toDate() });
+          form.reset({ ...data, date: data.date.toDate(), restTime: data.restTime ?? 10 });
         } else {
             setTournamentDocRef(null);
             setTournament(null);
@@ -360,6 +362,19 @@ export default function TournamentSettingsPage() {
                                 <FormLabel>Number of Courts</FormLabel>
                                 <FormControl>
                                     <Input type="number" min="1" max="50" {...field} />
+                                </FormControl>
+                                <FormMessage />
+                                </FormItem>
+                            )}
+                        />
+                        <FormField
+                            control={form.control}
+                            name="restTime"
+                            render={({ field }) => (
+                                <FormItem>
+                                <FormLabel>Rest Time (minutes)</FormLabel>
+                                <FormControl>
+                                    <Input type="number" min="0" {...field} />
                                 </FormControl>
                                 <FormMessage />
                                 </FormItem>
