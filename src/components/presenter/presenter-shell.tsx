@@ -167,6 +167,7 @@ const CompletedMatchesSlide = ({ matches, teamCounts }: { matches: Match[], team
                 <TableHeader>
                     <TableRow className="border-white/20 hover:bg-transparent">
                         <TableHead className="text-white/80 font-headline text-xl">Event</TableHead>
+                        <TableHead className="text-white/80 font-headline text-xl">Round</TableHead>
                         <TableHead className="text-white/80 font-headline text-xl">Winner</TableHead>
                         <TableHead className="text-white/80 font-headline text-xl">Runner-up</TableHead>
                         <TableHead className="text-center text-white/80 font-headline text-xl">Score</TableHead>
@@ -184,6 +185,7 @@ const CompletedMatchesSlide = ({ matches, teamCounts }: { matches: Match[], team
                         return (
                              <TableRow key={match.id} className="border-white/20 hover:bg-white/5">
                                 <TableCell><EventBadge eventType={match.eventType} /></TableCell>
+                                <TableCell>{getRoundName(match.round || 0, match.eventType, teamCounts[match.eventType] || 0)}</TableCell>
                                 <TableCell>
                                     <p className="font-bold">{winnerName}</p>
                                     <p className="text-sm text-slate-300">{winnerOrg}</p>
