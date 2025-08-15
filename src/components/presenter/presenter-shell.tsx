@@ -60,7 +60,7 @@ const LiveMatchSlide = ({ match, teamCounts }: { match: Match, teamCounts: Recor
             <div className="h-8 mb-2">
                  {isServing && <p className="font-bold text-yellow-300 animate-pulse text-lg md:text-xl tracking-widest">SERVING</p>}
             </div>
-            <h3 className="text-3xl md:text-5xl lg:text-7xl font-bold text-white break-words" title={name}>{name}</h3>
+            <h3 className="text-2xl md:text-4xl lg:text-5xl font-bold text-white break-words" title={name}>{name}</h3>
             <p className="text-base md:text-xl lg:text-2xl text-slate-300 mt-2">{org}</p>
          </div>
     );
