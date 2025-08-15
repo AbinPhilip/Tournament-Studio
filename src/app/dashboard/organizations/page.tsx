@@ -1,7 +1,7 @@
 
 "use client";
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -15,7 +15,7 @@ import {
 } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { MoreHorizontal, Trash2, Building, Edit, CheckCircle } from 'lucide-react';
+import { MoreHorizontal, Trash2, Building, Edit, CheckCircle, Loader2 } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -53,7 +53,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
 import { db } from '@/lib/firebase';
-import { collection, getDocs, addDoc, deleteDoc, doc, query, where, updateDoc } from 'firebase/firestore';
+import { collection, addDoc, deleteDoc, doc, query, where, updateDoc, onSnapshot } from 'firebase/firestore';
 import type { Organization, Team } from '@/types';
 
 
@@ -66,68 +66,80 @@ export default function OrganizationPage() {
   const { toast } = useToast();
   const [organizations, setOrganizations] = useState<Organization[]>([]);
   const [teams, setTeams] = useState<Team[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [orgToDelete, setOrgToDelete] = useState<Organization | null>(null);
   const [orgToEdit, setOrgToEdit] = useState<Organization | null>(null);
   const [isAddOrgOpen, setIsAddOrgOpen] = useState(false);
   const [isEditOrgOpen, setIsEditOrgOpen] = useState(false);
-  const [isSuccessModalOpen, setIsSuccessModalOpen] = useState(false);
-
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  
   const orgForm = useForm<z.infer<typeof organizationFormSchema>>({
     resolver: zodResolver(organizationFormSchema),
     defaultValues: { name: '', location: '' },
   });
-  
-  const fetchData = async () => {
-      const [orgsSnap, teamsSnap] = await Promise.all([
-          getDocs(collection(db, 'organizations')),
-          getDocs(collection(db, 'teams')),
-      ]);
-      setOrganizations(orgsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Organization)));
-      setTeams(teamsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Team)));
-  };
 
   useEffect(() => {
-    fetchData();
-  }, []);
+    setIsLoading(true);
+    const orgsUnsubscribe = onSnapshot(collection(db, 'organizations'), (snapshot) => {
+        setOrganizations(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Organization)));
+        setIsLoading(false);
+    }, (error) => {
+        console.error("Failed to fetch organizations: ", error);
+        toast({ title: 'Error', description: 'Failed to load organization data.', variant: 'destructive' });
+        setIsLoading(false);
+    });
+
+    const teamsUnsubscribe = onSnapshot(collection(db, 'teams'), (snapshot) => {
+        setTeams(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Team)));
+    });
+
+    return () => {
+        orgsUnsubscribe();
+        teamsUnsubscribe();
+    };
+  }, [toast]);
   
-  useEffect(() => {
-    if (orgToEdit) {
-        orgForm.reset(orgToEdit);
-        setIsEditOrgOpen(true);
-    }
-  }, [orgToEdit, orgForm]);
+  const handleOpenEditDialog = useCallback((org: Organization) => {
+    setOrgToEdit(org);
+    orgForm.reset(org);
+    setIsEditOrgOpen(true);
+  }, [orgForm]);
 
   const handleAddOrg = async (values: z.infer<typeof organizationFormSchema>) => {
+    setIsSubmitting(true);
+    if (organizations.some(org => org.name.toLowerCase() === values.name.toLowerCase())) {
+        toast({ title: 'Error', description: 'An organization with this name already exists.', variant: 'destructive' });
+        setIsSubmitting(false);
+        return;
+    }
+    
     try {
-        const q = query(collection(db, 'organizations'), where('name', '==', values.name));
-        const querySnapshot = await getDocs(q);
-        if (!querySnapshot.empty) {
-            toast({ title: 'Error', description: 'An organization with this name already exists.', variant: 'destructive' });
-            return;
-        }
-
-        const newOrgDoc = await addDoc(collection(db, 'organizations'), values);
-        const newOrg: Organization = { id: newOrgDoc.id, ...values };
-        setOrganizations([...organizations, newOrg]);
-        toast({ title: 'Organization Created', description: `Organization "${newOrg.name}" has been added.` });
+        await addDoc(collection(db, 'organizations'), values);
+        toast({ title: 'Organization Created', description: `Organization "${values.name}" has been added.` });
         setIsAddOrgOpen(false);
-        orgForm.reset();
+        orgForm.reset({ name: '', location: '' });
     } catch(error) {
+        console.error("Error adding organization: ", error);
         toast({ title: 'Error', description: 'Failed to create organization.', variant: 'destructive' });
+    } finally {
+        setIsSubmitting(false);
     }
   };
   
   const handleEditOrg = async (values: z.infer<typeof organizationFormSchema>) => {
     if (!orgToEdit) return;
+    setIsSubmitting(true);
     try {
         const orgRef = doc(db, 'organizations', orgToEdit.id);
         await updateDoc(orgRef, values);
-        setOrganizations(organizations.map(o => o.id === orgToEdit.id ? { ...o, ...values } : o));
+        toast({ title: 'Success', description: `"${values.name}" has been updated.`});
         setIsEditOrgOpen(false);
         setOrgToEdit(null);
-        setIsSuccessModalOpen(true);
     } catch (error) {
+        console.error("Error updating organization: ", error);
         toast({ title: 'Error', description: 'Failed to update organization.', variant: 'destructive' });
+    } finally {
+        setIsSubmitting(false);
     }
   };
 
@@ -143,7 +155,6 @@ export default function OrganizationPage() {
 
     try {
         await deleteDoc(doc(db, 'organizations', orgToDelete.id));
-        setOrganizations(organizations.filter(o => o.id !== orgToDelete.id));
         toast({ title: 'Success', description: 'Organization has been deleted.' });
     } catch (error) {
         toast({ title: 'Error', description: 'Failed to delete organization.', variant: 'destructive' });
@@ -190,7 +201,10 @@ export default function OrganizationPage() {
                     )} />
                     <DialogFooter>
                       <DialogClose asChild><Button type="button" variant="secondary">Cancel</Button></DialogClose>
-                      <Button type="submit">Create Organization</Button>
+                      <Button type="submit" disabled={isSubmitting}>
+                        {isSubmitting && <Loader2 className="animate-spin" />}
+                        Create Organization
+                      </Button>
                     </DialogFooter>
                   </form>
                 </Form>
@@ -198,51 +212,40 @@ export default function OrganizationPage() {
             </Dialog>
           </CardHeader>
           <CardContent>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Organization</TableHead>
-                  <TableHead>Location</TableHead>
-                  <TableHead><span className="sr-only">Actions</span></TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {organizations.map((org) => (
-                  <TableRow key={org.id}>
-                    <TableCell className="font-medium">{org.name}</TableCell>
-                    <TableCell>{org.location}</TableCell>
-                    <TableCell className="text-right">
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild><Button variant="ghost" className="h-8 w-8 p-0"><MoreHorizontal className="h-4 w-4" /></Button></DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuItem onSelect={() => setOrgToEdit(org)}><Edit className="mr-2 h-4 w-4" />Edit</DropdownMenuItem>
-                          <DropdownMenuItem className="text-destructive focus:text-destructive" onSelect={() => setOrgToDelete(org)}><Trash2 className="mr-2 h-4 w-4" />Delete</DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+            {isLoading ? (
+                <div className="flex justify-center items-center h-48">
+                    <Loader2 className="h-12 w-12 animate-spin text-primary" />
+                </div>
+            ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Organization</TableHead>
+                      <TableHead>Location</TableHead>
+                      <TableHead><span className="sr-only">Actions</span></TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {organizations.map((org) => (
+                      <TableRow key={org.id}>
+                        <TableCell className="font-medium">{org.name}</TableCell>
+                        <TableCell>{org.location}</TableCell>
+                        <TableCell className="text-right">
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild><Button variant="ghost" className="h-8 w-8 p-0"><MoreHorizontal className="h-4 w-4" /></Button></DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuItem onSelect={() => handleOpenEditDialog(org)}><Edit className="mr-2 h-4 w-4" />Edit</DropdownMenuItem>
+                              <DropdownMenuItem className="text-destructive focus:text-destructive" onSelect={() => setOrgToDelete(org)}><Trash2 className="mr-2 h-4 w-4" />Delete</DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+            )}
           </CardContent>
         </Card>
-        
-      <AlertDialog open={isSuccessModalOpen} onOpenChange={setIsSuccessModalOpen}>
-        <AlertDialogContent>
-            <AlertDialogHeader>
-                <div className="flex items-center gap-2">
-                    <CheckCircle className="h-6 w-6 text-green-500" />
-                    <AlertDialogTitle>Success!</AlertDialogTitle>
-                </div>
-                <AlertDialogDescription>
-                  Organization details have been saved successfully.
-                </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-                <AlertDialogAction onClick={() => setIsSuccessModalOpen(false)}>OK</AlertDialogAction>
-            </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
       
       <Dialog open={isEditOrgOpen} onOpenChange={setIsEditOrgOpen}>
           <DialogContent>
@@ -267,7 +270,10 @@ export default function OrganizationPage() {
               )} />
               <DialogFooter>
                   <Button type="button" variant="secondary" onClick={() => setIsEditOrgOpen(false)}>Cancel</Button>
-                  <Button type="submit">Save Changes</Button>
+                  <Button type="submit" disabled={isSubmitting}>
+                    {isSubmitting && <Loader2 className="animate-spin" />}
+                    Save Changes
+                  </Button>
               </DialogFooter>
               </form>
           </Form>

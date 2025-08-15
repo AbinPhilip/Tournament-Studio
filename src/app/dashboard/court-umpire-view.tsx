@@ -15,7 +15,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { useToast } from '@/hooks/use-toast';
 import { db } from '@/lib/firebase';
 import { collection, onSnapshot, query, where, Timestamp } from 'firebase/firestore';
-import type { Match, TeamType } from '@/types';
+import type { Match, Team, TeamType } from '@/types';
 import { Loader2, Gamepad2, ShieldCheck } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/use-auth';
@@ -46,11 +46,15 @@ export default function CourtUmpireView() {
     const matchesQuery = query(collection(db, 'matches'), where('courtName', '==', courtName));
     
     const unsubscribeMatches = onSnapshot(matchesQuery, (snapshot) => {
-        const matchesData = snapshot.docs.map(doc => ({ 
-            id: doc.id, 
-            ...doc.data(),
-            startTime: (doc.data().startTime as Timestamp)?.toDate() 
-        } as Match));
+        const matchesData = snapshot.docs.map(doc => { 
+            const data = doc.data();
+            return { 
+                id: doc.id, 
+                ...data,
+                startTime: (data.startTime as Timestamp)?.toDate(),
+                lastUpdateTime: (data.lastUpdateTime as Timestamp)?.toDate(),
+            } as Match;
+        });
         
         matchesData.sort((a, b) => (b.startTime?.getTime() || 0) - (a.startTime?.getTime() || 0));
         setMatches(matchesData);
@@ -64,9 +68,9 @@ export default function CourtUmpireView() {
     const unsubscribeTeams = onSnapshot(collection(db, 'teams'), (snapshot) => {
         const counts: Record<TeamType, number> = { singles: 0, mens_doubles: 0, womens_doubles: 0, mixed_doubles: 0 };
         snapshot.forEach(doc => {
-            const team = doc.data() as { type: TeamType };
+            const team = doc.data() as Team;
             if (counts[team.type] !== undefined) {
-            counts[team.type]++;
+                counts[team.type]++;
             }
         });
         setTeamCounts(counts);

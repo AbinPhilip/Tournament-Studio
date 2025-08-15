@@ -1,13 +1,13 @@
 
 "use client";
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, Loader2, Play, XCircle, TimerOff, ShieldCheck } from 'lucide-react';
+import { ArrowLeft, Loader2, Play, XCircle, TimerOff } from 'lucide-react';
 import type { Match, Team, TeamType, Tournament } from '@/types';
 import { db } from '@/lib/firebase';
-import { collection, getDocs, doc, writeBatch, query, Timestamp } from 'firebase/firestore';
+import { collection, doc, writeBatch, query, Timestamp, onSnapshot } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
 import { useRouter } from 'next/navigation';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -67,6 +67,7 @@ export default function SchedulerPage() {
     const { user } = useAuth();
     const [tournament, setTournament] = useState<Tournament | null>(null);
     const [matches, setMatches] = useState<Match[]>([]);
+    const [assignedMatches, setAssignedMatches] = useState<Record<string, string>>({}); // { matchId: courtName }
     const [isLoading, setIsLoading] = useState(true);
     const [isSaving, setIsSaving] = useState(false);
     const [teamCounts, setTeamCounts] = useState<Record<TeamType, number>>({
@@ -76,68 +77,57 @@ export default function SchedulerPage() {
     const router = useRouter();
 
     useEffect(() => {
-        const fetchAndSetData = async () => {
-            setIsLoading(true);
-            try {
-                const [tournamentSnap, matchesSnap, teamsSnap] = await Promise.all([
-                    getDocs(collection(db, 'tournaments')),
-                    getDocs(query(collection(db, 'matches'))),
-                    getDocs(collection(db, 'teams')),
-                ]);
-
-                if (!tournamentSnap.empty) {
-                    const tourneyData = tournamentSnap.docs[0].data() as Omit<Tournament, 'id'|'date'> & { date: Timestamp };
-                    const date = tourneyData.date.toDate();
-                    setTournament({id: tournamentSnap.docs[0].id, ...tourneyData, date });
-                } else {
-                     toast({ title: 'No Tournament Found', description: 'Please configure a tournament first.', variant: 'destructive'});
-                     router.push('/dashboard/tournament');
-                     return;
-                }
-
-                const allMatches = matchesSnap.docs.map(doc => {
-                  const data = doc.data();
-                  // Firestore Timestamps need to be converted to JS Date objects
-                  const startTime = data.startTime instanceof Timestamp ? data.startTime.toDate() : new Date();
-                  const lastUpdateTime = data.lastUpdateTime instanceof Timestamp ? data.lastUpdateTime.toDate() : null;
-                  return { id: doc.id, ...data, startTime, lastUpdateTime } as Match;
-                });
-                setMatches(allMatches);
-
-                const counts: Record<TeamType, number> = { singles: 0, mens_doubles: 0, womens_doubles: 0, mixed_doubles: 0 };
-                teamsSnap.forEach(doc => {
-                    const team = doc.data() as { type: TeamType };
-                    if (counts[team.type] !== undefined) {
-                        counts[team.type]++;
-                    }
-                });
-                setTeamCounts(counts);
-
-            } catch (error) {
-                console.error("Error fetching data:", error);
-                toast({ title: 'Error', description: 'Failed to fetch tournament data.', variant: 'destructive' });
-            } finally {
-                setIsLoading(false);
+        setIsLoading(true);
+        const tourneyUnsub = onSnapshot(collection(db, 'tournaments'), (snapshot) => {
+             if (!snapshot.empty) {
+                const tourneyData = snapshot.docs[0].data() as Omit<Tournament, 'id'|'date'> & { date: Timestamp };
+                const date = tourneyData.date.toDate();
+                setTournament({id: snapshot.docs[0].id, ...tourneyData, date });
+            } else {
+                 toast({ title: 'No Tournament Found', description: 'Please configure a tournament first.', variant: 'destructive'});
+                 router.push('/dashboard/tournament');
             }
-        };
-        fetchAndSetData();
+        });
+
+        const matchesUnsub = onSnapshot(collection(db, 'matches'), (snapshot) => {
+             const allMatches = snapshot.docs.map(doc => {
+                  const data = doc.data();
+                  return { 
+                      id: doc.id, ...data, 
+                      startTime: data.startTime instanceof Timestamp ? data.startTime.toDate() : new Date(),
+                      lastUpdateTime: data.lastUpdateTime instanceof Timestamp ? data.lastUpdateTime.toDate() : null
+                  } as Match;
+             });
+             setMatches(allMatches);
+             setIsLoading(false);
+        });
+
+        const teamsUnsub = onSnapshot(collection(db, 'teams'), (snapshot) => {
+             const counts: Record<TeamType, number> = { singles: 0, mens_doubles: 0, womens_doubles: 0, mixed_doubles: 0 };
+             snapshot.forEach(doc => {
+                const team = doc.data() as Team;
+                if (counts[team.type] !== undefined) counts[team.type]++;
+            });
+            setTeamCounts(counts);
+        });
+
+        return () => {
+            tourneyUnsub();
+            matchesUnsub();
+            teamsUnsub();
+        }
     }, [toast, router]);
 
     const { unassignedMatches, busyCourts, restingTeams } = useMemo(() => {
-        const unassigned = matches.filter(m => m.status === 'PENDING');
+        const unassigned = matches.filter(m => m.status === 'PENDING' && !assignedMatches[m.id]);
         
         const now = Date.now();
-        const completedMatchesMap = new Map(
-            matches.filter(m => m.status === 'COMPLETED' && m.lastUpdateTime)
-                   .map(m => [m.id, m.lastUpdateTime!.getTime()])
-        );
-
         const teamLastPlayed = new Map<string, number>();
         matches.forEach(m => {
             if (m.status === 'COMPLETED' && m.lastUpdateTime) {
                 const completedTime = m.lastUpdateTime!.getTime();
                 teamLastPlayed.set(m.team1Id, completedTime);
-                teamLastPlayed.set(m.team2Id, completedTime);
+                if (m.team2Id) teamLastPlayed.set(m.team2Id, completedTime);
             }
         });
 
@@ -146,7 +136,7 @@ export default function SchedulerPage() {
 
         unassigned.forEach(m => {
             const team1LastPlayed = teamLastPlayed.get(m.team1Id);
-            const team2LastPlayed = teamLastPlayed.get(m.team2Id);
+            const team2LastPlayed = m.team2Id ? teamLastPlayed.get(m.team2Id) : undefined;
             const lastMatchTime = Math.max(team1LastPlayed || 0, team2LastPlayed || 0);
 
             if (lastMatchTime > 0 && (now - lastMatchTime) < MIN_REST_TIME_MS) {
@@ -174,91 +164,68 @@ export default function SchedulerPage() {
             const aStage = getRoundStage(aRound, aTeamCount);
             const bStage = getRoundStage(bRound, bTeamCount);
 
-            if (aStage !== bStage) {
-                return aStage - bStage;
-            }
-
-            if (aRound !== bRound) {
-                return aRound - bRound;
-            }
+            if (aStage !== bStage) return aStage - bStage;
+            if (aRound !== bRound) return aRound - bRound;
             return a.eventType.localeCompare(b.eventType);
         });
 
-        const busy = new Set(matches
-            .filter(m => m.status === 'IN_PROGRESS' || (m.status === 'SCHEDULED' && m.courtName))
+        const inProgressOrScheduled = new Set(matches
+            .filter(m => (m.status === 'IN_PROGRESS' || m.status === 'SCHEDULED') && m.courtName)
             .map(m => m.courtName)
             .filter((name): name is string => !!name)
         );
-        return { unassignedMatches: ready, busyCourts: busy, restingTeams: resting };
-    }, [matches, teamCounts]);
 
-    const handleCourtChange = (matchId: string, courtName: string) => {
-        setMatches(currentMatches => {
-            const newMatches = [...currentMatches];
-            const matchIndex = newMatches.findIndex(m => m.id === matchId);
-            if (matchIndex === -1) return currentMatches;
-            
-            const oldCourtName = newMatches[matchIndex].courtName;
+        return { unassignedMatches: ready, busyCourts: inProgressOrScheduled, restingTeams: resting };
+    }, [matches, teamCounts, assignedMatches]);
 
-            if(oldCourtName) {
-                 const otherMatchWithOldCourt = newMatches.find(m => m.id !== matchId && m.courtName === oldCourtName);
-                 if (!otherMatchWithOldCourt) { }
-            }
-            for (let i = 0; i < newMatches.length; i++) {
-                if (newMatches[i].courtName === courtName && newMatches[i].id !== matchId) {
-                    newMatches[i].courtName = '';
-                    newMatches[i].status = 'PENDING';
+    const handleCourtChange = useCallback((matchId: string, courtName: string) => {
+        setAssignedMatches(current => {
+            const newAssignments = { ...current };
+            // Unassign any other match that was assigned to this court
+            Object.keys(newAssignments).forEach(key => {
+                if (newAssignments[key] === courtName) {
+                    delete newAssignments[key];
                 }
-            }
-
-            newMatches[matchIndex] = {
-                ...newMatches[matchIndex],
-                courtName: courtName,
-                status: courtName ? 'SCHEDULED' : 'PENDING',
-                startTime: courtName ? Timestamp.now().toDate() : newMatches[matchIndex].startTime,
-            };
-
-            return newMatches;
+            });
+            // Assign the new match
+            newAssignments[matchId] = courtName;
+            return newAssignments;
         });
-    };
+    }, []);
     
-    const handleOverride = (matchId: string) => {
-        const match = restingTeams.find(m => m.id === matchId);
-        if (!match) return;
+    const handleOverride = useCallback((matchId: string) => {
+        const matchToMove = restingTeams.find(m => m.id === matchId);
+        if (!matchToMove) return;
 
-        // Force a state update by creating new objects.
-        const newResting = restingTeams.filter(m => m.id !== matchId);
-        const newUnassigned = [...unassignedMatches, match];
-
-        // This is a client-side only state change to move the match between lists.
-        // It's a bit of a trick to force re-render. We create a temporary merged list.
-        const otherMatches = matches.filter(m => m.status !== 'PENDING');
-        setMatches([...otherMatches, ...newResting, ...newUnassigned]);
-        
+        // By setting the lastUpdateTime to be far in the past, we trick the memoization
+        // into moving it to the ready queue on the next re-render.
+        setMatches(current => current.map(m => m.id === matchId ? {...m, lastUpdateTime: new Date(0)} : m));
         toast({ title: 'Override Applied', description: `Match is now available for scheduling.`});
-    };
+    }, [restingTeams, toast]);
+
 
     const handleSaveSchedule = async () => {
         setIsSaving(true);
         try {
             const batch = writeBatch(db);
-            const matchesToUpdate = matches.filter(m => m.status === 'SCHEDULED' && m.courtName);
-
-            if (matchesToUpdate.length === 0) {
+            
+            if (Object.keys(assignedMatches).length === 0) {
                 toast({ title: 'No changes to save', description: 'No matches have been assigned to courts.' });
                 return;
             }
 
-            matchesToUpdate.forEach(match => {
-                const matchRef = doc(db, 'matches', match.id);
+            Object.entries(assignedMatches).forEach(([matchId, courtName]) => {
+                const matchRef = doc(db, 'matches', matchId);
                 batch.update(matchRef, {
                     status: 'SCHEDULED',
-                    courtName: match.courtName,
-                    startTime: match.startTime 
+                    courtName: courtName,
+                    startTime: Timestamp.now() 
                 });
             });
+
             await batch.commit();
             toast({ title: 'Schedule Saved', description: 'Match assignments have been updated.'});
+            setAssignedMatches({}); // Clear local assignments after saving
             router.push('/dashboard/umpire');
         } catch (error) {
             console.error("Failed to save schedule:", error);
@@ -272,8 +239,9 @@ export default function SchedulerPage() {
         setIsSaving(true);
         try {
             const batch = writeBatch(db);
-            const matchesQuery = await getDocs(collection(db, 'matches'));
-            matchesQuery.forEach(doc => batch.delete(doc.ref));
+            const matchesQuery = await collection(db, 'matches');
+            const matchesSnapshot = await getDocs(matchesQuery);
+            matchesSnapshot.forEach(doc => batch.delete(doc.ref));
 
             if (tournament) {
                 const tourneyRef = doc(db, 'tournaments', tournament.id);
@@ -290,9 +258,10 @@ export default function SchedulerPage() {
         }
     };
     
-    const assignedButNotSavedCourts = new Set(
-        matches.filter(m => m.status === 'SCHEDULED' && m.courtName).map(m => m.courtName)
-    );
+    const currentlyAssignedCourts = useMemo(() => new Set(Object.values(assignedMatches)), [assignedMatches]);
+    const availableCourts = useMemo(() => {
+        return tournament?.courtNames.filter(c => !busyCourts.has(c.name) && !currentlyAssignedCourts.has(c.name)) || [];
+    }, [tournament, busyCourts, currentlyAssignedCourts]);
     
 
     if (isLoading) {
@@ -317,29 +286,31 @@ export default function SchedulerPage() {
                     <p className="text-muted-foreground">Select a court for each match from the dropdown to schedule it.</p>
                 </div>
                  <div className="flex gap-2 flex-wrap">
-                     <Button variant="outline" onClick={() => router.push('/dashboard')}>
+                    <Button variant="outline" onClick={() => router.push('/dashboard')}>
                         <ArrowLeft /> Back to Dashboard
                     </Button>
-                     <AlertDialog>
-                        <AlertDialogTrigger asChild>
-                            <Button variant="destructive">
-                                <XCircle className="mr-2" /> Reset Tournament
-                            </Button>
-                        </AlertDialogTrigger>
-                        <AlertDialogContent>
-                            <AlertDialogHeader>
-                            <AlertDialogTitle>Are you sure?</AlertDialogTitle>
-                            <AlertDialogDescription>
-                                This will permanently delete all generated matches and reset the tournament status. This allows you to regenerate the pairings from the tournament page.
-                            </AlertDialogDescription>
-                            </AlertDialogHeader>
-                            <AlertDialogFooter>
-                            <AlertDialogCancel>Cancel</AlertDialogCancel>
-                            <AlertDialogAction onClick={handleResetTournament}>Reset Tournament</AlertDialogAction>
-                            </AlertDialogFooter>
-                        </AlertDialogContent>
-                    </AlertDialog>
-                    <Button onClick={handleSaveSchedule} disabled={isSaving}>
+                     {isAdmin && (
+                        <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                                <Button variant="destructive">
+                                    <XCircle className="mr-2" /> Reset Tournament
+                                </Button>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent>
+                                <AlertDialogHeader>
+                                <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+                                <AlertDialogDescription>
+                                    This will permanently delete all generated matches and reset the tournament status. This allows you to regenerate the pairings from the tournament page.
+                                </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                <AlertDialogAction onClick={handleResetTournament}>Reset Tournament</AlertDialogAction>
+                                </AlertDialogFooter>
+                            </AlertDialogContent>
+                        </AlertDialog>
+                     )}
+                    <Button onClick={handleSaveSchedule} disabled={isSaving || Object.keys(assignedMatches).length === 0}>
                         {isSaving ? <Loader2 className="animate-spin" /> : <Play />}
                         Save & Go to Umpire View
                     </Button>
@@ -409,13 +380,9 @@ export default function SchedulerPage() {
                             </TableHeader>
                             <TableBody>
                                 {unassignedMatches.map((match) => {
-                                    const availableCourtsForThisMatch = tournament?.courtNames.filter(c => 
-                                        !busyCourts.has(c.name) && 
-                                        (!assignedButNotSavedCourts.has(c.name) || match.courtName === c.name)
-                                    ) || [];
-
+                                    const currentAssignment = assignedMatches[match.id];
                                     return (
-                                        <TableRow key={match.id}>
+                                        <TableRow key={match.id} className={currentAssignment ? 'bg-blue-50 dark:bg-blue-900/20' : ''}>
                                             <TableCell><EventBadge eventType={match.eventType} /></TableCell>
                                             <TableCell className="font-medium whitespace-nowrap">{getRoundName(match.round || 0, match.eventType, teamCounts[match.eventType])}</TableCell>
                                             <TableCell>
@@ -430,12 +397,13 @@ export default function SchedulerPage() {
                                                 </div>
                                             </TableCell>
                                             <TableCell>
-                                                 <Select onValueChange={(value) => handleCourtChange(match.id, value)} value={match.courtName || ''}>
+                                                 <Select onValueChange={(value) => handleCourtChange(match.id, value)} value={currentAssignment || ''}>
                                                     <SelectTrigger className="w-[180px]">
                                                         <SelectValue placeholder="Select Court" />
                                                     </SelectTrigger>
                                                     <SelectContent>
-                                                        {availableCourtsForThisMatch.map(court => (
+                                                        {currentAssignment && <SelectItem value={currentAssignment}>{currentAssignment}</SelectItem>}
+                                                        {availableCourts.map(court => (
                                                             <SelectItem key={court.name} value={court.name}>
                                                                 {court.name}
                                                             </SelectItem>
@@ -456,4 +424,3 @@ export default function SchedulerPage() {
         </div>
     );
 }
-

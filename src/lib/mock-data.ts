@@ -120,5 +120,3 @@ export const mockTeams: (Omit<Team, 'id' | 'organizationId'> & { organizationNam
     const lotNumber = lotNumberCounters[team.type]++;
     return { ...team, lotNumber };
 });
-
-    

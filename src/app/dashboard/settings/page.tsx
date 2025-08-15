@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -18,7 +18,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import type { User, UserRole } from '@/types';
 import { useAuth } from '@/hooks/use-auth';
-import { MoreHorizontal, Trash2, UserPlus, Edit, CheckCircle, ArrowLeft, Database, Loader2, Save, GitBranch, Trophy, Users, Building, ListOrdered, Shield, Cog, LayoutDashboard, Settings } from 'lucide-react';
+import { MoreHorizontal, Trash2, UserPlus, Edit, CheckCircle, ArrowLeft, Database, Loader2, Save, GitBranch, Trophy, Users, Building, ListOrdered, Shield, Cog, LayoutDashboard, Settings, MonitorPlay } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -36,7 +36,6 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-  AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"
 import {
   Dialog,
@@ -67,8 +66,8 @@ import {
 import { Checkbox } from '@/components/ui/checkbox';
 import { useToast } from '@/hooks/use-toast';
 import { db } from '@/lib/firebase';
-import { collection, getDocs, addDoc, deleteDoc, doc, query, where, updateDoc, writeBatch, setDoc } from 'firebase/firestore';
-import { mockUsers, mockAppData, mockOrganizations, mockTeams } from '@/lib/mock-data';
+import { collection, getDocs, addDoc, deleteDoc, doc, query, where, updateDoc, writeBatch, onSnapshot } from 'firebase/firestore';
+import { mockUsers, mockOrganizations, mockTeams } from '@/lib/mock-data';
 import { useRouter } from 'next/navigation';
 
 
@@ -103,6 +102,7 @@ const appModules = [
     { id: 'umpire', label: 'Umpire View', icon: Shield },
     { id: 'draw', label: 'Tournament Draw', icon: GitBranch },
     { id: 'match-history', label: 'Match History', icon: Trophy },
+    { id: 'presenter', label: 'Presenter View', icon: MonitorPlay },
     { id: 'settings', label: 'System Settings', icon: Settings },
 ];
 
@@ -133,44 +133,52 @@ export default function SettingsPage() {
     super: [], admin: [], update: [], inquiry: [], individual: [], court: []
   });
 
-  const fetchUsersAndPermissions = async () => {
-    const usersSnap = await getDocs(collection(db, 'users'));
-    setUsers(usersSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as User)));
+  const fetchUsersAndPermissions = useCallback(async () => {
+    const usersUnsub = onSnapshot(collection(db, 'users'), (snapshot) => {
+        setUsers(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as User)));
+    });
     
-    // Fetch permissions
-    const permsSnap = await getDocs(collection(db, 'rolePermissions'));
-    if (!permsSnap.empty) {
-        const fetchedPerms: any = {};
-        permsSnap.forEach(doc => {
-            fetchedPerms[doc.id as UserRole] = doc.data().modules;
-        });
-        setPermissions(fetchedPerms);
-    } else {
-        // Set default permissions if none found
+    const permsUnsub = onSnapshot(collection(db, 'rolePermissions'), (snapshot) => {
         const allModuleIds = appModules.map(m => m.id);
         const defaultPerms: RolePermissions = {
             super: allModuleIds,
             admin: allModuleIds,
-            update: ['dashboard', 'umpire', 'draw', 'match-history'],
-            inquiry: ['dashboard', 'draw', 'match-history'],
-            individual: ['dashboard', 'draw', 'match-history'],
+            update: ['dashboard', 'umpire', 'draw', 'match-history', 'presenter'],
+            inquiry: ['dashboard', 'draw', 'match-history', 'presenter'],
+            individual: ['dashboard', 'draw', 'match-history', 'presenter'],
             court: [],
         };
-        setPermissions(defaultPerms);
-        // Optionally, save these defaults to Firestore
-        const batch = writeBatch(db);
-        Object.entries(defaultPerms).forEach(([role, modules]) => {
-            if (role === 'court') return; // Do not save 'court' role permissions
-            const docRef = doc(db, 'rolePermissions', role);
-            batch.set(docRef, { modules });
-        });
-        await batch.commit();
-    }
-  };
+        
+        if (snapshot.empty) {
+            setPermissions(defaultPerms);
+            // Optionally, save these defaults to Firestore
+            const batch = writeBatch(db);
+            Object.entries(defaultPerms).forEach(([role, modules]) => {
+                if (role === 'court') return; 
+                const docRef = doc(db, 'rolePermissions', role);
+                batch.set(docRef, { modules });
+            });
+            batch.commit();
+        } else {
+            const fetchedPerms = snapshot.docs.reduce((acc, doc) => {
+                const modules = doc.data().modules || [];
+                if (!modules.includes('presenter')) modules.push('presenter');
+                acc[doc.id as UserRole] = modules;
+                return acc;
+            }, {} as RolePermissions);
+            setPermissions(fetchedPerms);
+        }
+    });
+
+    return () => {
+        usersUnsub();
+        permsUnsub();
+    };
+  }, []);
 
   useEffect(() => {
     fetchUsersAndPermissions();
-  }, []);
+  }, [fetchUsersAndPermissions]);
 
   const userForm = useForm<z.infer<typeof userFormSchema>>({
     resolver: zodResolver(userFormSchema),
@@ -189,7 +197,6 @@ export default function SettingsPage() {
     if(!userToDelete || userToDelete.id === user?.id) return;
     try {
         await deleteDoc(doc(db, 'users', userToDelete.id));
-        setUsers(users.filter(u => u.id !== userToDelete.id));
         toast({ title: 'Success', description: 'User has been deleted.' });
     } catch (error) {
         toast({ title: 'Error', description: 'Failed to delete user.', variant: 'destructive' });
@@ -213,13 +220,11 @@ export default function SettingsPage() {
         return;
       }
 
-      const newUserDoc = await addDoc(collection(db, 'users'), values);
-      const newUser: User = { id: newUserDoc.id, ...values, role: values.role as UserRole };
-      setUsers([...users, newUser]);
+      await addDoc(collection(db, 'users'), values);
       setIsAddUserOpen(false);
       userForm.reset();
       setSuccessModalTitle('User Created');
-      setSuccessModalMessage(`User "${newUser.name}" has been added.`);
+      setSuccessModalMessage(`User "${values.name}" has been added.`);
       setIsSuccessModalOpen(true);
 
     } catch (error) {
@@ -232,7 +237,6 @@ export default function SettingsPage() {
     try {
         const userRef = doc(db, 'users', userToEdit.id);
         await updateDoc(userRef, values);
-        setUsers(users.map(u => u.id === userToEdit.id ? { ...u, ...values } : u));
         setIsEditUserOpen(false);
         setUserToEdit(null);
         setSuccessModalTitle('User Updated');
@@ -247,16 +251,14 @@ export default function SettingsPage() {
     setIsSeeding(true);
     setIsSeedAlertOpen(false);
     try {
-        const batch = writeBatch(db);
-
-        const collectionsToClear = ['users', 'organizations', 'teams', 'appData', 'matches', 'tournaments', 'rolePermissions'];
+        const collectionsToClear = ['users', 'organizations', 'teams', 'tournaments', 'matches', 'rolePermissions'];
+        
         for (const coll of collectionsToClear) {
+            const batch = writeBatch(db);
             const querySnapshot = await getDocs(collection(db, coll));
-            querySnapshot.forEach(doc => {
-                batch.delete(doc.ref);
-            });
+            querySnapshot.forEach(doc => batch.delete(doc.ref));
+            await batch.commit();
         }
-        await batch.commit();
 
         const seedBatch = writeBatch(db);
 
@@ -285,19 +287,15 @@ export default function SettingsPage() {
             seedBatch.set(docRef, user);
         });
 
-        const appDataCollectionRef = collection(db, 'appData');
-        mockAppData.forEach(data => {
-            const docRef = doc(appDataCollectionRef);
-            seedBatch.set(docRef, data);
-        });
-
         await seedBatch.commit();
+        
+        // Re-fetch after seeding
+        fetchUsersAndPermissions();
 
         toast({
             title: 'Database Reset!',
             description: 'Your database has been cleared and re-seeded with mock data.',
         });
-        await fetchUsersAndPermissions();
 
     } catch (error) {
         console.error("Seeding failed:", error);
@@ -390,7 +388,7 @@ export default function SettingsPage() {
                                             <Checkbox
                                                 checked={permissions[role]?.includes(module.id)}
                                                 onCheckedChange={(checked) => handlePermissionChange(role, module.id, !!checked)}
-                                                disabled={role === 'super'}
+                                                disabled={role === 'super' || module.id === 'dashboard'}
                                             />
                                         </TableCell>
                                     ))}
@@ -651,7 +649,3 @@ export default function SettingsPage() {
     </div>
   );
 }
-
-    
-
-    

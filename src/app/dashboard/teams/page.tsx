@@ -1,7 +1,7 @@
 
 "use client";
 
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -23,11 +23,10 @@ import {
     SelectValue,
 } from '@/components/ui/select';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { MoreHorizontal, Trash2, Edit, CheckCircle, Users, ArrowUpDown } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { MoreHorizontal, Trash2, Edit, CheckCircle, Users, ArrowUpDown, Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { db } from '@/lib/firebase';
-import { collection, doc, getDocs, updateDoc, addDoc, deleteDoc, query, where, writeBatch } from 'firebase/firestore';
+import { collection, doc, getDocs, updateDoc, addDoc, deleteDoc, query, where, onSnapshot } from 'firebase/firestore';
 import type { Team, Organization } from '@/types';
 import {
   AlertDialog,
@@ -94,7 +93,7 @@ const teamFormSchema = z.object({
 const TeamForm = ({
     form,
     onSubmit,
-    isEditing,
+    isSubmitting,
     organizations,
     playersByOrg,
     photoPreview,
@@ -103,7 +102,7 @@ const TeamForm = ({
 }: {
     form: any;
     onSubmit: (values: z.infer<typeof teamFormSchema>) => void;
-    isEditing: boolean;
+    isSubmitting: boolean;
     organizations: Organization[];
     playersByOrg: Record<string, string[]>;
     photoPreview: string | null;
@@ -214,7 +213,10 @@ const TeamForm = ({
                 </FormItem>
                 <DialogFooter>
                     <DialogClose asChild><Button type="button" variant="secondary">Cancel</Button></DialogClose>
-                    <Button type="submit">{isEditing ? 'Save Changes' : 'Register Team'}</Button>
+                    <Button type="submit" disabled={isSubmitting}>
+                        {isSubmitting && <Loader2 className="animate-spin" />}
+                        {form.formState.isDirty ? 'Save Changes' : 'Register Team'}
+                    </Button>
                 </DialogFooter>
             </form>
         </Form>
@@ -226,7 +228,7 @@ export default function TeamsPage() {
   const { toast } = useToast();
   const [teams, setTeams] = useState<Team[]>([]);
   const [organizations, setOrganizations] = useState<Organization[]>([]);
-  const [playersByOrg, setPlayersByOrg] = useState<Record<string, string[]>>({});
+  const [isLoading, setIsLoading] = useState(true);
   const [teamToDelete, setTeamToDelete] = useState<Team | null>(null);
   const [teamToEdit, setTeamToEdit] = useState<Team | null>(null);
   const [isAddTeamOpen, setIsAddTeamOpen] = useState(false);
@@ -234,8 +236,8 @@ export default function TeamsPage() {
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const inlineFileInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
-  const [originalLotNumbers, setOriginalLotNumbers] = useState<Record<string, number | undefined>>({});
   const [isSuccessModalOpen, setIsSuccessModalOpen] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [sortConfig, setSortConfig] = useState<{ key: keyof Team | 'organizationName'; direction: 'ascending' | 'descending' } | null>(null);
 
   const teamForm = useForm<z.infer<typeof teamFormSchema>>({
@@ -243,7 +245,8 @@ export default function TeamsPage() {
     defaultValues: { type: 'singles', player1Name: '', player2Name: '', photoUrl: '', lotNumber: undefined },
   });
 
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
+    setIsLoading(true);
     try {
       const [teamsSnap, orgsSnap] = await Promise.all([
         getDocs(collection(db, 'teams')),
@@ -255,73 +258,51 @@ export default function TeamsPage() {
 
       const fetchedOrgs = orgsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Organization));
       setOrganizations(fetchedOrgs);
-
-      const lotNumberMap: Record<string, number | undefined> = {};
-      const playersMap: Record<string, Set<string>> = {};
-
-      fetchedTeams.forEach(team => {
-          lotNumberMap[team.id] = team.lotNumber;
-          if (!playersMap[team.organizationId]) {
-              playersMap[team.organizationId] = new Set();
-          }
-          playersMap[team.organizationId].add(team.player1Name);
-          if (team.player2Name) {
-              playersMap[team.organizationId].add(team.player2Name);
-          }
-      });
-      setOriginalLotNumbers(lotNumberMap);
-      
-      const finalPlayersByOrg: Record<string, string[]> = {};
-      for(const orgId in playersMap) {
-          finalPlayersByOrg[orgId] = Array.from(playersMap[orgId]).sort();
-      }
-      setPlayersByOrg(finalPlayersByOrg);
       
     } catch (error) {
       toast({ title: 'Error', description: 'Failed to fetch data.', variant: 'destructive' });
+    } finally {
+        setIsLoading(false);
     }
-  };
+  }, [toast]);
 
   useEffect(() => {
     fetchData();
-  }, [toast]);
+  }, [fetchData]);
   
-  useEffect(() => {
-    if (teamToEdit) {
-        teamForm.reset(teamToEdit);
-        setPhotoPreview(teamToEdit.photoUrl || null);
-        setIsEditTeamOpen(true);
-    }
-  }, [teamToEdit, teamForm]);
+  const handleOpenEditDialog = useCallback((team: Team) => {
+    setTeamToEdit(team);
+    teamForm.reset(team);
+    setPhotoPreview(team.photoUrl || null);
+    setIsEditTeamOpen(true);
+  }, [teamForm]);
   
-  const resetForm = () => {
+  const resetFormAndClose = useCallback(() => {
     setPhotoPreview(null);
     teamForm.reset({ type: 'singles', player1Name: '', player2Name: '', photoUrl: '', lotNumber: undefined });
     if (fileInputRef.current) {
         fileInputRef.current.value = '';
     }
-  }
+    setIsAddTeamOpen(false);
+    setIsEditTeamOpen(false);
+  }, [teamForm]);
 
-  useEffect(() => {
-    if (!isAddTeamOpen && !isEditTeamOpen) {
-       resetForm();
-    }
-  }, [isAddTeamOpen, isEditTeamOpen]);
-  
   const handleTeamSubmit = async (values: z.infer<typeof teamFormSchema>) => {
+    setIsSubmitting(true);
     try {
         const { player1Name, player2Name, organizationId, type, lotNumber } = values;
 
         const teamsRef = collection(db, 'teams');
         const qPlayers = query(teamsRef, 
             where('organizationId', '==', organizationId),
+            where('type', '==', type),
             where('player1Name', '==', player1Name),
             where('player2Name', '==', (player2Name || '')) 
         );
         
         const playerSnapshot = await getDocs(qPlayers);
         if (!playerSnapshot.empty && (!teamToEdit || playerSnapshot.docs[0].id !== teamToEdit.id)) {
-            toast({ title: 'Duplicate Team', description: 'A team with these players from this organization already exists.', variant: 'destructive' });
+            toast({ title: 'Duplicate Team', description: 'A team with these players from this organization in this event already exists.', variant: 'destructive' });
             return;
         }
 
@@ -342,7 +323,7 @@ export default function TeamsPage() {
 
         if (values.type === 'mens_doubles') { teamData.genderP1 = 'male'; teamData.genderP2 = 'male'; }
         else if (values.type === 'womens_doubles') { teamData.genderP1 = 'female'; teamData.genderP2 = 'female'; }
-        else if (values.type === 'singles') { teamData.player2Name = ''; }
+        else if (values.type === 'singles') { teamData.player2Name = ''; teamData.genderP2 = undefined; }
         
         const dataToSave = { ...teamData, lotNumber: teamData.lotNumber ?? null };
 
@@ -350,7 +331,6 @@ export default function TeamsPage() {
             const teamRef = doc(db, 'teams', teamToEdit.id);
             await updateDoc(teamRef, dataToSave);
             setTeamToEdit(null);
-            setIsEditTeamOpen(false);
             setIsSuccessModalOpen(true);
         } else {
             await addDoc(collection(db, 'teams'), dataToSave);
@@ -358,13 +338,14 @@ export default function TeamsPage() {
               title: 'Team Registered',
               description: `Team "${dataToSave.player1Name}${dataToSave.player2Name ? ' & ' + dataToSave.player2Name : ''}" has been registered.`,
             });
-            setIsAddTeamOpen(false);
         }
         fetchData(); // Refetch all data to keep component in sync
-        resetForm();
+        resetFormAndClose();
     } catch(error) {
         console.error(error);
         toast({ title: 'Error', description: `Failed to ${teamToEdit ? 'update' : 'register'} team.`, variant: 'destructive' });
+    } finally {
+        setIsSubmitting(false);
     }
   };
 
@@ -373,7 +354,7 @@ export default function TeamsPage() {
     if (!teamToDelete) return;
     try {
         await deleteDoc(doc(db, 'teams', teamToDelete.id));
-        setTeams(teams.filter(t => t.id !== teamToDelete.id));
+        setTeams(prev => prev.filter(t => t.id !== teamToDelete.id));
         toast({ title: 'Success', description: 'Team has been deleted.' });
     } catch (error) {
         toast({ title: 'Error', description: 'Failed to delete team.', variant: 'destructive' });
@@ -385,7 +366,7 @@ export default function TeamsPage() {
       return new Map(organizations.map(org => [org.id, org.name]));
   }, [organizations]);
 
-  const getOrgName = (orgId: string) => orgNameMap.get(orgId) || '';
+  const getOrgName = useCallback((orgId: string) => orgNameMap.get(orgId) || '', [orgNameMap]);
   
   const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -394,7 +375,7 @@ export default function TeamsPage() {
         reader.onloadend = () => {
             const dataUrl = reader.result as string;
             setPhotoPreview(dataUrl);
-            teamForm.setValue('photoUrl', dataUrl);
+            teamForm.setValue('photoUrl', dataUrl, { shouldDirty: true });
         };
         reader.readAsDataURL(file);
     }
@@ -418,43 +399,51 @@ export default function TeamsPage() {
     reader.readAsDataURL(file);
   };
   
-  const handleLotNumberChange = (teamId: string, value: string) => {
-    const newLotNumber = value === '' ? undefined : parseInt(value, 10);
-    if (value !== '' && (isNaN(newLotNumber) || newLotNumber < 1)) return; 
-    setTeams(prevTeams => prevTeams.map(t => t.id === teamId ? { ...t, lotNumber: newLotNumber } : t));
-  };
-  
-  const handleLotNumberBlur = async (teamId: string) => {
+   const handleLotNumberChange = async (teamId: string, newLotNumberStr: string) => {
+    const newLotNumber = newLotNumberStr === '' ? undefined : parseInt(newLotNumberStr, 10);
+
     const team = teams.find(t => t.id === teamId);
     if (!team) return;
 
-    const originalLot = originalLotNumbers[teamId];
-    const currentLot = team.lotNumber;
-    
-    if (originalLot === currentLot) return;
-
-    if (currentLot && teams.some(t => t.id !== teamId && t.type === team.type && t.lotNumber === currentLot)) {
+    if (newLotNumber && teams.some(t => t.id !== teamId && t.type === team.type && t.lotNumber === newLotNumber)) {
         toast({
             title: 'Duplicate Lot Number',
-            description: `Lot number ${currentLot} is already used in this event.`,
+            description: `Lot number ${newLotNumber} is already used in this event.`,
             variant: 'destructive',
         });
-        setTeams(prevTeams => prevTeams.map(t => t.id === teamId ? { ...t, lotNumber: originalLot } : t));
         return;
     }
 
     try {
-        await updateDoc(doc(db, 'teams', teamId), { lotNumber: currentLot ?? null });
-        setOriginalLotNumbers(prev => ({ ...prev, [teamId]: currentLot }));
+        await updateDoc(doc(db, 'teams', teamId), { lotNumber: newLotNumber ?? null });
+        setTeams(prevTeams => prevTeams.map(t => t.id === teamId ? { ...t, lotNumber: newLotNumber } : t));
         toast({
             title: 'Lot Number Updated',
             description: `Lot number for ${team.player1Name}${team.player2Name ? ` & ${team.player2Name}` : ''} has been updated.`,
         });
     } catch (error) {
         toast({ title: 'Error Saving Lot Number', variant: 'destructive' });
-        setTeams(prevTeams => prevTeams.map(t => t.id === teamId ? { ...t, lotNumber: originalLot } : t));
     }
   };
+
+  const playersByOrg = useMemo(() => {
+     const playersMap: Record<string, Set<string>> = {};
+     teams.forEach(team => {
+          if (!playersMap[team.organizationId]) {
+              playersMap[team.organizationId] = new Set();
+          }
+          playersMap[team.organizationId].add(team.player1Name);
+          if (team.player2Name) {
+              playersMap[team.organizationId].add(team.player2Name);
+          }
+      });
+      
+      const finalPlayersByOrg: Record<string, string[]> = {};
+      for(const orgId in playersMap) {
+          finalPlayersByOrg[orgId] = Array.from(playersMap[orgId]).sort();
+      }
+      return finalPlayersByOrg;
+  }, [teams]);
 
   const sortedTeams = useMemo(() => {
     let sortableTeams = [...teams];
@@ -487,7 +476,7 @@ export default function TeamsPage() {
       });
     }
     return sortableTeams;
-  }, [teams, organizations, sortConfig, orgNameMap]);
+  }, [teams, sortConfig, getOrgName]);
 
   const requestSort = (key: keyof Team | 'organizationName') => {
     let direction: 'ascending' | 'descending' = 'ascending';
@@ -523,7 +512,7 @@ export default function TeamsPage() {
                 <TeamForm
                     form={teamForm}
                     onSubmit={handleTeamSubmit}
-                    isEditing={false}
+                    isSubmitting={isSubmitting}
                     organizations={organizations}
                     playersByOrg={playersByOrg}
                     photoPreview={photoPreview}
@@ -534,51 +523,56 @@ export default function TeamsPage() {
             </Dialog>
           </CardHeader>
           <CardContent>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead><SortableHeader sortKey="lotNumber">Lot #</SortableHeader></TableHead>
-                  <TableHead>Photo</TableHead>
-                  <TableHead><SortableHeader sortKey="type">Event</SortableHeader></TableHead>
-                  <TableHead>Players</TableHead>
-                  <TableHead><SortableHeader sortKey="organizationName">Organization</SortableHeader></TableHead>
-                  <TableHead><span className="sr-only">Actions</span></TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {sortedTeams.map((t) => (
-                  <TableRow key={t.id}>
-                    <TableCell>
-                      <Input type="number" className="w-20" value={t.lotNumber ?? ''}
-                        onChange={(e) => handleLotNumberChange(t.id, e.target.value)}
-                        onBlur={() => handleLotNumberBlur(t.id)} placeholder=""
-                      />
-                    </TableCell>
-                    <TableCell>
-                        <div className="relative group cursor-pointer" onClick={() => inlineFileInputRefs.current[t.id]?.click()}>
-                           <Image data-ai-hint="badminton players" src={t.photoUrl || 'https://placehold.co/80x80.png'} alt="Team photo" width={80} height={80} className="rounded-md object-cover group-hover:opacity-50 transition-opacity" />
-                           <div className="absolute inset-0 flex items-center justify-center bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity rounded-md">
-                                <Edit className="h-6 w-6 text-white" />
-                           </div>
-                           <Input type="file" className="hidden" ref={el => (inlineFileInputRefs.current[t.id] = el)} onChange={(e) => handleInlinePhotoChange(e, t.id)} accept="image/*" />
-                        </div>
-                    </TableCell>
-                    <TableCell><EventBadge eventType={t.type} /></TableCell>
-                    <TableCell>{t.player1Name}{t.player2Name ? ` & ${t.player2Name}`: ''}</TableCell>
-                    <TableCell>{getOrgName(t.organizationId)}</TableCell>
-                    <TableCell className="text-right">
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild><Button variant="ghost" className="h-8 w-8 p-0"><MoreHorizontal className="h-4 w-4" /></Button></DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuItem onSelect={() => setTeamToEdit(t)}><Edit className="mr-2 h-4 w-4" />Edit</DropdownMenuItem>
-                          <DropdownMenuItem className="text-destructive focus:text-destructive" onSelect={() => setTeamToDelete(t)}><Trash2 className="mr-2 h-4 w-4" />Delete</DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+             {isLoading ? (
+                <div className="flex justify-center items-center h-64">
+                    <Loader2 className="h-12 w-12 animate-spin text-primary" />
+                </div>
+             ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead><SortableHeader sortKey="lotNumber">Lot #</SortableHeader></TableHead>
+                      <TableHead>Photo</TableHead>
+                      <TableHead><SortableHeader sortKey="type">Event</SortableHeader></TableHead>
+                      <TableHead>Players</TableHead>
+                      <TableHead><SortableHeader sortKey="organizationName">Organization</SortableHeader></TableHead>
+                      <TableHead><span className="sr-only">Actions</span></TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {sortedTeams.map((t) => (
+                      <TableRow key={t.id}>
+                        <TableCell>
+                          <Input type="number" className="w-20" defaultValue={t.lotNumber ?? ''}
+                            onBlur={(e) => handleLotNumberChange(t.id, e.target.value)} placeholder=""
+                          />
+                        </TableCell>
+                        <TableCell>
+                            <div className="relative group cursor-pointer" onClick={() => inlineFileInputRefs.current[t.id]?.click()}>
+                               <Image data-ai-hint="badminton players" src={t.photoUrl || 'https://placehold.co/80x80.png'} alt="Team photo" width={80} height={80} className="rounded-md object-cover group-hover:opacity-50 transition-opacity" />
+                               <div className="absolute inset-0 flex items-center justify-center bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity rounded-md">
+                                    <Edit className="h-6 w-6 text-white" />
+                               </div>
+                               <Input type="file" className="hidden" ref={el => (inlineFileInputRefs.current[t.id] = el)} onChange={(e) => handleInlinePhotoChange(e, t.id)} accept="image/*" />
+                            </div>
+                        </TableCell>
+                        <TableCell><EventBadge eventType={t.type} /></TableCell>
+                        <TableCell>{t.player1Name}{t.player2Name ? ` & ${t.player2Name}`: ''}</TableCell>
+                        <TableCell>{getOrgName(t.organizationId)}</TableCell>
+                        <TableCell className="text-right">
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild><Button variant="ghost" className="h-8 w-8 p-0"><MoreHorizontal className="h-4 w-4" /></Button></DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuItem onSelect={() => handleOpenEditDialog(t)}><Edit className="mr-2 h-4 w-4" />Edit</DropdownMenuItem>
+                              <DropdownMenuItem className="text-destructive focus:text-destructive" onSelect={() => setTeamToDelete(t)}><Trash2 className="mr-2 h-4 w-4" />Delete</DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+             )}
           </CardContent>
         </Card>
         
@@ -603,7 +597,7 @@ export default function TeamsPage() {
            <TeamForm
                 form={teamForm}
                 onSubmit={handleTeamSubmit}
-                isEditing={true}
+                isSubmitting={isSubmitting}
                 organizations={organizations}
                 playersByOrg={playersByOrg}
                 photoPreview={photoPreview}

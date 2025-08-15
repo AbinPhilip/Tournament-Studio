@@ -37,12 +37,9 @@ type RolePermissions = Record<UserRole, string[]>;
 
 export function MainNav({ user, isMobile = false, isCollapsed = false }: { user: User | null, isMobile?: boolean, isCollapsed?: boolean }) {
   const pathname = usePathname();
-  const [permissions, setPermissions] = useState<RolePermissions>({
-      super: [], admin: [], update: [], inquiry: [], individual: [], court: []
-  });
+  const [permissions, setPermissions] = useState<RolePermissions | null>(null);
   
   useEffect(() => {
-    // Add 'presenter' to all roles' permissions by default
     const allModuleIds = allNavItems.map(m => m.id);
     const defaultPerms: RolePermissions = {
         super: allModuleIds,
@@ -62,7 +59,6 @@ export function MainNav({ user, isMobile = false, isCollapsed = false }: { user:
         }
         const fetchedPerms = snapshot.docs.reduce((acc, doc) => {
             const modules = doc.data().modules || [];
-            // ensure presenter is always available
             if (!modules.includes('presenter')) {
                 modules.push('presenter');
             }
@@ -72,6 +68,7 @@ export function MainNav({ user, isMobile = false, isCollapsed = false }: { user:
         setPermissions(fetchedPerms);
     }, (error) => {
         console.error("Failed to fetch permissions in real-time:", error);
+        setPermissions(defaultPerms); // Fallback to defaults on error
     });
 
     return () => unsubscribe();
@@ -83,7 +80,7 @@ export function MainNav({ user, isMobile = false, isCollapsed = false }: { user:
   }
 
   const role = user?.role;
-  if (!role || role === 'court') return null;
+  if (!role || role === 'court' || !permissions) return null;
 
   const allowedModuleIds = new Set(permissions[role] || []);
   const navItems = allNavItems.filter(item => allowedModuleIds.has(item.id));

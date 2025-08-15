@@ -33,7 +33,7 @@ import { Save, ArrowLeft, CheckCircle, Calendar as CalendarIcon, Loader2, Play }
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import { db } from '@/lib/firebase';
-import { collection, doc, getDocs, setDoc, updateDoc, DocumentReference, query, Timestamp, where, writeBatch } from 'firebase/firestore';
+import { collection, doc, getDocs, setDoc, updateDoc, DocumentReference, query, Timestamp, writeBatch, onSnapshot } from 'firebase/firestore';
 import type { Tournament, Team, TeamType, Organization } from '@/types';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useRouter } from 'next/navigation';
@@ -64,10 +64,11 @@ const tournamentFormSchema = z.object({
 export default function TournamentSettingsPage() {
   const { toast } = useToast();
   const router = useRouter();
-  const [tournament, setTournament] = useState<(Omit<Tournament, 'date' | 'startedAt'> & { date: Date, startedAt?: Date | Timestamp }) | null>(null);
+  const [tournament, setTournament] = useState<Tournament | null>(null);
   const [tournamentDocRef, setTournamentDocRef] = useState<DocumentReference | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const [isSuccessModalOpen, setIsSuccessModalOpen] = useState(false);
   const [teams, setTeams] = useState<Team[]>([]);
   const [organizations, setOrganizations] = useState<Organization[]>([]);
@@ -81,7 +82,7 @@ export default function TournamentSettingsPage() {
       date: new Date(),
       tournamentType: 'knockout',
       numberOfCourts: 4,
-      courtNames: Array.from({ length: 4 }, () => ({ name: '' })),
+      courtNames: Array.from({ length: 4 }, (_, i) => ({ name: `Court ${i+1}` })),
     },
   });
   
@@ -104,17 +105,11 @@ export default function TournamentSettingsPage() {
   }, [numberOfCourts, replace, form]);
 
   useEffect(() => {
-    const fetchData = async () => {
-      setIsLoading(true);
-      try {
-        const [tournamentSnap, teamsSnap, orgsSnap] = await Promise.all([
-          getDocs(collection(db, 'tournaments')),
-          getDocs(collection(db, 'teams')),
-          getDocs(collection(db, 'organizations')),
-        ]);
-        
-        if (!tournamentSnap.empty) {
-          const tournamentDoc = tournamentSnap.docs[0];
+    setIsLoading(true);
+
+    const tourneyUnsub = onSnapshot(collection(db, 'tournaments'), (snapshot) => {
+        if (!snapshot.empty) {
+          const tournamentDoc = snapshot.docs[0];
           const data = tournamentDoc.data() as Omit<Tournament, 'id'|'date'|'startedAt'> & { date: Timestamp, startedAt?: Timestamp };
           const tournamentData = { 
               id: tournamentDoc.id, 
@@ -124,31 +119,38 @@ export default function TournamentSettingsPage() {
           };
           setTournament(tournamentData as any)
           setTournamentDocRef(tournamentDoc.ref);
-          form.reset({
-            ...data,
-            date: data.date.toDate(),
-          });
+          form.reset({ ...data, date: data.date.toDate() });
         } else {
             setTournamentDocRef(null);
             setTournament(null);
         }
-        
-        setTeams(teamsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Team)));
-        setOrganizations(orgsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Organization)));
-        
-      } catch (error) {
-        toast({ title: 'Error', description: 'Failed to fetch data.', variant: 'destructive' });
-      } finally {
         setIsLoading(false);
-      }
-    };
-    fetchData();
+    }, (error) => {
+        console.error("Error fetching tournament:", error);
+        toast({ title: 'Error', description: 'Failed to fetch tournament data.', variant: 'destructive' });
+        setIsLoading(false);
+    });
+    
+    const teamsUnsub = onSnapshot(collection(db, 'teams'), (snapshot) => {
+        setTeams(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Team)));
+    });
+    
+    const orgsUnsub = onSnapshot(collection(db, 'organizations'), (snapshot) => {
+        setOrganizations(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Organization)));
+    });
+
+    return () => {
+        tourneyUnsub();
+        teamsUnsub();
+        orgsUnsub();
+    }
   }, [form, toast]);
 
 
   const onTournamentSubmit = async (values: z.infer<typeof tournamentFormSchema>) => {
+    setIsSaving(true);
     try {
-      const dataToSave: Partial<Tournament> & { date: Timestamp } = {
+      const dataToSave = {
         ...values,
         date: Timestamp.fromDate(values.date),
       };
@@ -156,21 +158,15 @@ export default function TournamentSettingsPage() {
       if (tournamentDocRef) {
         await updateDoc(tournamentDocRef, dataToSave as { [x: string]: any });
       } else {
-        const q = query(collection(db, 'tournaments'));
-        const querySnapshot = await getDocs(q);
-        if(!querySnapshot.empty) {
-            toast({ title: 'Error', description: 'A tournament is already configured. Please update the existing one.', variant: 'destructive'});
-            return;
-        }
         const newDocRef = doc(collection(db, 'tournaments'));
         await setDoc(newDocRef, { ...dataToSave, status: 'PENDING' });
-        setTournamentDocRef(newDocRef);
-        setTournament({ ...values, id: newDocRef.id, date: values.date } as any);
       }
       setIsSuccessModalOpen(true);
     } catch (error) {
       console.error(error);
       toast({ title: 'Error', description: 'Failed to save tournament details.', variant: 'destructive' });
+    } finally {
+        setIsSaving(false);
     }
   };
   
@@ -324,9 +320,6 @@ export default function TournamentSettingsPage() {
                                         mode="single"
                                         selected={field.value}
                                         onSelect={field.onChange}
-                                        disabled={(date) =>
-                                        date < new Date()
-                                        }
                                         initialFocus
                                     />
                                     </PopoverContent>
@@ -397,8 +390,8 @@ export default function TournamentSettingsPage() {
                     </div>
                 </fieldset>
                 <div className="flex gap-4 flex-wrap items-center border-t pt-6">
-                    <Button type="submit" disabled={isTournamentStarted}>
-                        <Save className="mr-2 h-4 w-4" />
+                    <Button type="submit" disabled={isTournamentStarted || isSaving}>
+                        {isSaving ? <Loader2 className="animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
                         {tournamentDocRef ? 'Update Tournament' : 'Create Tournament'}
                     </Button>
                      <Button type="button" variant="outline" onClick={() => router.push('/dashboard')}>
