@@ -6,7 +6,7 @@ import { db } from '@/lib/firebase';
 import { collection, onSnapshot, query, Timestamp } from 'firebase/firestore';
 import type { Match, Tournament, Team, TeamType } from '@/types';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, MonitorPlay, WifiOff, Trophy } from 'lucide-react';
+import { Loader2, WifiOff, Trophy } from 'lucide-react';
 import { AnimatePresence, m } from 'framer-motion';
 import { Carousel, CarouselContent, CarouselItem } from "@/components/ui/carousel";
 import Autoplay from "embla-carousel-autoplay";
@@ -307,7 +307,7 @@ export function PresenterShell() {
   }
   
   return (
-    <div className="h-screen w-screen bg-gradient-to-br from-[#020024] via-[#090979] to-[#00d4ff] font-sans flex flex-col p-4 relative">
+    <div className="h-screen w-screen bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-gray-700 via-gray-900 to-black font-sans flex flex-col p-4 relative">
        {slides.length <= 1 ? ( // Only welcome slide exists
             <WelcomeSlide tournament={tournament} />
         ) : (
@@ -324,5 +324,3 @@ export function PresenterShell() {
     </div>
   );
 }
-
-    
