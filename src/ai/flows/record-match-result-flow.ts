@@ -277,24 +277,30 @@ const recordMatchResultFlow = ai.defineFlow(
             const orgsCollection = await getDocs(collection(db, 'organizations'));
             const orgNameMap = new Map(orgsCollection.docs.map(doc => [doc.id, doc.data().name]));
 
-            let matchTime = new Date();
+            // Ensure a minimum 60-minute rest period.
+            const minStartTime = new Date();
+            minStartTime.setMinutes(minStartTime.getMinutes() + 60);
+
+            let matchTime = new Date(minStartTime.getTime());
             let availableCourt: string | null = null;
             let attempts = 0;
-            const maxAttempts = 48 * 4; 
+            const maxAttempts = 48 * 4; // Max 4 days of 15-min intervals
             
             while (attempts < maxAttempts) {
-                matchTime.setMinutes(matchTime.getMinutes() + 15); 
-                
-                if (matchTime.getHours() >= 20) {
+                // Ensure match time is within playing hours (9 AM - 8 PM)
+                if (matchTime.getHours() >= 20) { // After 8 PM
                     matchTime.setDate(matchTime.getDate() + 1);
-                    matchTime.setHours(9, 0, 0, 0);
+                    matchTime.setHours(9, 0, 0, 0); // Start at 9 AM next day
                 }
-                 if (matchTime.getHours() < 9) {
+                 if (matchTime.getHours() < 9) { // Before 9 AM
                     matchTime.setHours(9, 0, 0, 0);
                 }
 
                 availableCourt = await findAvailableCourt(matchTime, tournament.courtNames);
                 if (availableCourt) break;
+                
+                // If no court is found, increment time by 15 minutes and try again.
+                matchTime.setMinutes(matchTime.getMinutes() + 15); 
                 attempts++;
             }
 
