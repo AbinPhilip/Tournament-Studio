@@ -124,8 +124,9 @@ export default function SchedulerPage() {
             return a.eventType.localeCompare(b.eventType);
         });
 
+        // A court is busy if it has a match that is SCHEDULED, IN_PROGRESS, or has been assigned a court in the current UI state.
         const busy = new Set(matches
-            .filter(m => m.status === 'SCHEDULED' || m.status === 'IN_PROGRESS')
+            .filter(m => m.status === 'IN_PROGRESS' || (m.status === 'SCHEDULED' && m.courtName))
             .map(m => m.courtName)
             .filter((name): name is string => !!name)
         );
@@ -133,17 +134,38 @@ export default function SchedulerPage() {
     }, [matches, teamCounts]);
 
     const handleCourtChange = (matchId: string, courtName: string) => {
-        setMatches(currentMatches => currentMatches.map(m => {
-            if (m.id === matchId) {
-                return { 
-                    ...m, 
-                    courtName: courtName,
-                    status: courtName ? 'SCHEDULED' : 'PENDING',
-                    startTime: courtName ? Timestamp.now().toDate() : m.startTime, // Set timestamp when court is assigned
-                };
+        setMatches(currentMatches => {
+            const newMatches = [...currentMatches];
+            const matchIndex = newMatches.findIndex(m => m.id === matchId);
+            if (matchIndex === -1) return currentMatches;
+            
+            const oldCourtName = newMatches[matchIndex].courtName;
+
+            // Free up the old court if it was previously assigned in this UI state
+            if(oldCourtName) {
+                 const otherMatchWithOldCourt = newMatches.find(m => m.id !== matchId && m.courtName === oldCourtName);
+                 if (!otherMatchWithOldCourt) {
+                    // Logic to make court available again if needed
+                 }
             }
-            return m;
-        }));
+
+            // Un-assign from other matches if this court was selected for another match
+            for (let i = 0; i < newMatches.length; i++) {
+                if (newMatches[i].courtName === courtName && newMatches[i].id !== matchId) {
+                    newMatches[i].courtName = '';
+                    newMatches[i].status = 'PENDING';
+                }
+            }
+
+            newMatches[matchIndex] = {
+                ...newMatches[matchIndex],
+                courtName: courtName,
+                status: courtName ? 'SCHEDULED' : 'PENDING',
+                startTime: courtName ? Timestamp.now().toDate() : newMatches[matchIndex].startTime,
+            };
+
+            return newMatches;
+        });
     };
 
     const handleSaveSchedule = async () => {
@@ -197,6 +219,12 @@ export default function SchedulerPage() {
             setIsSaving(false);
         }
     };
+    
+    // Get courts that are occupied in the CURRENT UI state for a match yet to be saved.
+    const assignedButNotSavedCourts = new Set(
+        matches.filter(m => m.status === 'SCHEDULED' && m.courtName).map(m => m.courtName)
+    );
+    
 
     if (isLoading) {
         return (
@@ -264,37 +292,45 @@ export default function SchedulerPage() {
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
-                                {unassignedMatches.map((match) => (
-                                    <TableRow key={match.id}>
-                                        <TableCell><EventBadge eventType={match.eventType} /></TableCell>
-                                        <TableCell className="font-medium whitespace-nowrap">{getRoundName(match.round || 0, match.eventType, teamCounts[match.eventType])}</TableCell>
-                                        <TableCell>
-                                            <div>
-                                                <span>{match.team1Name}</span>
-                                                <p className="text-sm text-muted-foreground">{match.team1OrgName}</p>
-                                            </div>
-                                            <p className="text-muted-foreground my-1">vs</p>
-                                            <div>
-                                                <span>{match.team2Name}</span>
-                                                <p className="text-sm text-muted-foreground">{match.team2OrgName}</p>
-                                            </div>
-                                        </TableCell>
-                                        <TableCell>
-                                             <Select onValueChange={(value) => handleCourtChange(match.id, value)}>
-                                                <SelectTrigger className="w-[180px]">
-                                                    <SelectValue placeholder="Select Court" />
-                                                </SelectTrigger>
-                                                <SelectContent>
-                                                    {tournament?.courtNames.filter(c => !busyCourts.has(c.name)).map(court => (
-                                                        <SelectItem key={court.name} value={court.name}>
-                                                            {court.name}
-                                                        </SelectItem>
-                                                    ))}
-                                                </SelectContent>
-                                            </Select>
-                                        </TableCell>
-                                    </TableRow>
-                                ))}
+                                {unassignedMatches.map((match) => {
+                                    // An available court is one that isn't busy in the DB and hasn't been assigned in the current unsaved UI state.
+                                    const availableCourtsForThisMatch = tournament?.courtNames.filter(c => 
+                                        !busyCourts.has(c.name) && 
+                                        (!assignedButNotSavedCourts.has(c.name) || match.courtName === c.name)
+                                    ) || [];
+
+                                    return (
+                                        <TableRow key={match.id}>
+                                            <TableCell><EventBadge eventType={match.eventType} /></TableCell>
+                                            <TableCell className="font-medium whitespace-nowrap">{getRoundName(match.round || 0, match.eventType, teamCounts[match.eventType])}</TableCell>
+                                            <TableCell>
+                                                <div>
+                                                    <span>{match.team1Name}</span>
+                                                    <p className="text-sm text-muted-foreground">{match.team1OrgName}</p>
+                                                </div>
+                                                <p className="text-muted-foreground my-1">vs</p>
+                                                <div>
+                                                    <span>{match.team2Name}</span>
+                                                    <p className="text-sm text-muted-foreground">{match.team2OrgName}</p>
+                                                </div>
+                                            </TableCell>
+                                            <TableCell>
+                                                 <Select onValueChange={(value) => handleCourtChange(match.id, value)} value={match.courtName || ''}>
+                                                    <SelectTrigger className="w-[180px]">
+                                                        <SelectValue placeholder="Select Court" />
+                                                    </SelectTrigger>
+                                                    <SelectContent>
+                                                        {availableCourtsForThisMatch.map(court => (
+                                                            <SelectItem key={court.name} value={court.name}>
+                                                                {court.name}
+                                                            </SelectItem>
+                                                        ))}
+                                                    </SelectContent>
+                                                </Select>
+                                            </TableCell>
+                                        </TableRow>
+                                    )
+                                })}
                             </TableBody>
                         </Table>
                     ) : (

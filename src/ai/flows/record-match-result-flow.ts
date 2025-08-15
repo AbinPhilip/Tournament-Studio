@@ -28,16 +28,21 @@ export type RecordMatchResultInput = z.infer<typeof RecordMatchResultInputSchema
 
 async function findAvailableCourt(startTime: Date, courtNames: { name: string }[]): Promise<string | null> {
     const matchesRef = collection(db, 'matches');
-    const startTimestamp = Timestamp.fromDate(startTime);
     
-    // Check for matches starting at the exact same time
+    // First, find all courts that currently have a match IN_PROGRESS. These are unavailable regardless of start time.
+    const inProgressQuery = query(matchesRef, where('status', '==', 'IN_PROGRESS'));
+    const inProgressSnap = await getDocs(inProgressQuery);
+    const inProgressCourts = new Set(inProgressSnap.docs.map(doc => doc.data().courtName));
+
+    // Then, check for matches scheduled at the exact same time
+    const startTimestamp = Timestamp.fromDate(startTime);
     const q = query(matchesRef, where('startTime', '==', startTimestamp));
     const snapshot = await getDocs(q);
+    const busyAtTimeCourts = new Set(snapshot.docs.map(doc => doc.data().courtName));
 
-    const busyCourts = new Set(snapshot.docs.map(doc => doc.data().courtName));
-    
+    // An available court is one that is NOT in progress AND NOT busy at the specified time.
     for (const court of courtNames) {
-        if (!busyCourts.has(court.name)) {
+        if (!inProgressCourts.has(court.name) && !busyAtTimeCourts.has(court.name)) {
             return court.name;
         }
     }
