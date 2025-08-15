@@ -80,6 +80,7 @@ export interface Match {
     forfeitedById?: string;
     round?: number; // For knockout tournaments
     pointDifferential?: number;
+    isRestOverridden?: boolean;
     // Live scoring fields
     live?: {
         team1Points: number;

@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { ArrowLeft, Loader2, Play, XCircle, TimerOff } from 'lucide-react';
 import type { Match, Team, TeamType, Tournament } from '@/types';
 import { db } from '@/lib/firebase';
-import { collection, doc, writeBatch, query, Timestamp, onSnapshot, getDocs } from 'firebase/firestore';
+import { collection, doc, writeBatch, query, Timestamp, onSnapshot, getDocs, updateDoc } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
 import { useRouter } from 'next/navigation';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -149,7 +149,7 @@ export default function SchedulerPage() {
     }, [toast, router]);
 
     const { unassignedMatches, busyCourts, restingTeams } = useMemo(() => {
-        const unassigned = matches.filter(m => m.status === 'PENDING' && !assignedMatches[m.id]);
+        const pendingMatches = matches.filter(m => m.status === 'PENDING' && !assignedMatches[m.id]);
         
         const now = Date.now();
         const teamMap = new Map(teams.map(t => [t.id, t]));
@@ -166,7 +166,7 @@ export default function SchedulerPage() {
                     playerLastPlayed.set(team1.player1Name, completedTime);
                     if (team1.player2Name) playerLastPlayed.set(team1.player2Name, completedTime);
                 }
-                if (team2) {
+                if (team2 && team2.id !== 'BYE') {
                     playerLastPlayed.set(team2.player1Name, completedTime);
                     if (team2.player2Name) playerLastPlayed.set(team2.player2Name, completedTime);
                 }
@@ -176,7 +176,12 @@ export default function SchedulerPage() {
         const resting: Match[] = [];
         const ready: Match[] = [];
 
-        unassigned.forEach(m => {
+        pendingMatches.forEach(m => {
+            if (m.isRestOverridden) {
+                ready.push(m);
+                return;
+            }
+
             const team1 = teamMap.get(m.team1Id);
             const team2 = teamMap.get(m.team2Id);
 
@@ -247,16 +252,21 @@ export default function SchedulerPage() {
         });
     }, []);
     
-    const handleOverride = useCallback((matchId: string) => {
-        const matchToMove = restingTeams.find(m => m.id === matchId);
-        if (!matchToMove) return;
-
-        // By setting the lastUpdateTime to be far in the past, we trick the memoization
-        // into moving it to the ready queue on the next re-render.
-        // We also need to clear the restEndTime so it's not re-calculated into the resting queue.
-        setMatches(current => current.map(m => m.id === matchId ? {...m, team1LastPlayed: 0, team2LastPlayed: 0, restEndTime: 0} : m));
-        toast({ title: 'Override Applied', description: `Match is now available for scheduling.`});
-    }, [restingTeams, toast]);
+    const handleOverride = useCallback(async (matchId: string) => {
+        try {
+            const matchRef = doc(db, 'matches', matchId);
+            await updateDoc(matchRef, { isRestOverridden: true });
+            
+            setMatches(current => current.map(m => 
+                m.id === matchId ? { ...m, isRestOverridden: true } : m
+            ));
+            
+            toast({ title: 'Override Applied', description: `Match is now available for scheduling.`});
+        } catch (error) {
+            console.error("Failed to override rest period:", error);
+            toast({ title: 'Error', description: 'Could not apply override.', variant: 'destructive' });
+        }
+    }, [toast]);
 
 
     const handleSaveSchedule = async () => {
