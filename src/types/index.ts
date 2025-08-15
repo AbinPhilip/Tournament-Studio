@@ -92,4 +92,8 @@ export interface Match {
     restEndTime?: number; 
     team1LastPlayed?: number | null;
     team2LastPlayed?: number | null;
+    restingPlayers?: string[];
 }
+
+
+    

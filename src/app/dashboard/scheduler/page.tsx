@@ -200,6 +200,16 @@ export default function SchedulerPage() {
 
             if (lastMatchTime > 0 && (now - lastMatchTime) < MIN_REST_TIME_MS) {
                 m.restEndTime = lastMatchTime + MIN_REST_TIME_MS;
+                const restingPlayers: string[] = [];
+                if (team1LastPlayed > 0 && (now - team1LastPlayed) < MIN_REST_TIME_MS) {
+                    if (team1?.player1Name) restingPlayers.push(team1.player1Name);
+                    if (team1?.player2Name) restingPlayers.push(team1.player2Name);
+                }
+                if (team2LastPlayed > 0 && (now - team2LastPlayed) < MIN_REST_TIME_MS) {
+                    if (team2?.player1Name) restingPlayers.push(team2.player1Name);
+                    if (team2?.player2Name) restingPlayers.push(team2.player2Name);
+                }
+                m.restingPlayers = restingPlayers;
                 resting.push(m);
             } else {
                 ready.push(m);
@@ -398,29 +408,46 @@ export default function SchedulerPage() {
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
-                                {restingTeams.map(match => (
-                                    <TableRow key={match.id}>
-                                         <TableCell>
-                                            <div>
-                                                <span>{match.team1Name} vs {match.team2Name}</span>
-                                                <p className="text-sm text-muted-foreground">
-                                                    <EventBadge eventType={match.eventType} className="mr-2" />
-                                                    {getRoundName(match.round || 0, match.eventType, teamCounts[match.eventType])}
-                                                </p>
-                                            </div>
-                                        </TableCell>
-                                        <TableCell>
-                                            <CountdownTimer endTime={match.restEndTime!} />
-                                        </TableCell>
-                                        {isAdmin && (
-                                            <TableCell className="text-right">
-                                                <Button variant="secondary" size="sm" onClick={() => handleOverride(match.id)}>
-                                                    <TimerOff className="mr-2"/> Override
-                                                </Button>
+                                {restingTeams.map(match => {
+                                    const restingPlayerSet = new Set(match.restingPlayers);
+                                    const PlayerName = ({ name }: { name: string }) => (
+                                        <span className={restingPlayerSet.has(name) ? 'font-bold text-destructive' : ''}>
+                                            {name}
+                                        </span>
+                                    );
+
+                                    return (
+                                        <TableRow key={match.id}>
+                                             <TableCell>
+                                                <div>
+                                                    <p>
+                                                        <PlayerName name={match.team1Name.split(' & ')[0]} />
+                                                        {match.team1Name.includes(' & ') && ' & '}
+                                                        {match.team1Name.includes(' & ') && <PlayerName name={match.team1Name.split(' & ')[1]} />}
+                                                        <span className="text-muted-foreground mx-2">vs</span>
+                                                        <PlayerName name={match.team2Name.split(' & ')[0]} />
+                                                        {match.team2Name.includes(' & ') && ' & '}
+                                                        {match.team2Name.includes(' & ') && <PlayerName name={match.team2Name.split(' & ')[1]} />}
+                                                    </p>
+                                                    <p className="text-sm text-muted-foreground">
+                                                        <EventBadge eventType={match.eventType} className="mr-2" />
+                                                        {getRoundName(match.round || 0, match.eventType, teamCounts[match.eventType])}
+                                                    </p>
+                                                </div>
                                             </TableCell>
-                                        )}
-                                    </TableRow>
-                                ))}
+                                            <TableCell>
+                                                <CountdownTimer endTime={match.restEndTime!} />
+                                            </TableCell>
+                                            {isAdmin && (
+                                                <TableCell className="text-right">
+                                                    <Button variant="secondary" size="sm" onClick={() => handleOverride(match.id)}>
+                                                        <TimerOff className="mr-2"/> Override
+                                                    </Button>
+                                                </TableCell>
+                                            )}
+                                        </TableRow>
+                                    )
+                                })}
                             </TableBody>
                          </Table>
                     </CardContent>
@@ -494,3 +521,6 @@ export default function SchedulerPage() {
         </div>
     );
 }
+
+
+    
