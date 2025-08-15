@@ -1,4 +1,5 @@
 
+
 "use client";
 
 import { useState, useEffect, useMemo } from 'react';
@@ -6,7 +7,7 @@ import { db } from '@/lib/firebase';
 import { collection, onSnapshot, query, Timestamp } from 'firebase/firestore';
 import type { Match, Tournament, Team, TeamType } from '@/types';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, WifiOff, Trophy } from 'lucide-react';
+import { Loader2, WifiOff, Trophy, Crown } from 'lucide-react';
 import { AnimatePresence, m } from 'framer-motion';
 import { Carousel, CarouselContent, CarouselItem } from "@/components/ui/carousel";
 import Autoplay from "embla-carousel-autoplay";
@@ -15,7 +16,6 @@ import { EventBadge } from '../ui/event-badge';
 import { Logo } from '../logo';
 import { cn } from '@/lib/utils';
 import { Table, TableBody, TableCell, TableHeader, TableRow, TableHead } from '../ui/table';
-import { Badge } from '../ui/badge';
 
 const LiveMatchSlide = ({ match, teamCounts }: { match: Match, teamCounts: Record<TeamType, number> }) => {
     const { team1Points = 0, team2Points = 0, servingTeamId } = match.live || {};
@@ -201,6 +201,46 @@ const CompletedMatchesSlide = ({ matches, teamCounts }: { matches: Match[], team
      </m.div>
 );
 
+const WinnerSlide = ({ match }: { match: Match }) => {
+    const winnerName = match.winnerId === match.team1Id ? match.team1Name : match.team2Name;
+    const winnerOrg = match.winnerId === match.team1Id ? match.team1OrgName : match.team2OrgName;
+
+    return (
+        <m.div
+            className="h-full flex flex-col justify-center items-center p-8 text-white text-center bg-black/30 rounded-2xl border-2 border-yellow-400"
+            initial={{opacity: 0, scale: 0.9, y: 50}}
+            animate={{opacity: 1, scale: 1, y: 0}}
+            transition={{duration: 0.7, type: 'spring', stiffness: 100}}
+        >
+            <m.div initial={{scale: 0}} animate={{scale: 1, rotate: -15}} transition={{delay: 0.3, duration: 0.5}}>
+                <Crown className="h-24 w-24 text-yellow-400" />
+            </m.div>
+            <m.h2 
+                className="text-6xl md:text-8xl font-bold text-yellow-300 mt-4 tracking-wider font-headline"
+                initial={{y: 20, opacity: 0}} animate={{y: 0, opacity: 1}} transition={{delay: 0.5}}
+            >
+                WINNER
+            </m.h2>
+            <m.div
+                className="mt-8"
+                initial={{y: 20, opacity: 0}} animate={{y: 0, opacity: 1}} transition={{delay: 0.7}}
+            >
+                <h3 className="text-4xl md:text-6xl font-bold text-white font-headline">{winnerName}</h3>
+                <p className="text-2xl md:text-3xl text-slate-300 mt-2">{winnerOrg}</p>
+            </m.div>
+            <m.p 
+                className="mt-6 text-3xl font-bold text-white bg-black/40 px-6 py-2 rounded-lg font-headline"
+                initial={{y: 20, opacity: 0}} animate={{y: 0, opacity: 1}} transition={{delay: 0.9}}
+            >
+                Final Score: {match.score}
+            </m.p>
+             <footer className="text-slate-400 text-lg mt-8">
+                From Court: {match.courtName}
+            </footer>
+        </m.div>
+    );
+};
+
 
 export function PresenterShell() {
   const { toast } = useToast();
@@ -265,28 +305,38 @@ export function PresenterShell() {
   }, [toast]);
 
   const slides = useMemo(() => {
+    const now = Date.now();
     const liveMatches = matches.filter(m => m.status === 'IN_PROGRESS' && m.courtName).sort((a,b) => (a.courtName || '').localeCompare(b.courtName || ''));
     const scheduledFixtures = matches.filter(m => m.status === 'SCHEDULED' && m.courtName).sort((a, b) => (a.startTime as any) - (b.startTime as any));
-    const recentCompleted = matches.filter(m => m.status === 'COMPLETED').sort((a, b) => (b.lastUpdateTime?.getTime() || 0) - (a.lastUpdateTime?.getTime() || 0)).slice(0, 8);
+    const allCompleted = matches.filter(m => m.status === 'COMPLETED').sort((a, b) => (b.lastUpdateTime?.getTime() || 0) - (a.lastUpdateTime?.getTime() || 0));
+    
+    // Show winner slide for matches completed in the last 5 minutes
+    const recentWinners = allCompleted.filter(m => m.lastUpdateTime && (now - m.lastUpdateTime.getTime()) < 5 * 60 * 1000);
+    const olderCompleted = allCompleted.slice(0, 8);
     
     const slideComponents = [];
 
-    // Always add Welcome slide
+    // 1. Welcome slide
     slideComponents.push(<CarouselItem key="welcome"><WelcomeSlide tournament={tournament} /></CarouselItem>);
 
-    // Add Live matches
+    // 2. Recent Winner slides
+    recentWinners.forEach(match => slideComponents.push(
+        <CarouselItem key={`winner-${match.id}`}><WinnerSlide match={match} /></CarouselItem>
+    ));
+
+    // 3. Live matches
     liveMatches.forEach(match => slideComponents.push(
         <CarouselItem key={match.id}><LiveMatchSlide match={match} teamCounts={teamCounts}/></CarouselItem>
     ));
 
-    // Add Scheduled fixtures
+    // 4. Scheduled fixtures
     scheduledFixtures.forEach(match => slideComponents.push(
         <CarouselItem key={match.id}><FixtureSlide match={match} teamCounts={teamCounts} /></CarouselItem>
     ));
-
-    // Add Completed matches slide if there are any
-    if (recentCompleted.length > 0) {
-        slideComponents.push(<CarouselItem key="completed"><CompletedMatchesSlide matches={recentCompleted} teamCounts={teamCounts} /></CarouselItem>);
+    
+    // 5. Completed matches table
+    if (olderCompleted.length > 0) {
+        slideComponents.push(<CarouselItem key="completed"><CompletedMatchesSlide matches={olderCompleted} teamCounts={teamCounts} /></CarouselItem>);
     }
     
     return slideComponents;
@@ -328,3 +378,4 @@ export function PresenterShell() {
     </div>
   );
 }
+
