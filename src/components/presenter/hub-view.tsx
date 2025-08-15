@@ -3,14 +3,14 @@
 
 import { useState, useEffect } from 'react';
 import type { Match, Tournament } from '@/types';
-import { AnimatePresence, motion } from 'framer-motion';
+import { AnimatePresence, m } from 'framer-motion';
 import { getRoundName } from '@/lib/utils';
 import { Logo } from '../logo';
 import { EventBadge } from '../ui/event-badge';
 
 const SlideWrapper = ({ children, keyId }: { children: React.ReactNode; keyId: string }) => (
   <AnimatePresence>
-    <motion.div
+    <m.div
       key={keyId}
       initial={{ opacity: 0, scale: 0.95 }}
       animate={{ opacity: 1, scale: 1 }}
@@ -19,7 +19,7 @@ const SlideWrapper = ({ children, keyId }: { children: React.ReactNode; keyId: s
       className="absolute inset-0 flex flex-col items-center justify-center text-center p-8"
     >
       {children}
-    </motion.div>
+    </m.div>
   </AnimatePresence>
 );
 

@@ -1,11 +1,11 @@
 
 import type { Match, Tournament } from '@/types';
 import { getRoundName } from '@/lib/utils';
-import { AnimatePresence, motion } from 'framer-motion';
+import { AnimatePresence, m } from 'framer-motion';
 
 const Score = ({ score }: { score: number | string }) => (
     <AnimatePresence mode="popLayout">
-        <motion.div
+        <m.div
             key={score}
             initial={{ y: -20, opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
@@ -14,7 +14,7 @@ const Score = ({ score }: { score: number | string }) => (
             className="text-8xl md:text-9xl lg:text-[12rem] font-black leading-none"
         >
             {score}
-        </motion.div>
+        </m.div>
     </AnimatePresence>
 );
 
