@@ -6,7 +6,7 @@ import { db } from '@/lib/firebase';
 import { collection, onSnapshot, query, Timestamp } from 'firebase/firestore';
 import type { Match, Tournament, TeamType } from '@/types';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, MonitorPlay, WifiOff, Gamepad2, ListChecks } from 'lucide-react';
+import { Loader2, MonitorPlay, WifiOff, ListChecks } from 'lucide-react';
 import { AnimatePresence, m } from 'framer-motion';
 import { Carousel, CarouselContent, CarouselItem } from "@/components/ui/carousel";
 import Autoplay from "embla-carousel-autoplay";
@@ -16,18 +16,18 @@ import { Logo } from '../logo';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 
 const WelcomeSlide = ({ tournament }: { tournament: Tournament | null }) => (
-    <div className="flex flex-col items-center justify-center h-full text-center p-8 bg-gradient-to-br from-background to-slate-900/50 text-foreground">
+    <div className="flex flex-col items-center justify-center h-full text-center p-8 text-white">
         <m.div initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ delay: 0.2, duration: 0.5 }}>
             <Logo />
         </m.div>
         <m.h1 
-            className="text-5xl md:text-7xl lg:text-8xl font-extrabold mt-8 text-transparent bg-clip-text bg-gradient-to-r from-primary via-blue-400 to-primary"
+            className="text-5xl md:text-7xl lg:text-8xl font-extrabold mt-8 tracking-tight"
             initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.4, duration: 0.5 }}
         >
             {tournament?.location}
         </m.h1>
         <m.p 
-            className="text-xl md:text-2xl lg:text-3xl text-muted-foreground mt-4"
+            className="text-xl md:text-2xl lg:text-3xl text-slate-300 mt-4"
             initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.6, duration: 0.5 }}
         >
             Welcome to the Tournament
@@ -36,7 +36,7 @@ const WelcomeSlide = ({ tournament }: { tournament: Tournament | null }) => (
 );
 
 
-const LiveMatchSlide = ({ match }: { match: Match }) => {
+const LiveMatchSlide = ({ match, teamCounts }: { match: Match, teamCounts: Record<TeamType, number> }) => {
     const { team1Points = 0, team2Points = 0, servingTeamId } = match.live || {};
     const team1SetsWon = match.scores?.filter(s => s.team1 > s.team2).length || 0;
     const team2SetsWon = match.scores?.filter(s => s.team2 > s.team1).length || 0;
@@ -45,44 +45,57 @@ const LiveMatchSlide = ({ match }: { match: Match }) => {
         <AnimatePresence mode="popLayout">
             <m.div
                 key={score}
-                initial={{ y: -30, opacity: 0 }}
+                initial={{ y: -40, opacity: 0 }}
                 animate={{ y: 0, opacity: 1 }}
-                exit={{ y: 30, opacity: 0 }}
+                exit={{ y: 40, opacity: 0 }}
                 transition={{ type: "spring", stiffness: 500, damping: 30 }}
-                className="text-8xl md:text-9xl font-black"
+                className="text-8xl md:text-9xl lg:text-[10rem] font-black leading-none text-white"
             >
                 {score}
             </m.div>
         </AnimatePresence>
     );
 
-    const PlayerDisplay = ({ name, org, sets, isServing }: { name: string, org?: string, sets: number, isServing: boolean }) => (
-         <div className={`p-4 rounded-xl transition-all duration-300 w-full text-center ${isServing ? 'bg-primary/10' : ''}`}>
-             <h3 className="text-3xl md:text-5xl font-bold truncate" title={name}>{name}</h3>
-             <p className="text-lg md:text-xl text-muted-foreground">{org}</p>
-             <p className="text-lg md:text-xl text-muted-foreground mt-2">Games Won: {sets}</p>
-             <div className="h-8 mt-2">
-                 {isServing && <p className="font-bold text-primary animate-pulse text-lg tracking-widest">SERVING</p>}
-             </div>
+    const PlayerDisplay = ({ name, org, isServing }: { name: string, org?: string, isServing: boolean }) => (
+         <div className={`p-4 rounded-xl transition-all duration-300 w-full text-center flex flex-col items-center justify-center ${isServing ? 'bg-white/10' : ''}`}>
+            <div className="h-8 mb-2">
+                 {isServing && <p className="font-bold text-yellow-300 animate-pulse text-lg tracking-widest">SERVING</p>}
+            </div>
+            <h3 className="text-3xl md:text-4xl lg:text-6xl font-bold text-white break-words" title={name}>{name}</h3>
+            <p className="text-base md:text-lg lg:text-2xl text-slate-300 mt-2">{org}</p>
          </div>
+    );
+    
+    const SetTracker = ({ setsWon }: { setsWon: number }) => (
+        <div className="flex gap-2 justify-center">
+            {Array.from({length: setsWon}).map((_, i) => (
+                <div key={i} className="w-5 h-5 rounded-full bg-yellow-400" />
+            ))}
+        </div>
     );
 
     return (
-        <div className="h-full flex flex-col justify-between p-4 sm:p-6 md:p-8 bg-background rounded-2xl border">
-            <header className="flex justify-between items-center text-muted-foreground">
+        <div className="h-full flex flex-col justify-between p-4 sm:p-6 md:p-8 bg-black/30 rounded-2xl border border-white/20">
+            <header className="flex justify-between items-center text-slate-200">
                 <EventBadge eventType={match.eventType} />
-                <span className="font-bold text-xl md:text-2xl">Court: {match.courtName}</span>
-                <span className="font-semibold text-lg md:text-xl">{getRoundName(match.round || 0, match.eventType, 0)}</span>
+                <span className="font-bold text-xl md:text-2xl text-white">Court: {match.courtName}</span>
+                <span className="font-semibold text-lg md:text-xl">{getRoundName(match.round || 0, match.eventType, teamCounts[match.eventType] || 0)}</span>
             </header>
 
-            <main className="grid grid-cols-1 md:grid-cols-[1fr_auto_1fr] items-center gap-4 py-4 text-center">
-                <PlayerDisplay name={match.team1Name} org={match.team1OrgName} sets={team1SetsWon} isServing={servingTeamId === match.team1Id} />
+            <main className="flex-grow grid grid-cols-1 md:grid-cols-[1fr_auto_1fr] items-center gap-4 py-4">
+                <div className="flex flex-col items-center justify-between h-full">
+                    <PlayerDisplay name={match.team1Name} org={match.team1OrgName} isServing={servingTeamId === match.team1Id} />
+                    <SetTracker setsWon={team1SetsWon}/>
+                </div>
                 <div className="flex items-center justify-center gap-4 md:gap-8 my-4 md:my-0">
                      <Score score={team1Points} />
-                    <span className="text-6xl font-light text-muted-foreground/50">-</span>
+                    <span className="text-6xl font-light text-white/50">-</span>
                     <Score score={team2Points} />
                 </div>
-                <PlayerDisplay name={match.team2Name} org={match.team2OrgName} sets={team2SetsWon} isServing={servingTeamId === match.team2Id} />
+                <div className="flex flex-col items-center justify-between h-full">
+                    <PlayerDisplay name={match.team2Name} org={match.team2OrgName} isServing={servingTeamId === match.team2Id} />
+                    <SetTracker setsWon={team2SetsWon}/>
+                </div>
             </main>
 
             <footer/>
@@ -91,27 +104,27 @@ const LiveMatchSlide = ({ match }: { match: Match }) => {
 };
 
 const UpcomingMatchesSlide = ({ matches, teamCounts }: { matches: Match[], teamCounts: Record<TeamType, number>}) => (
-    <Card className="h-full flex flex-col bg-background/80 backdrop-blur-sm">
-        <CardHeader className="text-center">
-            <CardTitle className="text-4xl md:text-5xl font-bold flex items-center justify-center gap-4"><ListChecks /> Upcoming Matches</CardTitle>
-            <CardDescription className="text-lg md:text-xl">Next on the schedule</CardDescription>
-        </CardHeader>
-        <CardContent className="flex-grow overflow-hidden">
-             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 h-full">
-                {matches.slice(0, 6).map(match => (
-                    <div key={match.id} className="bg-muted/50 p-4 rounded-lg flex flex-col justify-center text-center">
-                        <div className="flex justify-center mb-2"><EventBadge eventType={match.eventType}/></div>
-                        <p className="font-semibold text-muted-foreground">{getRoundName(match.round || 0, match.eventType, teamCounts[match.eventType])}</p>
-                        <p className="text-lg font-bold truncate">{match.team1Name}</p>
-                        <p className="text-sm text-muted-foreground mb-1">{match.team1OrgName}</p>
-                        <p className="font-bold text-primary">VS</p>
-                        <p className="text-lg font-bold truncate">{match.team2Name}</p>
-                        <p className="text-sm text-muted-foreground">{match.team2OrgName}</p>
+    <div className="h-full flex flex-col bg-black/30 rounded-2xl border border-white/20 p-8">
+        <header className="text-center mb-8">
+            <h2 className="text-4xl md:text-5xl font-bold flex items-center justify-center gap-4 text-white"><ListChecks /> Upcoming Matches</h2>
+            <p className="text-lg md:text-xl text-slate-300">Next on the schedule</p>
+        </header>
+        <div className="flex-grow grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {matches.slice(0, 6).map(match => (
+                <div key={match.id} className="bg-white/10 p-4 rounded-lg flex flex-col justify-center text-center text-white">
+                    <div className="flex justify-between items-center w-full px-2 mb-2">
+                      <EventBadge eventType={match.eventType}/>
+                      <span className="font-semibold text-slate-200">{getRoundName(match.round || 0, match.eventType, teamCounts[match.eventType])}</span>
                     </div>
-                ))}
-             </div>
-        </CardContent>
-    </Card>
+                    <p className="text-lg font-bold truncate">{match.team1Name}</p>
+                    <p className="text-sm text-slate-300 mb-1">{match.team1OrgName}</p>
+                    <p className="font-bold text-yellow-400 my-1">VS</p>
+                    <p className="text-lg font-bold truncate">{match.team2Name}</p>
+                    <p className="text-sm text-slate-300">{match.team2OrgName}</p>
+                </div>
+            ))}
+        </div>
+    </div>
 );
 
 export function PresenterShell() {
@@ -140,7 +153,8 @@ export function PresenterShell() {
 
     const unsubscribeTournament = onSnapshot(tournamentQuery, (snapshot) => {
       if (!snapshot.empty) {
-        const tourneyData = snapshot.docs[0].data() as Tournament;
+        const docData = snapshot.docs[0].data();
+        const tourneyData = { id: snapshot.docs[0].id, ...docData } as Tournament;
         setTournament(tourneyData);
       } else {
         setTournament(null);
@@ -172,18 +186,18 @@ export function PresenterShell() {
 
   if (isLoading) {
     return (
-      <div className="flex h-screen w-screen items-center justify-center bg-background text-foreground">
-        <Loader2 className="h-24 w-24 animate-spin text-primary" />
+      <div className="flex h-screen w-screen items-center justify-center bg-gray-900 text-white">
+        <Loader2 className="h-24 w-24 animate-spin text-blue-400" />
       </div>
     );
   }
 
   if (!tournament) {
     return (
-      <div className="flex h-screen w-screen flex-col items-center justify-center bg-background text-foreground p-8 text-center">
-        <WifiOff className="h-32 w-32 text-destructive mb-8" />
+      <div className="flex h-screen w-screen flex-col items-center justify-center bg-gray-900 text-white p-8 text-center">
+        <WifiOff className="h-32 w-32 text-red-500 mb-8" />
         <h1 className="text-5xl font-bold mb-4">No Tournament Active</h1>
-        <p className="text-2xl text-muted-foreground">Please start a tournament in the admin dashboard to use the presenter view.</p>
+        <p className="text-2xl text-slate-300">Please start a tournament in the admin dashboard to use the presenter view.</p>
       </div>
     );
   }
@@ -191,7 +205,7 @@ export function PresenterShell() {
   const hasSlides = liveMatches.length > 0 || upcomingMatches.length > 0;
 
   return (
-    <div className="h-screen w-screen bg-muted font-sans flex flex-col p-4">
+    <div className="h-screen w-screen bg-gradient-to-br from-gray-900 to-blue-900/50 font-sans flex flex-col p-4">
         { !hasSlides ? (
             <WelcomeSlide tournament={tournament} />
         ) : (
@@ -207,7 +221,7 @@ export function PresenterShell() {
                     
                     {liveMatches.map(match => (
                         <CarouselItem key={match.id}>
-                            <LiveMatchSlide match={match} />
+                            <LiveMatchSlide match={match} teamCounts={teamCounts}/>
                         </CarouselItem>
                     ))}
 
