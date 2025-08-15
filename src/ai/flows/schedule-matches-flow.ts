@@ -102,11 +102,12 @@ const scheduleMatchesFlow = ai.defineFlow(
         if (input.tournament.tournamentType === 'knockout') {
             const nextPowerOf2 = Math.pow(2, Math.ceil(Math.log2(teamCount)));
             const byes = nextPowerOf2 - teamCount;
+            const numMatchesInRound1 = teamCount - byes;
 
             const teamsWithByes = eventTeams.slice(0, byes);
             const teamsInMatches = eventTeams.slice(byes);
 
-            // Create BYE matches
+            // Create BYE matches for the teams with the lowest lot numbers
             for (const team of teamsWithByes) {
                 allMatches.push({
                     team1Id: team.id,
@@ -123,7 +124,7 @@ const scheduleMatchesFlow = ai.defineFlow(
                 });
             }
             
-            // Create regular Round 1 matches
+            // Create regular Round 1 matches for the remaining teams, pairing them sequentially
             for (let i = 0; i < teamsInMatches.length; i += 2) {
                  if (i + 1 < teamsInMatches.length) {
                     const team1 = teamsInMatches[i];
