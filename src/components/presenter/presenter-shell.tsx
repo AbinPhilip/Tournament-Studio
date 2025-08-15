@@ -44,16 +44,11 @@ const LiveMatchSlide = ({ match, teamCounts }: { match: Match, teamCounts: Recor
             <div className="h-8 mb-2">
                  {isServing && <p className="font-bold text-yellow-300 animate-pulse text-lg md:text-xl tracking-widest font-headline">SERVING</p>}
             </div>
-            <h3 className="text-2xl md:text-4xl font-bold text-white break-words font-headline" title={name}>{name}</h3>
+             <div className="flex items-center gap-4">
+                 <h3 className="text-2xl md:text-4xl font-bold text-white break-words font-headline" title={name}>{name}</h3>
+                 <span className="text-4xl md:text-6xl font-bold text-yellow-400 font-headline">{setsWon}</span>
+             </div>
             <p className="text-base md:text-xl text-slate-300 mt-2">{org}</p>
-            <div className="flex gap-2 justify-center mt-4">
-                {Array.from({length: setsWon}).map((_, i) => (
-                    <m.div key={i} className="w-4 h-4 rounded-full bg-yellow-400" initial={{scale:0}} animate={{scale:1}} transition={{delay: i * 0.1}}/>
-                ))}
-                 {Array.from({length: Math.max(0, 2 - setsWon)}).map((_, i) => (
-                    <div key={`empty-${i}`} className="w-4 h-4 rounded-full bg-white/20" />
-                ))}
-            </div>
          </div>
     );
     
@@ -81,7 +76,16 @@ const LiveMatchSlide = ({ match, teamCounts }: { match: Match, teamCounts: Recor
             </main>
 
             <footer className="text-center text-slate-400">
-                Live Score
+               {match.scores && match.scores.length > 0 && (
+                    <div className="flex justify-center items-center gap-4 text-lg">
+                        <span className="font-semibold">Previous Sets:</span>
+                        <div className="flex gap-3">
+                        {match.scores.map((s, i) => (
+                             <span key={i} className="font-mono bg-black/30 px-2 py-1 rounded-md text-white">{s.team1}-{s.team2}</span>
+                        ))}
+                        </div>
+                    </div>
+                )}
             </footer>
         </m.div>
     );
