@@ -1,4 +1,5 @@
 
+
 "use client";
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
@@ -146,9 +147,9 @@ export default function SchedulerPage() {
         }
     }, [toast, router]);
 
-    const { unassignedMatches, busyCourts, restingTeams } = useMemo(() => {
-        const pendingMatches = matches.filter(m => m.status === 'PENDING' && !assignedMatches[m.id]);
-        const minRestTimeMs = (tournament?.restTime || 10) * 60 * 1000;
+    const { unassignedMatches, busyCourts, restingTeams, pendingSummary } = useMemo(() => {
+        const allPendingMatches = matches.filter(m => m.status === 'PENDING');
+        const minRestTimeMs = (tournament?.restTime || 10) * 60 * 100;
         
         const now = Date.now();
         const teamMap = new Map(teams.map(t => [t.id, t]));
@@ -161,12 +162,20 @@ export default function SchedulerPage() {
                 const team2 = teamMap.get(m.team2Id);
                 
                 if (team1) {
-                    playerLastPlayed.set(`${team1.player1Name}|${team1.organizationId}`, completedTime);
-                    if (team1.player2Name) playerLastPlayed.set(`${team1.player2Name}|${team1.organizationId}`, completedTime);
+                    const p1Id = `${team1.player1Name}|${team1.organizationId}`;
+                    playerLastPlayed.set(p1Id, Math.max(playerLastPlayed.get(p1Id) || 0, completedTime));
+                    if (team1.player2Name) {
+                         const p2Id = `${team1.player2Name}|${team1.organizationId}`;
+                         playerLastPlayed.set(p2Id, Math.max(playerLastPlayed.get(p2Id) || 0, completedTime));
+                    }
                 }
                 if (team2 && team2.id !== 'BYE') {
-                    playerLastPlayed.set(`${team2.player1Name}|${team2.organizationId}`, completedTime);
-                    if (team2.player2Name) playerLastPlayed.set(`${team2.player2Name}|${team2.organizationId}`, completedTime);
+                    const p1Id = `${team2.player1Name}|${team2.organizationId}`;
+                    playerLastPlayed.set(p1Id, Math.max(playerLastPlayed.get(p1Id) || 0, completedTime));
+                    if (team2.player2Name) {
+                        const p2Id = `${team2.player2Name}|${team2.organizationId}`;
+                        playerLastPlayed.set(p2Id, Math.max(playerLastPlayed.get(p2Id) || 0, completedTime));
+                    }
                 }
             }
         });
@@ -174,7 +183,9 @@ export default function SchedulerPage() {
         const resting: Match[] = [];
         const ready: Match[] = [];
 
-        pendingMatches.forEach(match => {
+        const pendingMatchesForScheduling = allPendingMatches.filter(m => !assignedMatches[m.id]);
+
+        pendingMatchesForScheduling.forEach(match => {
             const m = {...match}; // Create a mutable copy
             if (m.isRestOverridden) {
                 ready.push(m);
@@ -240,7 +251,21 @@ export default function SchedulerPage() {
             .filter((name): name is string => !!name)
         );
 
-        return { unassignedMatches: ready, busyCourts: inProgressOrScheduled, restingTeams: resting };
+        const summary = allPendingMatches.reduce((acc, match) => {
+            const event = match.eventType;
+            const round = match.round || 1;
+            if (!acc[event]) {
+                acc[event] = {};
+            }
+            if (!acc[event][round]) {
+                acc[event][round] = 0;
+            }
+            acc[event][round]++;
+            return acc;
+        }, {} as Record<TeamType, Record<number, number>>);
+
+
+        return { unassignedMatches: ready, busyCourts: inProgressOrScheduled, restingTeams: resting, pendingSummary: summary };
     }, [matches, teams, teamCounts, assignedMatches, tournament]);
 
     const handleCourtChange = useCallback((matchId: string, courtName: string) => {
@@ -262,9 +287,6 @@ export default function SchedulerPage() {
         try {
             const matchRef = doc(db, 'matches', matchId);
             await updateDoc(matchRef, { isRestOverridden: true });
-            
-            // This will trigger the onSnapshot listener and update the local state automatically
-            
             toast({ title: 'Override Applied', description: `Match is now available for scheduling.`});
         } catch (error) {
             console.error("Failed to override rest period:", error);
@@ -346,6 +368,7 @@ export default function SchedulerPage() {
     }
 
     const isAdmin = user?.role === 'admin' || user?.role === 'super';
+    const eventOrder: TeamType[] = ['singles', 'mens_doubles', 'womens_doubles', 'mixed_doubles'];
 
     return (
         <div className="space-y-8 p-4 md:p-8">
@@ -450,6 +473,34 @@ export default function SchedulerPage() {
 
             <Card>
                 <CardHeader>
+                    <CardTitle>Pending Queue Summary</CardTitle>
+                    <CardDescription>An overview of all matches waiting to be scheduled.</CardDescription>
+                </CardHeader>
+                <CardContent className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    {eventOrder.map(event => {
+                        const summaryForEvent = pendingSummary[event];
+                        if (!summaryForEvent) return null;
+                        
+                        return (
+                            <div key={event}>
+                                <EventBadge eventType={event} />
+                                <div className="mt-2 space-y-1 text-sm">
+                                    {Object.entries(summaryForEvent).sort(([a], [b]) => Number(a) - Number(b)).map(([round, count]) => (
+                                        <div key={round} className="flex justify-between">
+                                            <span>{getRoundName(Number(round), event, teamCounts[event])}:</span>
+                                            <span className="font-bold">{count} matches</span>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )
+                    })}
+                </CardContent>
+            </Card>
+
+
+            <Card>
+                <CardHeader>
                     <CardTitle>Unassigned Matches</CardTitle>
                     <CardDescription>Matches that are ready to be scheduled.</CardDescription>
                 </CardHeader>
@@ -515,3 +566,4 @@ export default function SchedulerPage() {
         </div>
     );
 }
+
