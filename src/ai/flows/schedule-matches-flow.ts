@@ -102,9 +102,11 @@ const scheduleMatchesFlow = ai.defineFlow(
         if (input.tournament.tournamentType === 'knockout') {
             const nextPowerOf2 = Math.pow(2, Math.ceil(Math.log2(teamCount)));
             const byes = nextPowerOf2 - teamCount;
-            const numMatchesInRound1 = teamCount - byes;
+            const teamsInRound1 = teamCount - byes;
 
+            // Teams with lowest lot numbers get byes
             const teamsWithByes = eventTeams.slice(0, byes);
+            // Remaining teams play in round 1
             const teamsInMatches = eventTeams.slice(byes);
 
             // Create BYE matches for the teams with the lowest lot numbers
@@ -173,5 +175,3 @@ export async function scheduleMatches(input: ScheduleMatchesInput): Promise<Omit
     const result = await scheduleMatchesFlow(input);
     return result.matches;
 }
-
-    
