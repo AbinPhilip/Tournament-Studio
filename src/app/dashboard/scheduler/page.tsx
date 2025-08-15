@@ -62,6 +62,34 @@ const CountdownTimer = ({ endTime }: { endTime: number }) => {
     return <span>{minutes}:{seconds}</span>;
 };
 
+const TimeSince = ({ startTime }: { startTime: number | null }) => {
+    const [timeSince, setTimeSince] = useState(startTime ? Date.now() - startTime : null);
+
+    useEffect(() => {
+        if (!startTime) return;
+        const interval = setInterval(() => {
+            setTimeSince(Date.now() - startTime);
+        }, 60000); // Update every minute
+        return () => clearInterval(interval);
+    }, [startTime]);
+    
+    if (timeSince === null) {
+        return <span className="text-muted-foreground">-</span>;
+    }
+
+    const minutes = Math.floor(timeSince / 60000);
+    const hours = Math.floor(minutes / 60);
+    const displayMinutes = minutes % 60;
+
+    if (hours > 0) {
+        return <span>{hours}h {displayMinutes}m ago</span>;
+    }
+    if (minutes < 1) {
+        return <span>&lt;1m ago</span>
+    }
+    return <span>{minutes}m ago</span>;
+}
+
 
 export default function SchedulerPage() {
     const { user } = useAuth();
@@ -138,6 +166,9 @@ export default function SchedulerPage() {
             const team1LastPlayed = teamLastPlayed.get(m.team1Id);
             const team2LastPlayed = m.team2Id ? teamLastPlayed.get(m.team2Id) : undefined;
             const lastMatchTime = Math.max(team1LastPlayed || 0, team2LastPlayed || 0);
+
+            m.team1LastPlayed = team1LastPlayed;
+            m.team2LastPlayed = team2LastPlayed;
 
             if (lastMatchTime > 0 && (now - lastMatchTime) < MIN_REST_TIME_MS) {
                 m.restEndTime = lastMatchTime + MIN_REST_TIME_MS;
@@ -239,7 +270,7 @@ export default function SchedulerPage() {
         setIsSaving(true);
         try {
             const batch = writeBatch(db);
-            const matchesQuery = collection(db, 'matches');
+            const matchesQuery = query(collection(db, 'matches'));
             const matchesSnapshot = await getDocs(matchesQuery);
             matchesSnapshot.forEach(doc => batch.delete(doc.ref));
 
@@ -375,6 +406,7 @@ export default function SchedulerPage() {
                                     <TableHead>Event</TableHead>
                                     <TableHead>Round</TableHead>
                                     <TableHead>Match</TableHead>
+                                    <TableHead>Last Played</TableHead>
                                     <TableHead>Assign Court</TableHead>
                                 </TableRow>
                             </TableHeader>
@@ -395,6 +427,10 @@ export default function SchedulerPage() {
                                                     <span>{match.team2Name}</span>
                                                     <p className="text-sm text-muted-foreground">{match.team2OrgName}</p>
                                                 </div>
+                                            </TableCell>
+                                            <TableCell className="text-sm text-muted-foreground">
+                                                <div><TimeSince startTime={match.team1LastPlayed ?? null} /></div>
+                                                <div><TimeSince startTime={match.team2LastPlayed ?? null} /></div>
                                             </TableCell>
                                             <TableCell>
                                                  <Select onValueChange={(value) => handleCourtChange(match.id, value)} value={currentAssignment || ''}>

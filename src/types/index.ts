@@ -87,5 +87,8 @@ export interface Match {
         servingTeamId: string;
         currentSet: number;
     } | null;
-    restEndTime?: number; // Client-side property for countdown
+    // Client-side properties
+    restEndTime?: number; 
+    team1LastPlayed?: number | null;
+    team2LastPlayed?: number | null;
 }
