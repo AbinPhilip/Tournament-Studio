@@ -41,24 +41,27 @@ export default function MatchHistoryPage() {
             const matchesRef = collection(db, 'matches');
             let q;
 
+            // Note: Removed `where('status', '==', 'COMPLETED')` from queries to avoid composite index requirement.
+            // Filtering is now done on the client-side after fetching.
             if (direction === 'next' && lastVisible) {
-                q = query(matchesRef, where('status', '==', 'COMPLETED'), orderBy('lastUpdateTime', 'desc'), startAfter(lastVisible), limit(PAGE_SIZE));
+                q = query(matchesRef, orderBy('lastUpdateTime', 'desc'), startAfter(lastVisible), limit(PAGE_SIZE));
             } else if (direction === 'prev' && firstVisible) {
-                q = query(matchesRef, where('status', '==', 'COMPLETED'), orderBy('lastUpdateTime', 'desc'), endBefore(firstVisible), limitToLast(PAGE_SIZE));
+                q = query(matchesRef, orderBy('lastUpdateTime', 'desc'), endBefore(firstVisible), limitToLast(PAGE_SIZE));
             } else {
-                q = query(matchesRef, where('status', '==', 'COMPLETED'), orderBy('lastUpdateTime', 'desc'), limit(PAGE_SIZE));
+                q = query(matchesRef, orderBy('lastUpdateTime', 'desc'), limit(PAGE_SIZE));
             }
 
             const matchesSnap = await getDocs(q);
-            const matchesData = matchesSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Match));
+            const matchesData = matchesSnap.docs
+                .map(doc => ({ id: doc.id, ...doc.data() } as Match))
+                .filter(m => m.status === 'COMPLETED'); // Filter on client
             
             setMatches(matchesData);
             setFirstVisible(matchesSnap.docs[0]);
             setLastVisible(matchesSnap.docs[matchesSnap.docs.length - 1]);
             
-            // Check if it's the last page
             if (direction === 'next' || direction === 'initial') {
-                const nextQuery = query(matchesRef, where('status', '==', 'COMPLETED'), orderBy('lastUpdateTime', 'desc'), startAfter(matchesSnap.docs[matchesSnap.docs.length - 1]), limit(1));
+                const nextQuery = query(matchesRef, orderBy('lastUpdateTime', 'desc'), startAfter(matchesSnap.docs[matchesSnap.docs.length - 1]), limit(1));
                 const nextSnap = await getDocs(nextQuery);
                 setIsLastPage(nextSnap.empty);
             } else {
@@ -68,7 +71,6 @@ export default function MatchHistoryPage() {
             if (direction === 'initial') setCurrentPage(1);
             else if (direction === 'next') setCurrentPage(p => p + 1);
             else if (direction === 'prev') setCurrentPage(p => p - 1);
-
 
         } catch (error) {
             console.error("Error fetching standings:", error);
