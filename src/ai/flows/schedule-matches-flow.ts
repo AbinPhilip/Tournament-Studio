@@ -120,7 +120,7 @@ const schedulePrompt = ai.definePrompt({
         1.  **Sort Teams:** For the specific event category, take all teams and sort them in ascending order based on their 'lotNumber'.
         2.  **Calculate Byes:** A "bye" is a pass to the next round. Byes are needed if the total number of teams (N) is not a power of 2.
             *   Find the next highest power of 2 (P). For example, if N=13, P=16. If N=8, P=8.
-            *   The number of byes to be assigned is P - N. For example, if N=13, there are 16 - 13 = 3 byes.
+            *   The number of byes to be assigned is P - N. For example, if N=13, there are 16 - 13 = 3 byes. If N=29, P=32, so there are 3 byes.
         3.  **Assign Byes for Round 1:**
             *   The teams with the *lowest* lot numbers (from the sorted list) receive a bye. The number of byes assigned must exactly match the number calculated in the previous step.
             *   For each team that gets a bye, you MUST generate a match object.
@@ -128,7 +128,9 @@ const schedulePrompt = ai.definePrompt({
             *   Set 'team2Name' and 'team2OrgName' to "BYE".
             *   Set the match 'status' to 'COMPLETED' and the 'winnerId' to the 'team1Id'.
         4.  **Assign Matches for Round 1:**
-            *   The remaining teams (those that did not get a bye) are paired up sequentially based on their position in the sorted list. For example, the team with the next lowest lot number plays the one after it, and so on.
+            *   Take the list of remaining teams (those that did not get a bye) which are already sorted by their lot number.
+            *   Pair them up sequentially. The first team in the list plays the second, the third plays the fourth, and so on.
+            *   For example, if the remaining sorted lot numbers are [5, 6, 7, 8, 9, 10], the pairings MUST be (5 vs 6), (7 vs 8), and (9 vs 10).
             *   For these regular matches, set the initial 'status' of all generated matches to 'PENDING'.
         5.  **Set Round Number:** For ALL matches generated in this process (including bye matches), set the 'round' field to 1.
 
