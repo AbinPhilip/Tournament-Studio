@@ -79,6 +79,15 @@ const recordMatchResultFlow = ai.defineFlow(
         updates.status = 'COMPLETED';
         updates.live = null; // Clear live data on completion
 
+        // Calculate and store point differential
+        if (updates.scores && updates.scores.length > 0 && !input.isForfeited && updates.winnerId) {
+            const totalScoreWinner = updates.scores.reduce((sum, set) => sum + (updates.winnerId === completedMatch.team1Id ? set.team1 : set.team2), 0);
+            const totalScoreLoser = updates.scores.reduce((sum, set) => sum + (updates.winnerId === completedMatch.team1Id ? set.team2 : set.team1), 0);
+            updates.pointDifferential = totalScoreWinner - totalScoreLoser;
+        } else {
+            updates.pointDifferential = 0;
+        }
+
     } else { // Handle 'IN_PROGRESS' updates (e.g., finalizing a set)
         updates.status = 'IN_PROGRESS';
         if (input.scores) {
@@ -285,5 +294,3 @@ const recordMatchResultFlow = ai.defineFlow(
 export async function recordMatchResult(input: RecordMatchResultInput): Promise<void> {
     await recordMatchResultFlow(input);
 }
-
-    

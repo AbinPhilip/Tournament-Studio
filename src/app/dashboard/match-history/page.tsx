@@ -19,6 +19,7 @@ import { Loader2, ArrowLeft, ArrowRight } from 'lucide-react';
 import { getRoundName } from '@/lib/utils';
 import { EventBadge } from '@/components/ui/event-badge';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 
 const PAGE_SIZE = 10;
 
@@ -41,44 +42,69 @@ export default function MatchHistoryPage() {
             const matchesRef = collection(db, 'matches');
             let q;
 
-            // Note: Removed `where('status', '==', 'COMPLETED')` from queries to avoid composite index requirement.
-            // Filtering is now done on the client-side after fetching.
+            const baseQuery = query(matchesRef, where('status', '==', 'COMPLETED'), orderBy('lastUpdateTime', 'desc'));
+
             if (direction === 'next' && lastVisible) {
-                q = query(matchesRef, orderBy('lastUpdateTime', 'desc'), startAfter(lastVisible), limit(PAGE_SIZE));
+                q = query(baseQuery, startAfter(lastVisible), limit(PAGE_SIZE));
             } else if (direction === 'prev' && firstVisible) {
-                q = query(matchesRef, orderBy('lastUpdateTime', 'desc'), endBefore(firstVisible), limitToLast(PAGE_SIZE));
+                q = query(matchesRef, where('status', '==', 'COMPLETED'), orderBy('lastUpdateTime', 'desc'), endBefore(firstVisible), limitToLast(PAGE_SIZE));
             } else {
-                q = query(matchesRef, orderBy('lastUpdateTime', 'desc'), limit(PAGE_SIZE));
+                q = query(baseQuery, limit(PAGE_SIZE));
             }
 
             const matchesSnap = await getDocs(q);
-            if (matchesSnap.empty) {
+            if (matchesSnap.empty && direction !== 'initial') {
                 if (direction === 'next') setIsLastPage(true);
+                 if (direction === 'prev') setIsFirstPage(true);
+                setIsLoading(false);
+                return;
+            }
+            
+             if (matchesSnap.empty && direction === 'initial') {
                 setMatches([]);
+                setIsLastPage(true);
+                setIsFirstPage(true);
                 setIsLoading(false);
                 return;
             }
 
-            const matchesData = matchesSnap.docs
-                .map(doc => ({ id: doc.id, ...doc.data() } as Match))
-                .filter(m => m.status === 'COMPLETED'); // Filter on client
+            const matchesData = matchesSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Match));
             
             setMatches(matchesData);
             setFirstVisible(matchesSnap.docs[0]);
             const newLastVisible = matchesSnap.docs[matchesSnap.docs.length - 1];
             setLastVisible(newLastVisible);
             
+            // Check for next page availability
             if ((direction === 'next' || direction === 'initial') && newLastVisible) {
-                const nextQuery = query(matchesRef, orderBy('lastUpdateTime', 'desc'), startAfter(newLastVisible), limit(1));
+                const nextQuery = query(baseQuery, startAfter(newLastVisible), limit(1));
                 const nextSnap = await getDocs(nextQuery);
                 setIsLastPage(nextSnap.empty);
             } else {
                  setIsLastPage(false);
             }
-             
-            if (direction === 'initial') setCurrentPage(1);
-            else if (direction === 'next') setCurrentPage(p => p + 1);
-            else if (direction === 'prev') setCurrentPage(p => p - 1);
+
+            // Update current page number
+            if (direction === 'initial') {
+                setCurrentPage(1);
+                 // Check if it is also the first page
+                const prevQuery = query(baseQuery, endBefore(matchesSnap.docs[0]), limitToLast(1));
+                const prevSnap = await getDocs(prevQuery);
+                setIsFirstPage(prevSnap.empty);
+            }
+            else if (direction === 'next') {
+                setCurrentPage(p => p + 1);
+                setIsFirstPage(false);
+            }
+            else if (direction === 'prev') {
+                setCurrentPage(p => p - 1);
+                setIsLastPage(false); // We moved back, so it's not the last page
+                 // Check if it is now the first page
+                const prevQuery = query(baseQuery, endBefore(matchesSnap.docs[0]), limitToLast(1));
+                const prevSnap = await getDocs(prevQuery);
+                setIsFirstPage(prevSnap.empty);
+            }
+
 
         } catch (error) {
             console.error("Error fetching standings:", error);
@@ -88,9 +114,6 @@ export default function MatchHistoryPage() {
         }
     };
     
-     useEffect(() => {
-        setIsFirstPage(currentPage === 1);
-     }, [currentPage])
 
     useEffect(() => {
         const fetchInitialData = async () => {
@@ -106,6 +129,7 @@ export default function MatchHistoryPage() {
             fetchMatches('initial');
         };
         fetchInitialData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [toast]);
 
     const groupedMatches = useMemo(() => {
@@ -163,6 +187,7 @@ export default function MatchHistoryPage() {
                                             <TableHead>Victor</TableHead>
                                             <TableHead>Runner-up</TableHead>
                                             <TableHead>Score</TableHead>
+                                            <TableHead>Point Diff.</TableHead>
                                         </TableRow>
                                     </TableHeader>
                                     <TableBody>
@@ -172,13 +197,14 @@ export default function MatchHistoryPage() {
                                             const winnerOrg = winnerIsTeam1 ? match.team1OrgName : match.team2OrgName;
                                             const loserName = winnerIsTeam1 ? match.team2Name : match.team1Name;
                                             const loserOrg = winnerIsTeam1 ? match.team2OrgName : match.team1OrgName;
+                                            const diff = match.pointDifferential;
 
                                             return (
                                                  <TableRow key={match.id}>
                                                     <TableCell className="font-medium">{getRoundName(match.round || 0, eventType, teamCounts[eventType])}</TableCell>
                                                     <TableCell>
                                                         <div>
-                                                          <span>{winnerName}</span>
+                                                          <span className="font-bold">{winnerName}</span>
                                                           <p className="text-sm text-muted-foreground">{winnerOrg}</p>
                                                         </div>
                                                     </TableCell>
@@ -188,7 +214,12 @@ export default function MatchHistoryPage() {
                                                             <p className="text-sm text-muted-foreground">{loserOrg}</p>
                                                         </div>
                                                     </TableCell>
-                                                    <TableCell>{match.score || ''}</TableCell>
+                                                    <TableCell><Badge variant="secondary" className="text-base">{match.score || ''}</Badge></TableCell>
+                                                    <TableCell>
+                                                        {diff !== undefined && diff > 0 && (
+                                                            <span className="font-bold text-green-600">+{diff}</span>
+                                                        )}
+                                                    </TableCell>
                                                 </TableRow>
                                             )
                                         })}

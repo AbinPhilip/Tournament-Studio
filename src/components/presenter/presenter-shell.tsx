@@ -1,10 +1,9 @@
 
-
 "use client";
 
 import { useState, useEffect, useMemo } from 'react';
 import { db } from '@/lib/firebase';
-import { collection, onSnapshot, query, Timestamp } from 'firebase/firestore';
+import { collection, onSnapshot, query, Timestamp, orderBy, limit } from 'firebase/firestore';
 import type { Match, Tournament, Team, TeamType } from '@/types';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2, WifiOff, Trophy, Crown } from 'lucide-react';
@@ -171,6 +170,7 @@ const CompletedMatchesSlide = ({ matches, teamCounts }: { matches: Match[], team
                         <TableHead className="text-white/80 font-headline text-xl">Winner</TableHead>
                         <TableHead className="text-white/80 font-headline text-xl">Runner-up</TableHead>
                         <TableHead className="text-center text-white/80 font-headline text-xl">Score</TableHead>
+                        <TableHead className="text-center text-white/80 font-headline text-xl">Point Diff.</TableHead>
                     </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -180,6 +180,7 @@ const CompletedMatchesSlide = ({ matches, teamCounts }: { matches: Match[], team
                         const winnerOrg = winnerIsTeam1 ? match.team1OrgName : match.team2OrgName;
                         const loserName = winnerIsTeam1 ? match.team2Name : match.team1Name;
                         const loserOrg = winnerIsTeam1 ? match.team2OrgName : match.team1OrgName;
+                        const diff = match.pointDifferential;
                         return (
                              <TableRow key={match.id} className="border-white/20 hover:bg-white/5">
                                 <TableCell><EventBadge eventType={match.eventType} /></TableCell>
@@ -192,6 +193,9 @@ const CompletedMatchesSlide = ({ matches, teamCounts }: { matches: Match[], team
                                      <p className="text-sm text-slate-300">{loserOrg}</p>
                                 </TableCell>
                                 <TableCell className="text-center font-bold text-yellow-300 text-xl font-headline">{match.score}</TableCell>
+                                <TableCell className="text-center font-bold text-green-400 text-xl font-headline">
+                                    {diff !== undefined && diff > 0 ? `+${diff}` : ''}
+                                </TableCell>
                             </TableRow>
                         )
                      })}
@@ -308,7 +312,7 @@ export function PresenterShell() {
     const now = Date.now();
     const liveMatches = matches.filter(m => m.status === 'IN_PROGRESS' && m.courtName).sort((a,b) => (a.courtName || '').localeCompare(b.courtName || ''));
     const scheduledFixtures = matches.filter(m => m.status === 'SCHEDULED' && m.courtName).sort((a, b) => (a.startTime as any) - (b.startTime as any));
-    const allCompleted = matches.filter(m => m.status === 'COMPLETED').sort((a, b) => (b.lastUpdateTime?.getTime() || 0) - (a.lastUpdateTime?.getTime() || 0));
+    const allCompleted = matches.filter(m => m.status === 'COMPLETED' && m.winnerId).sort((a, b) => (b.lastUpdateTime?.getTime() || 0) - (a.lastUpdateTime?.getTime() || 0));
     
     // Show winner slide for matches completed in the last 5 minutes
     const recentWinners = allCompleted.filter(m => m.lastUpdateTime && (now - m.lastUpdateTime.getTime()) < 5 * 60 * 1000);
@@ -378,4 +382,3 @@ export function PresenterShell() {
     </div>
   );
 }
-
