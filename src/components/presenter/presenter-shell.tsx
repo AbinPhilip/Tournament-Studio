@@ -23,13 +23,13 @@ const WelcomeSlide = ({ tournament }: { tournament: Tournament | null }) => (
             className="text-5xl md:text-7xl lg:text-8xl font-extrabold mt-8 tracking-tight"
             initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.4, duration: 0.5 }}
         >
-            {tournament?.location}
+            {tournament?.name || 'Welcome'}
         </m.h1>
         <m.p 
             className="text-xl md:text-2xl lg:text-3xl text-slate-300 mt-4"
             initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.6, duration: 0.5 }}
         >
-            Welcome to the Tournament
+            Hosted by: {tournament?.hostName}
         </m.p>
     </div>
 );
@@ -60,8 +60,8 @@ const LiveMatchSlide = ({ match, teamCounts }: { match: Match, teamCounts: Recor
             <div className="h-8 mb-2">
                  {isServing && <p className="font-bold text-yellow-300 animate-pulse text-lg md:text-xl tracking-widest">SERVING</p>}
             </div>
-            <h3 className="text-2xl md:text-4xl lg:text-5xl font-bold text-white break-words" title={name}>{name}</h3>
-            <p className="text-base md:text-xl lg:text-2xl text-slate-300 mt-2">{org}</p>
+            <h3 className="text-2xl md:text-3xl lg:text-4xl font-bold text-white break-words" title={name}>{name}</h3>
+            <p className="text-base md:text-lg lg:text-xl text-slate-300 mt-2">{org}</p>
          </div>
     );
     
@@ -182,7 +182,7 @@ export function PresenterShell() {
   }, [toast]);
 
   const liveMatches = matches.filter(m => m.status === 'IN_PROGRESS').sort((a,b) => (a.courtName || '').localeCompare(b.courtName || ''));
-  const upcomingMatches = matches.filter(m => m.status === 'SCHEDULED' && !m.live).sort((a, b) => (a.startTime as any) - (b.startTime as any));
+  const upcomingMatches = matches.filter(m => m.status !== 'COMPLETED').sort((a, b) => (a.startTime as any) - (b.startTime as any));
 
   if (isLoading) {
     return (
@@ -236,5 +236,3 @@ export function PresenterShell() {
     </div>
   );
 }
-
-    

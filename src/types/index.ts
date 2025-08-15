@@ -48,6 +48,9 @@ export type TournamentStatus = 'PENDING' | 'IN_PROGRESS' | 'COMPLETED';
 
 export interface Tournament {
     id:string;
+    name: string;
+    hostName?: string;
+    googleDriveLink?: string;
     location: string;
     numberOfCourts: number;
     courtNames: { name: string }[];
@@ -84,5 +87,3 @@ export interface Match {
         currentSet: number;
     } | null;
 }
-
-    
