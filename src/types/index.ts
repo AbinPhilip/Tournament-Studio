@@ -50,7 +50,6 @@ export interface Tournament {
     id:string;
     name: string;
     hostName?: string;
-    googleDriveLink?: string;
     location: string;
     numberOfCourts: number;
     courtNames: { name: string }[];

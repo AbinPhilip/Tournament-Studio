@@ -53,7 +53,6 @@ import { scheduleMatches } from '@/ai/flows/schedule-matches-flow';
 const tournamentFormSchema = z.object({
   name: z.string().min(3, { message: 'Tournament name must be at least 3 characters.' }),
   hostName: z.string().min(3, { message: 'Host name must be at least 3 characters.' }),
-  googleDriveLink: z.string().url({ message: "Please enter a valid URL." }).optional().or(z.literal('')),
   location: z.string().min(3, { message: 'Location must be at least 3 characters.' }),
   date: z.date({ required_error: 'A tournament date is required.'}),
   tournamentType: z.enum(['round-robin', 'knockout'], { required_error: 'Tournament type is required.' }),
@@ -78,7 +77,6 @@ export default function TournamentSettingsPage() {
     defaultValues: {
       name: '',
       hostName: '',
-      googleDriveLink: '',
       location: '',
       date: new Date(),
       tournamentType: 'knockout',
@@ -339,14 +337,6 @@ export default function TournamentSettingsPage() {
                         />
                     </div>
 
-                    <FormField control={form.control} name="googleDriveLink" render={({ field }) => (
-                        <FormItem>
-                            <FormLabel>Google Drive Image Folder Link</FormLabel>
-                            <FormControl><Input placeholder="https://drive.google.com/drive/folders/..." {...field} /></FormControl>
-                            <FormMessage />
-                        </FormItem>
-                     )} />
-                    
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
                         <FormField
                             control={form.control}
