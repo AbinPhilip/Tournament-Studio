@@ -129,8 +129,7 @@ const schedulePrompt = ai.definePrompt({
             *   Set the match 'status' to 'COMPLETED' and the 'winnerId' to the 'team1Id'.
         4.  **Assign Matches for Round 1:**
             *   Take the list of remaining teams (those that did not get a bye) which are already sorted by their lot number.
-            *   Pair them up sequentially. The first team in the list plays the second, the third plays the fourth, and so on.
-            *   For example, if the remaining sorted lot numbers are [5, 6, 7, 8, 9, 10], the pairings MUST be (5 vs 6), (7 vs 8), and (9 vs 10).
+            *   Pair them up sequentially based on their sorted order. The first team in the list plays the second, the third plays the fourth, and so on.
             *   For these regular matches, set the initial 'status' of all generated matches to 'PENDING'.
         5.  **Set Round Number:** For ALL matches generated in this process (including bye matches), set the 'round' field to 1.
 
