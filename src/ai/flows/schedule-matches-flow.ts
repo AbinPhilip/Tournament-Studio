@@ -97,7 +97,7 @@ const scheduleMatchesFlow = ai.defineFlow(
             .sort((a, b) => (a.lotNumber ?? Infinity) - (b.lotNumber ?? Infinity));
         
         const teamCount = eventTeams.length;
-        if (teamCount === 0) continue;
+        if (teamCount < 2) continue; // Skip if not enough teams for a match
         
         if (input.tournament.tournamentType === 'knockout') {
             const nextPowerOf2 = Math.pow(2, Math.ceil(Math.log2(teamCount)));
@@ -105,8 +105,8 @@ const scheduleMatchesFlow = ai.defineFlow(
 
             // Teams with the lowest lot numbers get byes.
             const teamsWithByes = eventTeams.slice(0, byes);
-            // The remaining teams play in the first round.
             const teamsInMatches = eventTeams.slice(byes);
+
 
             // Create "BYE" matches for the teams that get a pass to the next round.
             for (const team of teamsWithByes) {
