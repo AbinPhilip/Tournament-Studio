@@ -11,7 +11,7 @@ import { ai } from '@/ai/genkit';
 import { z } from 'zod';
 import { db } from '@/lib/firebase';
 import { collection, doc, getDoc, getDocs, writeBatch, query, where, Timestamp } from 'firebase/firestore';
-import type { Match, Tournament, Organization, Team } from '@/types';
+import type { Match, Tournament, Organization, Team, TeamType } from '@/types';
 
 
 const RecordMatchResultInputSchema = z.object({
@@ -43,6 +43,11 @@ async function findAvailableCourt(startTime: Date, courtNames: { name: string }[
     }
     return null; // All courts at this specific time are busy
 }
+
+const getTotalRounds = (teamCount: number) => {
+    if (teamCount < 2) return 0;
+    return Math.ceil(Math.log2(teamCount));
+};
 
 const recordMatchResultFlow = ai.defineFlow(
   {
@@ -108,7 +113,7 @@ const recordMatchResultFlow = ai.defineFlow(
         Object.assign(finalUpdates, updates); // ensure all updates are applied
     }
 
-    batch.update(matchRef, finalUpdates);
+    batch.update(matchRef, { ...finalUpdates, lastUpdateTime: Timestamp.now() });
 
     // 2. If match is COMPLETED, check if it was a knockout match and if we need to schedule the next round
     const currentWinnerId = updates.winnerId;
@@ -136,38 +141,90 @@ const recordMatchResultFlow = ai.defineFlow(
         );
         const currentRoundSnap = await getDocs(currentRoundQuery);
         
-        // Create a map of the current state of matches in the round
         const roundMatchesMap = new Map(currentRoundSnap.docs.map(doc => [doc.id, doc.data() as Match]));
-        // Apply the current update to our map so it's up-to-date
-        roundMatchesMap.set(input.matchId, { ...completedMatch, ...updates });
+        roundMatchesMap.set(input.matchId, { ...completedMatch, ...updates, lastUpdateTime: Timestamp.now() });
 
-        // Check if all matches in this round are completed
         const allMatchesInRoundCompleted = Array.from(roundMatchesMap.values()).every(
             match => match.status === 'COMPLETED'
         );
 
         if (!allMatchesInRoundCompleted) {
-            // Not all matches in the current round are finished, so don't schedule the next round yet.
             await batch.commit();
             return;
         }
 
-        // All matches in the round are complete, proceed to find pairs for the next round.
-        const winners = Array.from(roundMatchesMap.values())
-            .map(match => match.winnerId)
-            .filter((id): id is string => !!id && id !== 'BYE');
+        // All matches in the round are complete, proceed to schedule next round.
+        
+        const allTeamsSnap = await getDocs(collection(db, "teams"));
+        const teamCounts = allTeamsSnap.docs.reduce((acc, doc) => {
+            const team = doc.data() as Team;
+            if (!acc[team.type]) acc[team.type] = 0;
+            acc[team.type]++;
+            return acc;
+        }, {} as Record<TeamType, number>);
+
+        const totalRounds = getTotalRounds(teamCounts[completedMatch.eventType] || 0);
+        const isFinalRound = completedMatch.round === totalRounds;
+        const isSemiFinalRound = completedMatch.round === totalRounds - 1;
+
+        // Hold scheduling for semi-finals and finals
+        if (isSemiFinalRound || isFinalRound) {
+            const allMatchesSnap = await getDocs(matchesRef);
+            const allMatches = allMatchesSnap.docs.map(d => d.data() as Match);
+
+            // Check if all non-final/semi-final rounds in all event types are complete
+            const allPrelimsDone = allMatches.every(m => {
+                const eventTeamCount = teamCounts[m.eventType] || 0;
+                const eventTotalRounds = getTotalRounds(eventTeamCount);
+                const mIsSemiOrFinal = m.round === eventTotalRounds || m.round === eventTotalRounds - 1;
+                return m.status === 'COMPLETED' || mIsSemiOrFinal;
+            });
+
+            if (!allPrelimsDone) {
+                await batch.commit(); // Not all prelims are done, so wait.
+                return;
+            }
+        }
+        
+        const roundMatchesWithTime = Array.from(roundMatchesMap.values()).map(m => ({
+            ...m,
+            lastUpdateTime: m.lastUpdateTime instanceof Timestamp ? m.lastUpdateTime : Timestamp.now(),
+        }));
+        
+        const byeWinners = new Set(
+            roundMatchesWithTime
+                .filter(match => match.team2Id === 'BYE' && match.winnerId)
+                .map(match => match.winnerId!)
+        );
+        
+        const matchWinners = roundMatchesWithTime
+            .filter(match => match.team2Id !== 'BYE' && match.winnerId)
+            .sort((a, b) => a.lastUpdateTime.toMillis() - b.lastUpdateTime.toMillis())
+            .map(match => match.winnerId!);
+
+        let winnersToSchedule = [];
+        let remainingMatchWinners = [...matchWinners];
+        
+        for (const byeWinner of Array.from(byeWinners)) {
+             if (remainingMatchWinners.length > 0) {
+                winnersToSchedule.push(byeWinner, remainingMatchWinners.shift()!);
+            } else {
+                winnersToSchedule.push(byeWinner); // Will get a bye if no one to pair with
+            }
+        }
+        winnersToSchedule.push(...remainingMatchWinners);
 
         const nextRoundQuery = query(matchesRef, where('round', '==', completedMatch.round + 1), where('eventType', '==', completedMatch.eventType));
         const nextRoundSnap = await getDocs(nextRoundQuery);
         const scheduledIds = new Set(nextRoundSnap.docs.flatMap(d => [d.data().team1Id, d.data().team2Id]));
 
-        const winnersToSchedule = winners.filter(id => !scheduledIds.has(id));
+        const finalWinnersToSchedule = winnersToSchedule.filter(id => !scheduledIds.has(id));
 
-        for (let i = 0; i < winnersToSchedule.length; i += 2) {
-             if (i + 1 >= winnersToSchedule.length) continue; // Odd number of winners, last one gets a bye implicitly
+        for (let i = 0; i < finalWinnersToSchedule.length; i += 2) {
+             if (i + 1 >= finalWinnersToSchedule.length) continue; 
 
-             const team1Id = winnersToSchedule[i];
-             const team2Id = winnersToSchedule[i+1];
+             const team1Id = finalWinnersToSchedule[i];
+             const team2Id = finalWinnersToSchedule[i+1];
 
             const winnerTeamSnap = await getDoc(doc(db, 'teams', team1Id));
             const opponentTeamSnap = await getDoc(doc(db, 'teams', team2Id));
@@ -182,7 +239,7 @@ const recordMatchResultFlow = ai.defineFlow(
             const orgsCollection = await getDocs(collection(db, 'organizations'));
             const orgNameMap = new Map(orgsCollection.docs.map(doc => [doc.id, doc.data().name]));
 
-            let matchTime = completedMatch.startTime instanceof Timestamp ? completedMatch.startTime.toDate() : new Date();
+            let matchTime = new Date();
             let availableCourt: string | null = null;
             let attempts = 0;
             const maxAttempts = 48 * 4; 
