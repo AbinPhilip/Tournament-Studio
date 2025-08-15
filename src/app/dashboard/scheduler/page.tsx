@@ -154,7 +154,7 @@ export default function SchedulerPage() {
         const now = Date.now();
         const teamMap = new Map(teams.map(t => [t.id, t]));
         
-        // Map of player names to their last match completion time
+        // Map of player unique ID (name|orgId) to their last match completion time
         const playerLastPlayed = new Map<string, number>();
         matches.forEach(m => {
             if (m.status === 'COMPLETED' && m.lastUpdateTime) {
@@ -163,12 +163,12 @@ export default function SchedulerPage() {
                 const team2 = teamMap.get(m.team2Id);
                 
                 if (team1) {
-                    playerLastPlayed.set(team1.player1Name, completedTime);
-                    if (team1.player2Name) playerLastPlayed.set(team1.player2Name, completedTime);
+                    playerLastPlayed.set(`${team1.player1Name}|${team1.organizationId}`, completedTime);
+                    if (team1.player2Name) playerLastPlayed.set(`${team1.player2Name}|${team1.organizationId}`, completedTime);
                 }
                 if (team2 && team2.id !== 'BYE') {
-                    playerLastPlayed.set(team2.player1Name, completedTime);
-                    if (team2.player2Name) playerLastPlayed.set(team2.player2Name, completedTime);
+                    playerLastPlayed.set(`${team2.player1Name}|${team2.organizationId}`, completedTime);
+                    if (team2.player2Name) playerLastPlayed.set(`${team2.player2Name}|${team2.organizationId}`, completedTime);
                 }
             }
         });
@@ -185,10 +185,10 @@ export default function SchedulerPage() {
             const team1 = teamMap.get(m.team1Id);
             const team2 = teamMap.get(m.team2Id);
 
-            const team1Player1LastPlayed = team1 ? playerLastPlayed.get(team1.player1Name) : undefined;
-            const team1Player2LastPlayed = team1?.player2Name ? playerLastPlayed.get(team1.player2Name) : undefined;
-            const team2Player1LastPlayed = team2 ? playerLastPlayed.get(team2.player1Name) : undefined;
-            const team2Player2LastPlayed = team2?.player2Name ? playerLastPlayed.get(team2.player2Name) : undefined;
+            const team1Player1LastPlayed = team1 ? playerLastPlayed.get(`${team1.player1Name}|${team1.organizationId}`) : undefined;
+            const team1Player2LastPlayed = team1?.player2Name ? playerLastPlayed.get(`${team1.player2Name}|${team1.organizationId}`) : undefined;
+            const team2Player1LastPlayed = team2 ? playerLastPlayed.get(`${team2.player1Name}|${team2.organizationId}`) : undefined;
+            const team2Player2LastPlayed = team2?.player2Name ? playerLastPlayed.get(`${team2.player2Name}|${team2.organizationId}`) : undefined;
             
             const team1LastPlayed = Math.max(team1Player1LastPlayed || 0, team1Player2LastPlayed || 0);
             const team2LastPlayed = Math.max(team2Player1LastPlayed || 0, team2Player2LastPlayed || 0);
@@ -267,9 +267,7 @@ export default function SchedulerPage() {
             const matchRef = doc(db, 'matches', matchId);
             await updateDoc(matchRef, { isRestOverridden: true });
             
-            setMatches(current => current.map(m => 
-                m.id === matchId ? { ...m, isRestOverridden: true } : m
-            ));
+            // This will trigger a re-render via the onSnapshot listener, no need for local state update
             
             toast({ title: 'Override Applied', description: `Match is now available for scheduling.`});
         } catch (error) {
@@ -522,5 +520,7 @@ export default function SchedulerPage() {
     );
 }
 
+
+    
 
     
