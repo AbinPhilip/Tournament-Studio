@@ -95,6 +95,7 @@ export default function SchedulerPage() {
     const { user } = useAuth();
     const [tournament, setTournament] = useState<Tournament | null>(null);
     const [matches, setMatches] = useState<Match[]>([]);
+    const [teams, setTeams] = useState<Team[]>([]);
     const [assignedMatches, setAssignedMatches] = useState<Record<string, string>>({}); // { matchId: courtName }
     const [isLoading, setIsLoading] = useState(true);
     const [isSaving, setIsSaving] = useState(false);
@@ -131,9 +132,10 @@ export default function SchedulerPage() {
         });
 
         const teamsUnsub = onSnapshot(collection(db, 'teams'), (snapshot) => {
+             const teamData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Team));
+             setTeams(teamData);
              const counts: Record<TeamType, number> = { singles: 0, mens_doubles: 0, womens_doubles: 0, mixed_doubles: 0 };
-             snapshot.forEach(doc => {
-                const team = doc.data() as Team;
+             teamData.forEach(team => {
                 if (counts[team.type] !== undefined) counts[team.type]++;
             });
             setTeamCounts(counts);
@@ -150,12 +152,24 @@ export default function SchedulerPage() {
         const unassigned = matches.filter(m => m.status === 'PENDING' && !assignedMatches[m.id]);
         
         const now = Date.now();
-        const teamLastPlayed = new Map<string, number>();
+        const teamMap = new Map(teams.map(t => [t.id, t]));
+        
+        // Map of player names to their last match completion time
+        const playerLastPlayed = new Map<string, number>();
         matches.forEach(m => {
             if (m.status === 'COMPLETED' && m.lastUpdateTime) {
                 const completedTime = m.lastUpdateTime!.getTime();
-                teamLastPlayed.set(m.team1Id, completedTime);
-                if (m.team2Id) teamLastPlayed.set(m.team2Id, completedTime);
+                const team1 = teamMap.get(m.team1Id);
+                const team2 = teamMap.get(m.team2Id);
+                
+                if (team1) {
+                    playerLastPlayed.set(team1.player1Name, completedTime);
+                    if (team1.player2Name) playerLastPlayed.set(team1.player2Name, completedTime);
+                }
+                if (team2) {
+                    playerLastPlayed.set(team2.player1Name, completedTime);
+                    if (team2.player2Name) playerLastPlayed.set(team2.player2Name, completedTime);
+                }
             }
         });
 
@@ -163,12 +177,21 @@ export default function SchedulerPage() {
         const ready: Match[] = [];
 
         unassigned.forEach(m => {
-            const team1LastPlayed = teamLastPlayed.get(m.team1Id);
-            const team2LastPlayed = m.team2Id ? teamLastPlayed.get(m.team2Id) : undefined;
-            const lastMatchTime = Math.max(team1LastPlayed || 0, team2LastPlayed || 0);
+            const team1 = teamMap.get(m.team1Id);
+            const team2 = teamMap.get(m.team2Id);
 
-            m.team1LastPlayed = team1LastPlayed;
-            m.team2LastPlayed = team2LastPlayed;
+            const team1Player1LastPlayed = team1 ? playerLastPlayed.get(team1.player1Name) : undefined;
+            const team1Player2LastPlayed = team1?.player2Name ? playerLastPlayed.get(team1.player2Name) : undefined;
+            const team2Player1LastPlayed = team2 ? playerLastPlayed.get(team2.player1Name) : undefined;
+            const team2Player2LastPlayed = team2?.player2Name ? playerLastPlayed.get(team2.player2Name) : undefined;
+            
+            const team1LastPlayed = Math.max(team1Player1LastPlayed || 0, team1Player2LastPlayed || 0);
+            const team2LastPlayed = Math.max(team2Player1LastPlayed || 0, team2Player2LastPlayed || 0);
+            
+            m.team1LastPlayed = team1LastPlayed > 0 ? team1LastPlayed : null;
+            m.team2LastPlayed = team2LastPlayed > 0 ? team2LastPlayed : null;
+            
+            const lastMatchTime = Math.max(team1LastPlayed, team2LastPlayed);
 
             if (lastMatchTime > 0 && (now - lastMatchTime) < MIN_REST_TIME_MS) {
                 m.restEndTime = lastMatchTime + MIN_REST_TIME_MS;
@@ -207,7 +230,7 @@ export default function SchedulerPage() {
         );
 
         return { unassignedMatches: ready, busyCourts: inProgressOrScheduled, restingTeams: resting };
-    }, [matches, teamCounts, assignedMatches]);
+    }, [matches, teams, teamCounts, assignedMatches]);
 
     const handleCourtChange = useCallback((matchId: string, courtName: string) => {
         setAssignedMatches(current => {
@@ -230,7 +253,8 @@ export default function SchedulerPage() {
 
         // By setting the lastUpdateTime to be far in the past, we trick the memoization
         // into moving it to the ready queue on the next re-render.
-        setMatches(current => current.map(m => m.id === matchId ? {...m, lastUpdateTime: new Date(0)} : m));
+        // We also need to clear the restEndTime so it's not re-calculated into the resting queue.
+        setMatches(current => current.map(m => m.id === matchId ? {...m, team1LastPlayed: 0, team2LastPlayed: 0, restEndTime: 0} : m));
         toast({ title: 'Override Applied', description: `Match is now available for scheduling.`});
     }, [restingTeams, toast]);
 
