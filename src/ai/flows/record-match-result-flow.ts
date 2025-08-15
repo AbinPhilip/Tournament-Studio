@@ -26,28 +26,6 @@ const RecordMatchResultInputSchema = z.object({
 });
 export type RecordMatchResultInput = z.infer<typeof RecordMatchResultInputSchema>;
 
-async function findAvailableCourt(startTime: Date, courtNames: { name: string }[]): Promise<string | null> {
-    const matchesRef = collection(db, 'matches');
-    
-    // First, find all courts that currently have a match IN_PROGRESS. These are unavailable regardless of start time.
-    const inProgressQuery = query(matchesRef, where('status', '==', 'IN_PROGRESS'));
-    const inProgressSnap = await getDocs(inProgressQuery);
-    const inProgressCourts = new Set(inProgressSnap.docs.map(doc => doc.data().courtName));
-
-    // Then, check for matches scheduled at the exact same time
-    const startTimestamp = Timestamp.fromDate(startTime);
-    const q = query(matchesRef, where('startTime', '==', startTimestamp));
-    const snapshot = await getDocs(q);
-    const busyAtTimeCourts = new Set(snapshot.docs.map(doc => doc.data().courtName));
-
-    // An available court is one that is NOT in progress AND NOT busy at the specified time.
-    for (const court of courtNames) {
-        if (!inProgressCourts.has(court.name) && !busyAtTimeCourts.has(court.name)) {
-            return court.name;
-        }
-    }
-    return null; // All courts at this specific time are busy
-}
 
 const getTotalRounds = (teamCount: number) => {
     if (teamCount < 2) return 0;
@@ -277,53 +255,23 @@ const recordMatchResultFlow = ai.defineFlow(
 
             const orgsCollection = await getDocs(collection(db, 'organizations'));
             const orgNameMap = new Map(orgsCollection.docs.map(doc => [doc.id, doc.data().name]));
-
-            // Ensure a minimum 10-minute rest period.
-            const minStartTime = new Date();
-            minStartTime.setMinutes(minStartTime.getMinutes() + 10);
-
-            let matchTime = new Date(minStartTime.getTime());
-            let availableCourt: string | null = null;
-            let attempts = 0;
-            const maxAttempts = 48 * 4; // Max 4 days of 15-min intervals
             
-            while (attempts < maxAttempts) {
-                // Ensure match time is within playing hours (9 AM - 8 PM)
-                if (matchTime.getHours() >= 20) { // After 8 PM
-                    matchTime.setDate(matchTime.getDate() + 1);
-                    matchTime.setHours(9, 0, 0, 0); // Start at 9 AM next day
-                }
-                 if (matchTime.getHours() < 9) { // Before 9 AM
-                    matchTime.setHours(9, 0, 0, 0);
-                }
-
-                availableCourt = await findAvailableCourt(matchTime, tournament.courtNames);
-                if (availableCourt) break;
-                
-                // If no court is found, increment time by 15 minutes and try again.
-                matchTime.setMinutes(matchTime.getMinutes() + 15); 
-                attempts++;
-            }
-
-            if (availableCourt) {
-                const newMatchRef = doc(collection(db, 'matches'));
-                const newMatchData: Omit<Match, 'id'> = {
-                    team1Id: team1Id,
-                    team2Id: team2Id,
-                    team1Name: winnerTeam.player1Name + (winnerTeam.player2Name ? ` & ${winnerTeam.player2Name}` : ''),
-                    team2Name: opponentTeam.player1Name + (opponentTeam.player2Name ? ` & ${opponentTeam.player2Name}` : ''),
-                    team1OrgName: orgNameMap.get(winnerTeam.organizationId) || '',
-                    team2OrgName: orgNameMap.get(opponentTeam.organizationId) || '',
-                    eventType: completedMatch.eventType,
-                    courtName: availableCourt,
-                    startTime: Timestamp.fromDate(matchTime),
-                    status: 'SCHEDULED',
-                    round: completedMatch.round + 1,
-                };
-                batch.set(newMatchRef, newMatchData);
-            } else {
-                 console.warn(`Could not find an available court for match in event ${completedMatch.eventType}, round ${completedMatch.round + 1}.`);
-            }
+            // Create the new match fixture without assigning court or time.
+            const newMatchRef = doc(collection(db, 'matches'));
+            const newMatchData: Omit<Match, 'id'> = {
+                team1Id: team1Id,
+                team2Id: team2Id,
+                team1Name: winnerTeam.player1Name + (winnerTeam.player2Name ? ` & ${winnerTeam.player2Name}` : ''),
+                team2Name: opponentTeam.player1Name + (opponentTeam.player2Name ? ` & ${opponentTeam.player2Name}` : ''),
+                team1OrgName: orgNameMap.get(winnerTeam.organizationId) || '',
+                team2OrgName: orgNameMap.get(opponentTeam.organizationId) || '',
+                eventType: completedMatch.eventType,
+                courtName: '', // Left blank for manual assignment
+                startTime: Timestamp.now(), // Placeholder time
+                status: 'PENDING', // Set to PENDING for manual scheduling
+                round: completedMatch.round + 1,
+            };
+            batch.set(newMatchRef, newMatchData);
         }
     }
 
