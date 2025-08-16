@@ -21,9 +21,11 @@ import { useRouter } from 'next/navigation';
 import { Badge } from '@/components/ui/badge';
 import { getRoundName } from '@/lib/utils';
 import { EventBadge } from '@/components/ui/event-badge';
+import { useAuth } from '@/hooks/use-auth';
 
 
 export default function CourtViewPage() {
+    const { user } = useAuth();
     const { toast } = useToast();
     const router = useRouter();
     const [isLoading, setIsLoading] = useState(true);
@@ -43,10 +45,16 @@ export default function CourtViewPage() {
         const teamsQuery = query(collection(db, 'teams'));
 
         const unsubscribeMatches = onSnapshot(matchesQuery, (querySnapshot) => {
-            const matchesData = querySnapshot.docs.map(doc => {
+            let matchesData = querySnapshot.docs.map(doc => {
                  const data = doc.data() as Omit<Match, 'startTime'> & {startTime: Timestamp | null};
                  return { id: doc.id, ...data, startTime: data.startTime?.toDate() ?? new Date() } as Match;
             });
+
+            // If user is a court umpire, filter to their court
+            if (user?.role === 'court' && user.courtName) {
+                matchesData = matchesData.filter(m => m.courtName === user.courtName);
+            }
+            
             matchesData.sort((a,b) => (a.courtName || 'ZZZ').localeCompare(b.courtName || 'ZZZ') || (b.startTime?.getTime() || 0) - (a.startTime?.getTime() || 0));
 
             setMatches(matchesData);
@@ -75,7 +83,7 @@ export default function CourtViewPage() {
             unsubscribeMatches();
             unsubscribeTeams();
         };
-    }, [toast]);
+    }, [toast, user]);
 
     const handleScorerClick = (match: Match) => {
         if (match.status === 'COMPLETED') {
@@ -114,14 +122,21 @@ export default function CourtViewPage() {
         );
     }
 
+    const isCourtUmpire = user?.role === 'court';
+
     return (
         <Card>
             <CardHeader>
                 <div className="flex justify-between items-start flex-wrap gap-2">
                     <div>
-                        <CardTitle>Umpire Court View</CardTitle>
+                        <CardTitle>
+                            {isCourtUmpire ? `Court: ${user.courtName}` : 'Umpire Court View'}
+                        </CardTitle>
                         <CardDescription>
-                            View all matches organized by court. Click the scorer icon to begin live scoring.
+                            {isCourtUmpire
+                                ? 'View assigned matches for your court. Click the scorer icon to begin.'
+                                : 'View all matches organized by court. Click the scorer icon to begin live scoring.'
+                            }
                         </CardDescription>
                     </div>
                     <Button variant="outline" onClick={() => router.push('/dashboard')}>
@@ -134,17 +149,21 @@ export default function CourtViewPage() {
                 {courtNames.length === 0 ? (
                     <div className="text-center py-12">
                         <p className="text-muted-foreground">No matches have been assigned to courts yet.</p>
-                        <Button className="mt-4" onClick={() => router.push('/dashboard/scheduler')}>
-                            Go to Scheduler
-                        </Button>
+                        {!isCourtUmpire && (
+                            <Button className="mt-4" onClick={() => router.push('/dashboard/scheduler')}>
+                                Go to Scheduler
+                            </Button>
+                        )}
                     </div>
                 ) : (
                     <div className="space-y-8">
                         {courtNames.map(courtName => (
                             <div key={courtName}>
-                                <h3 className="text-xl font-bold mb-4 capitalize">
-                                    {courtName}
-                                </h3>
+                                {!isCourtUmpire && (
+                                     <h3 className="text-xl font-bold mb-4 capitalize">
+                                        {courtName}
+                                    </h3>
+                                )}
                                 <div className="border rounded-md overflow-x-auto">
                                 <Table>
                                     <TableHeader>
