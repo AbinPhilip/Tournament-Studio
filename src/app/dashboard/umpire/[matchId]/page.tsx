@@ -173,7 +173,7 @@ export default function LiveScorerPage() {
     const { team1Points = 0, team2Points = 0, servingTeamId, currentSet = 1 } = match.live || {};
     
     return (
-      <div className="container mx-auto p-4 md:p-8">
+      <div className="container mx-auto p-2 sm:p-4 md:p-8">
           <Card>
               <CardHeader>
                   <div className="flex justify-between items-start flex-wrap gap-4">
@@ -186,8 +186,8 @@ export default function LiveScorerPage() {
                       </Button>
                   </div>
               </CardHeader>
-              <CardContent className="space-y-8">
-                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-8 items-start text-center">
+              <CardContent className="space-y-6">
+                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-start text-center">
                      <TeamScorePanel 
                           teamName={match.team1Name} 
                           points={team1Points}
@@ -206,15 +206,15 @@ export default function LiveScorerPage() {
                   
                   <Separator />
                   
-                   <div className="text-center space-y-4">
+                   <div className="text-center space-y-2">
                       <h3 className="font-semibold text-lg">Set {currentSet} Score</h3>
-                      <p className="text-4xl font-bold">{team1Points} - {team2Points}</p>
+                      <p className="text-4xl md:text-5xl font-bold">{team1Points} - {team2Points}</p>
                    </div>
                   
                   {match.scores && match.scores.length > 0 && (
                       <div className="text-center">
                           <h3 className="font-semibold text-lg mb-2">Previous Sets</h3>
-                          <div className="flex gap-4 justify-center text-muted-foreground">
+                          <div className="flex flex-wrap gap-2 justify-center text-muted-foreground">
                               {match.scores.map((s, i) => <span key={i} className="text-sm">Set {i+1}: <span className="font-bold">{s.team1} - {s.team2}</span></span>)}
                           </div>
                            <p className="text-xl font-bold mt-2">Match Score: {team1SetsWon} - {team2SetsWon}</p>
@@ -222,11 +222,11 @@ export default function LiveScorerPage() {
                   )}
 
                   <div className="border-t pt-6 space-y-4">
-                      <div className="flex flex-wrap gap-4 justify-center">
-                           <Button variant="secondary" onClick={handleServiceChange} disabled={isSubmitting}>
+                      <div className="flex flex-col sm:flex-row gap-4 justify-center">
+                           <Button variant="secondary" onClick={handleServiceChange} disabled={isSubmitting} className="flex-grow">
                               <Repeat className="mr-2"/> Change Service
                           </Button>
-                          <Button variant="default" onClick={handleFinalizeSet} disabled={isSubmitting}>
+                          <Button variant="default" onClick={handleFinalizeSet} disabled={isSubmitting} className="flex-grow">
                               <Send className="mr-2"/> Finalize Set {currentSet}
                           </Button>
                       </div>
@@ -282,15 +282,15 @@ export default function LiveScorerPage() {
 
 function TeamScorePanel({ teamName, points, setsWon, isServing, onPointChange }: { teamName: string, points: number, setsWon: number, isServing: boolean, onPointChange: (delta: 1 | -1) => void }) {
     return (
-        <div className={`p-6 rounded-lg border-4 transition-all ${isServing ? 'border-primary shadow-lg' : 'border-muted'}`}>
-            <div className="text-lg font-semibold mb-2 min-h-[56px] flex items-center justify-center break-words text-2xl">
+        <div className={`p-4 sm:p-6 rounded-lg border-4 transition-all ${isServing ? 'border-primary shadow-lg' : 'border-muted'}`}>
+            <div className="text-xl md:text-2xl font-semibold mb-2 min-h-[56px] flex items-center justify-center break-words">
                 {teamName}
             </div>
             <p className="text-sm font-bold text-muted-foreground mb-2">Sets Won: {setsWon}</p>
-            <p className="text-7xl font-bold mb-4">{points}</p>
+            <p className="text-6xl md:text-7xl font-bold mb-4">{points}</p>
             <div className="flex justify-center gap-2">
-                <Button onClick={() => onPointChange(1)} size="lg" className="w-16 text-xl">+</Button>
-                <Button onClick={() => onPointChange(-1)} size="lg" variant="outline" className="w-16 text-xl">-</Button>
+                <Button onClick={() => onPointChange(1)} size="lg" className="w-16 h-16 text-2xl">+</Button>
+                <Button onClick={() => onPointChange(-1)} size="lg" variant="outline" className="w-16 h-16 text-2xl">-</Button>
             </div>
             <div className="h-6 mt-4">
               {isServing && <div className="text-sm font-semibold text-primary animate-pulse">SERVING</div>}
@@ -298,3 +298,5 @@ function TeamScorePanel({ teamName, points, setsWon, isServing, onPointChange }:
         </div>
     );
 }
+
+    
