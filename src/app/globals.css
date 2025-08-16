@@ -57,3 +57,19 @@
     @apply bg-background text-foreground;
   }
 }
+
+@layer components {
+  .landscape-only .overlay {
+    @apply hidden;
+  }
+
+  /* Media query for portrait mode on touch devices (tablets and phones) */
+  @media (orientation: portrait) and (max-width: 1024px) {
+    .landscape-only .content {
+      @apply hidden; /* Hide content in portrait */
+    }
+    .landscape-only .overlay {
+      @apply fixed inset-0 z-[100] flex flex-col items-center justify-center bg-background p-8 text-center;
+    }
+  }
+}

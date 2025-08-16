@@ -7,7 +7,7 @@ import { db } from '@/lib/firebase';
 import { doc, onSnapshot, Unsubscribe, Timestamp, updateDoc } from 'firebase/firestore';
 import type { Match } from '@/types';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, ArrowLeft, Send, Repeat, CheckCircle } from 'lucide-react';
+import { Loader2, ArrowLeft, Send, Repeat, CheckCircle, Smartphone } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { updateLiveScore } from '@/ai/flows/update-live-score-flow';
@@ -173,109 +173,118 @@ export default function LiveScorerPage() {
     const { team1Points = 0, team2Points = 0, servingTeamId, currentSet = 1 } = match.live || {};
     
     return (
-        <div className="container mx-auto p-4 md:p-8">
-            <Card>
-                <CardHeader>
-                    <div className="flex justify-between items-start flex-wrap gap-4">
-                        <div>
-                            <CardTitle className="text-2xl md:text-3xl">Live Scorer</CardTitle>
-                            <CardDescription>Court: {match.courtName}</CardDescription>
-                        </div>
-                         <Button variant="outline" onClick={() => router.push('/dashboard/umpire')}>
-                            <ArrowLeft /> Back to Umpire View
-                        </Button>
-                    </div>
-                </CardHeader>
-                <CardContent className="space-y-8">
-                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-8 items-start text-center">
-                       <TeamScorePanel 
-                            teamName={match.team1Name} 
-                            points={team1Points}
-                            setsWon={team1SetsWon}
-                            isServing={servingTeamId === match.team1Id}
-                            onPointChange={(delta) => handlePointChange('team1', delta)}
-                       />
-                       <TeamScorePanel 
-                            teamName={match.team2Name} 
-                            points={team2Points}
-                            setsWon={team2SetsWon}
-                            isServing={servingTeamId === match.team2Id}
-                            onPointChange={(delta) => handlePointChange('team2', delta)}
-                       />
-                    </div>
-                    
-                    <Separator />
-                    
-                     <div className="text-center space-y-4">
-                        <h3 className="font-semibold text-lg">Set {currentSet} Score</h3>
-                        <p className="text-4xl font-bold">{team1Points} - {team2Points}</p>
-                     </div>
-                    
-                    {match.scores && match.scores.length > 0 && (
-                        <div className="text-center">
-                            <h3 className="font-semibold text-lg mb-2">Previous Sets</h3>
-                            <div className="flex gap-4 justify-center text-muted-foreground">
-                                {match.scores.map((s, i) => <span key={i} className="text-sm">Set {i+1}: <span className="font-bold">{s.team1} - {s.team2}</span></span>)}
-                            </div>
-                             <p className="text-xl font-bold mt-2">Match Score: {team1SetsWon} - {team2SetsWon}</p>
-                        </div>
-                    )}
+      <div className="landscape-only">
+        <div className="content">
+          <div className="container mx-auto p-4 md:p-8">
+              <Card>
+                  <CardHeader>
+                      <div className="flex justify-between items-start flex-wrap gap-4">
+                          <div>
+                              <CardTitle className="text-2xl md:text-3xl">Live Scorer</CardTitle>
+                              <CardDescription>Court: {match.courtName}</CardDescription>
+                          </div>
+                           <Button variant="outline" onClick={() => router.push('/dashboard/umpire')}>
+                              <ArrowLeft /> Back to Umpire View
+                          </Button>
+                      </div>
+                  </CardHeader>
+                  <CardContent className="space-y-8">
+                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-8 items-start text-center">
+                         <TeamScorePanel 
+                              teamName={match.team1Name} 
+                              points={team1Points}
+                              setsWon={team1SetsWon}
+                              isServing={servingTeamId === match.team1Id}
+                              onPointChange={(delta) => handlePointChange('team1', delta)}
+                         />
+                         <TeamScorePanel 
+                              teamName={match.team2Name} 
+                              points={team2Points}
+                              setsWon={team2SetsWon}
+                              isServing={servingTeamId === match.team2Id}
+                              onPointChange={(delta) => handlePointChange('team2', delta)}
+                         />
+                      </div>
+                      
+                      <Separator />
+                      
+                       <div className="text-center space-y-4">
+                          <h3 className="font-semibold text-lg">Set {currentSet} Score</h3>
+                          <p className="text-4xl font-bold">{team1Points} - {team2Points}</p>
+                       </div>
+                      
+                      {match.scores && match.scores.length > 0 && (
+                          <div className="text-center">
+                              <h3 className="font-semibold text-lg mb-2">Previous Sets</h3>
+                              <div className="flex gap-4 justify-center text-muted-foreground">
+                                  {match.scores.map((s, i) => <span key={i} className="text-sm">Set {i+1}: <span className="font-bold">{s.team1} - {s.team2}</span></span>)}
+                              </div>
+                               <p className="text-xl font-bold mt-2">Match Score: {team1SetsWon} - {team2SetsWon}</p>
+                          </div>
+                      )}
 
-                    <div className="border-t pt-6 space-y-4">
-                        <div className="flex flex-wrap gap-4 justify-center">
-                             <Button variant="secondary" onClick={handleServiceChange} disabled={isSubmitting}>
-                                <Repeat className="mr-2"/> Change Service
-                            </Button>
-                            <Button variant="default" onClick={handleFinalizeSet} disabled={isSubmitting}>
-                                <Send className="mr-2"/> Finalize Set {currentSet}
-                            </Button>
-                        </div>
-                        
-                         <AlertDialog>
-                            <AlertDialogTrigger asChild>
-                                <Button variant="destructive" className="w-full" disabled={isSubmitting}>Finalize Match</Button>
-                            </AlertDialogTrigger>
-                            <AlertDialogContent>
-                                <AlertDialogHeader>
-                                    <AlertDialogTitle>Finalize Match</AlertDialogTitle>
-                                    <AlertDialogDescription>
-                                        Click confirm to finalize the match. The winner will be calculated automatically from the scores. You can also declare a forfeit below.
-                                    </AlertDialogDescription>
-                                </AlertDialogHeader>
-                                <div className="space-y-4 py-4">
-                                    <AlertDialogAction 
-                                        onClick={() => handleFinalizeMatch()} 
-                                        className="w-full bg-green-600 hover:bg-green-700"
-                                     >
-                                         <CheckCircle className="mr-2"/> Confirm and Finalize Match
-                                    </AlertDialogAction>
-                                    
-                                    <div className="relative">
-                                        <div className="absolute inset-0 flex items-center"><span className="w-full border-t" /></div>
-                                        <div className="relative flex justify-center text-xs uppercase"><span className="bg-background px-2 text-muted-foreground">Or Declare Forfeit</span></div>
-                                    </div>
-                                    <div className="grid grid-cols-2 gap-2">
-                                        <AlertDialogAction asChild>
-                                            <Button variant="destructive" onClick={() => handleFinalizeMatch(match.team2Id, true)} className="h-auto py-2 text-wrap">
-                                                {match.team1Name} Forfeits
-                                            </Button>
-                                        </AlertDialogAction>
-                                        <AlertDialogAction asChild>
-                                             <Button variant="destructive" onClick={() => handleFinalizeMatch(match.team1Id, true)} className="h-auto py-2 text-wrap">
-                                                {match.team2Name} Forfeits
-                                             </Button>
-                                        </AlertDialogAction>
-                                    </div>
-                                </div>
-                                <AlertDialogFooter>
-                                    <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                </AlertDialogFooter>
-                            </AlertDialogContent>
-                        </AlertDialog>
-                    </div>
-                </CardContent>
-            </Card>
+                      <div className="border-t pt-6 space-y-4">
+                          <div className="flex flex-wrap gap-4 justify-center">
+                               <Button variant="secondary" onClick={handleServiceChange} disabled={isSubmitting}>
+                                  <Repeat className="mr-2"/> Change Service
+                              </Button>
+                              <Button variant="default" onClick={handleFinalizeSet} disabled={isSubmitting}>
+                                  <Send className="mr-2"/> Finalize Set {currentSet}
+                              </Button>
+                          </div>
+                          
+                           <AlertDialog>
+                              <AlertDialogTrigger asChild>
+                                  <Button variant="destructive" className="w-full" disabled={isSubmitting}>Finalize Match</Button>
+                              </AlertDialogTrigger>
+                              <AlertDialogContent>
+                                  <AlertDialogHeader>
+                                      <AlertDialogTitle>Finalize Match</AlertDialogTitle>
+                                      <AlertDialogDescription>
+                                          Click confirm to finalize the match. The winner will be calculated automatically from the scores. You can also declare a forfeit below.
+                                      </AlertDialogDescription>
+                                  </AlertDialogHeader>
+                                  <div className="space-y-4 py-4">
+                                      <AlertDialogAction 
+                                          onClick={() => handleFinalizeMatch()} 
+                                          className="w-full bg-green-600 hover:bg-green-700"
+                                       >
+                                           <CheckCircle className="mr-2"/> Confirm and Finalize Match
+                                      </AlertDialogAction>
+                                      
+                                      <div className="relative">
+                                          <div className="absolute inset-0 flex items-center"><span className="w-full border-t" /></div>
+                                          <div className="relative flex justify-center text-xs uppercase"><span className="bg-background px-2 text-muted-foreground">Or Declare Forfeit</span></div>
+                                      </div>
+                                      <div className="grid grid-cols-2 gap-2">
+                                          <AlertDialogAction asChild>
+                                              <Button variant="destructive" onClick={() => handleFinalizeMatch(match.team2Id, true)} className="h-auto py-2 text-wrap">
+                                                  {match.team1Name} Forfeits
+                                              </Button>
+                                          </AlertDialogAction>
+                                          <AlertDialogAction asChild>
+                                               <Button variant="destructive" onClick={() => handleFinalizeMatch(match.team1Id, true)} className="h-auto py-2 text-wrap">
+                                                  {match.team2Name} Forfeits
+                                               </Button>
+                                          </AlertDialogAction>
+                                      </div>
+                                  </div>
+                                  <AlertDialogFooter>
+                                      <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                  </AlertDialogFooter>
+                              </AlertDialogContent>
+                          </AlertDialog>
+                      </div>
+                  </CardContent>
+              </Card>
+          </div>
         </div>
+        <div className="overlay">
+            <Smartphone className="h-24 w-24 text-primary mb-8 animate-pulse" />
+            <h2 className="text-2xl font-bold">Please Rotate Your Device</h2>
+            <p className="text-lg text-muted-foreground mt-2">This page is best viewed in landscape mode.</p>
+        </div>
+      </div>
     );
 }
 
