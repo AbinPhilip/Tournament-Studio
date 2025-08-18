@@ -48,6 +48,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { scheduleMatches } from '@/ai/flows/schedule-matches-flow';
+import { MultiImageUploader } from '@/components/ui/multi-image-uploader';
 
 
 const tournamentFormSchema = z.object({
@@ -59,6 +60,9 @@ const tournamentFormSchema = z.object({
   numberOfCourts: z.coerce.number().min(1, { message: 'There must be at least 1 court.' }).max(50, { message: "Cannot exceed 50 courts."}),
   courtNames: z.array(z.object({ name: z.string().min(1, {message: 'Court name cannot be empty.'}) })),
   restTime: z.coerce.number().min(0, { message: 'Rest time cannot be negative.'}).optional(),
+  logoUrl: z.string().optional(),
+  sponsorUrls: z.array(z.string()).optional(),
+  eventImageUrls: z.array(z.string()).optional(),
 });
 
 
@@ -85,6 +89,9 @@ export default function TournamentSettingsPage() {
       numberOfCourts: 4,
       courtNames: Array.from({ length: 4 }, (_, i) => ({ name: `Court ${i+1}` })),
       restTime: 10,
+      logoUrl: '',
+      sponsorUrls: [],
+      eventImageUrls: [],
     },
   });
   
@@ -121,7 +128,14 @@ export default function TournamentSettingsPage() {
           };
           setTournament(tournamentData as any)
           setTournamentDocRef(tournamentDoc.ref);
-          form.reset({ ...data, date: data.date.toDate(), restTime: data.restTime ?? 10 });
+          form.reset({ 
+            ...data, 
+            date: data.date.toDate(), 
+            restTime: data.restTime ?? 10,
+            logoUrl: data.logoUrl || '',
+            sponsorUrls: data.sponsorUrls || [],
+            eventImageUrls: data.eventImageUrls || [],
+          });
         } else {
             setTournamentDocRef(null);
             setTournament(null);
@@ -402,6 +416,60 @@ export default function TournamentSettingsPage() {
                           />
                         ))}
                       </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 border-t pt-8">
+                         <FormField
+                            control={form.control}
+                            name="logoUrl"
+                            render={({ field }) => (
+                                <FormItem>
+                                    <FormLabel>Tournament Logo</FormLabel>
+                                    <FormControl>
+                                        <MultiImageUploader
+                                            value={field.value ? [field.value] : []}
+                                            onChange={(urls) => field.onChange(urls[0] || '')}
+                                            maxFiles={1}
+                                        />
+                                    </FormControl>
+                                    <FormMessage />
+                                </FormItem>
+                            )}
+                        />
+                        <FormField
+                            control={form.control}
+                            name="sponsorUrls"
+                            render={({ field }) => (
+                                <FormItem>
+                                    <FormLabel>Sponsor Logos</FormLabel>
+                                    <FormControl>
+                                        <MultiImageUploader
+                                            value={field.value}
+                                            onChange={field.onChange}
+                                            maxFiles={10}
+                                        />
+                                    </FormControl>
+                                    <FormMessage />
+                                </FormItem>
+                            )}
+                        />
+                        <FormField
+                            control={form.control}
+                            name="eventImageUrls"
+                            render={({ field }) => (
+                                <FormItem>
+                                    <FormLabel>Event Images</FormLabel>
+                                    <FormControl>
+                                        <MultiImageUploader
+                                            value={field.value}
+                                            onChange={field.onChange}
+                                            maxFiles={10}
+                                        />
+                                    </FormControl>
+                                    <FormMessage />
+                                </FormItem>
+                            )}
+                        />
                     </div>
                 </fieldset>
                 <div className="flex gap-4 flex-wrap items-center border-t pt-6">

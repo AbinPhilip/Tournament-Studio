@@ -58,6 +58,9 @@ export interface Tournament {
     status?: TournamentStatus;
     startedAt?: string;
     restTime?: number; // in minutes
+    logoUrl?: string;
+    sponsorUrls?: string[];
+    eventImageUrls?: string[];
 }
 
 export type MatchStatus = 'PENDING' | 'SCHEDULED' | 'IN_PROGRESS' | 'COMPLETED';

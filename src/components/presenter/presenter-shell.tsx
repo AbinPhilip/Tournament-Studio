@@ -6,7 +6,7 @@ import { db } from '@/lib/firebase';
 import { collection, onSnapshot, query, Timestamp, orderBy, limit } from 'firebase/firestore';
 import type { Match, Tournament, Team, TeamType } from '@/types';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, WifiOff, Trophy, Crown } from 'lucide-react';
+import { Loader2, WifiOff, Trophy, Crown, Building, ImageIcon } from 'lucide-react';
 import { AnimatePresence, m } from 'framer-motion';
 import { Carousel, CarouselContent, CarouselItem } from "@/components/ui/carousel";
 import Autoplay from "embla-carousel-autoplay";
@@ -15,6 +15,7 @@ import { EventBadge } from '../ui/event-badge';
 import { Logo } from '../logo';
 import { cn } from '@/lib/utils';
 import { Table, TableBody, TableCell, TableHeader, TableRow, TableHead } from '../ui/table';
+import Image from 'next/image';
 
 const LiveMatchSlide = ({ match, teamCounts }: { match: Match, teamCounts: Record<TeamType, number> }) => {
     const { team1Points = 0, team2Points = 0, servingTeamId } = match.live || {};
@@ -133,7 +134,11 @@ const WelcomeSlide = ({ tournament }: { tournament: Tournament | null }) => (
         transition={{duration: 0.5}}
     >
         <m.div initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ delay: 0.2, duration: 0.5 }}>
-            <Logo />
+            {tournament?.logoUrl ? (
+                <Image src={tournament.logoUrl} alt="Tournament Logo" width={128} height={128} className="object-contain h-32 w-32 rounded-full bg-white/10 p-2" />
+            ) : (
+                <Logo />
+            )}
         </m.div>
         <m.h1 
             className="text-5xl md:text-7xl lg:text-8xl font-bold mt-8 tracking-tight font-headline"
@@ -253,6 +258,65 @@ const WinnerSlide = ({ match }: { match: Match }) => {
     );
 };
 
+const SponsorsSlide = ({ urls }: { urls: string[] }) => (
+    <m.div
+        className="h-full flex flex-col justify-center p-4 sm:p-6 md:p-8 bg-black/30 rounded-2xl border border-white/20"
+        initial={{opacity: 0, scale: 0.95}}
+        animate={{opacity: 1, scale: 1}}
+        transition={{duration: 0.5}}
+    >
+        <header className="text-center mb-6" style={{ textShadow: '2px 2px 8px rgba(0,0,0,0.7)' }}>
+            <h2 className="text-4xl md:text-5xl font-bold text-white font-headline flex items-center justify-center gap-4">
+                <Building className="text-blue-400" />
+                Our Sponsors
+            </h2>
+        </header>
+        <main className="flex-grow flex flex-wrap items-center justify-center gap-8 md:gap-12">
+            {urls.map((url, i) => (
+                <m.div
+                    key={i}
+                    className="p-4 bg-white/90 rounded-xl shadow-lg"
+                    initial={{ scale: 0, opacity: 0 }}
+                    animate={{ scale: 1, opacity: 1 }}
+                    transition={{ delay: 0.2 + i * 0.1, type: 'spring' }}
+                >
+                    <Image
+                        src={url}
+                        alt={`Sponsor ${i + 1}`}
+                        width={200}
+                        height={100}
+                        className="object-contain h-24 w-48"
+                    />
+                </m.div>
+            ))}
+        </main>
+    </m.div>
+);
+
+const EventImageSlide = ({ url }: { url: string }) => (
+    <m.div
+        className="h-full w-full bg-black/30 rounded-2xl border border-white/20 relative overflow-hidden"
+        initial={{opacity: 0}}
+        animate={{opacity: 1}}
+        transition={{duration: 1}}
+    >
+        <Image
+            src={url}
+            alt="Event Image"
+            layout="fill"
+            objectFit="cover"
+            className="z-0"
+        />
+         <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent z-10"/>
+         <header className="absolute top-4 left-4 z-20" style={{ textShadow: '2px 2px 8px rgba(0,0,0,0.7)' }}>
+            <h2 className="text-4xl md:text-5xl font-bold text-white font-headline flex items-center justify-center gap-4">
+                <ImageIcon className="text-green-400" />
+                Highlights
+            </h2>
+        </header>
+    </m.div>
+);
+
 
 export function PresenterShell() {
   const { toast } = useToast();
@@ -340,15 +404,27 @@ export function PresenterShell() {
     liveMatches.forEach(match => slideComponents.push(
         <CarouselItem key={match.id}><LiveMatchSlide match={match} teamCounts={teamCounts}/></CarouselItem>
     ));
+    
+    // 4. Sponsor slide
+    if (tournament?.sponsorUrls && tournament.sponsorUrls.length > 0) {
+        slideComponents.push(<CarouselItem key="sponsors"><SponsorsSlide urls={tournament.sponsorUrls} /></CarouselItem>);
+    }
 
-    // 4. Scheduled fixtures
+    // 5. Scheduled fixtures
     scheduledFixtures.forEach(match => slideComponents.push(
         <CarouselItem key={match.id}><FixtureSlide match={match} teamCounts={teamCounts} /></CarouselItem>
     ));
     
-    // 5. Completed matches table
+    // 6. Completed matches table
     if (olderCompleted.length > 0) {
         slideComponents.push(<CarouselItem key="completed"><CompletedMatchesSlide matches={olderCompleted} teamCounts={teamCounts} /></CarouselItem>);
+    }
+
+    // 7. Event image slides
+    if (tournament?.eventImageUrls && tournament.eventImageUrls.length > 0) {
+        tournament.eventImageUrls.forEach((url, i) => {
+            slideComponents.push(<CarouselItem key={`event-img-${i}`}><EventImageSlide url={url} /></CarouselItem>);
+        });
     }
     
     return slideComponents;
@@ -390,6 +466,3 @@ export function PresenterShell() {
     </div>
   );
 }
-
-
-    
