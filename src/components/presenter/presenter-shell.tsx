@@ -134,11 +134,7 @@ const WelcomeSlide = ({ tournament }: { tournament: Tournament | null }) => (
         transition={{duration: 0.5}}
     >
         <m.div initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ delay: 0.2, duration: 0.5 }}>
-            {tournament?.logoUrl ? (
-                <Image src={tournament.logoUrl} alt={`${tournament.name} Logo`} width={128} height={128} className="object-contain" />
-            ) : (
-                <Logo />
-            )}
+            <Logo />
         </m.div>
         <m.h1 
             className="text-5xl md:text-7xl lg:text-8xl font-bold mt-8 tracking-tight font-headline"
@@ -394,5 +390,3 @@ export function PresenterShell() {
     </div>
   );
 }
-
-    
