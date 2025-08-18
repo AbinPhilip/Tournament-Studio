@@ -423,7 +423,9 @@ export function PresenterShell() {
     const now = Date.now();
     const liveMatches = matches.filter(m => m.status === 'IN_PROGRESS' && m.courtName).sort((a,b) => (a.courtName || '').localeCompare(b.courtName || ''));
     const scheduledFixtures = matches.filter(m => m.status === 'SCHEDULED' && m.courtName).sort((a, b) => (a.startTime as any) - (b.startTime as any));
-    const allCompleted = matches.filter(m => m.status === 'COMPLETED' && m.winnerId).sort((a, b) => (b.lastUpdateTime?.getTime() || 0) - (a.lastUpdateTime?.getTime() || 0));
+    
+    // Filter out BYE matches
+    const allCompleted = matches.filter(m => m.status === 'COMPLETED' && m.winnerId && m.team2Id !== 'BYE').sort((a, b) => (b.lastUpdateTime?.getTime() || 0) - (a.lastUpdateTime?.getTime() || 0));
     
     const orgMap = new Map(organizations.map(o => [o.id, o.name]));
     const teamsWithLots = teams
