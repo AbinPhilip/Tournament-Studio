@@ -6,7 +6,7 @@ import { db } from '@/lib/firebase';
 import { collection, onSnapshot, query, Timestamp, orderBy, limit } from 'firebase/firestore';
 import type { Match, Tournament, Team, TeamType } from '@/types';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, WifiOff, Trophy, Crown, ImageIcon, Handshake } from 'lucide-react';
+import { Loader2, WifiOff, Trophy, Crown } from 'lucide-react';
 import { AnimatePresence, m } from 'framer-motion';
 import { Carousel, CarouselContent, CarouselItem } from "@/components/ui/carousel";
 import Autoplay from "embla-carousel-autoplay";
@@ -258,38 +258,6 @@ const WinnerSlide = ({ match }: { match: Match }) => {
     );
 };
 
-const ImageSlide = ({ images, title, icon: Icon }: { images: string[], title: string, icon: React.ElementType }) => (
-    <m.div
-        className="h-full flex flex-col justify-center p-4 sm:p-6 md:p-8 bg-black/30 rounded-2xl border border-white/20"
-        initial={{opacity: 0, scale: 0.95}}
-        animate={{opacity: 1, scale: 1}}
-        transition={{duration: 0.5}}
-    >
-        <header className="text-center mb-6" style={{ textShadow: '2px 2px 8px rgba(0,0,0,0.7)' }}>
-            <h2 className="text-4xl md:text-5xl font-bold text-white font-headline flex items-center justify-center gap-4">
-                <Icon className="text-yellow-400" />
-                {title}
-            </h2>
-        </header>
-        <main className="flex-grow flex items-center justify-center">
-            <Carousel 
-                className="w-full max-w-4xl"
-                plugins={[Autoplay({ delay: 5000, stopOnInteraction: true })]}
-                opts={{ loop: true }}
-            >
-                <CarouselContent>
-                    {images.map((url, index) => (
-                        <CarouselItem key={index} className="flex items-center justify-center">
-                            <Image src={url} alt={`${title} ${index + 1}`} width={800} height={600} className="object-contain max-h-[70vh] rounded-lg shadow-2xl" />
-                        </CarouselItem>
-                    ))}
-                </CarouselContent>
-            </Carousel>
-        </main>
-    </m.div>
-);
-
-
 export function PresenterShell() {
   const { toast } = useToast();
   const [matches, setMatches] = useState<Match[]>([]);
@@ -367,34 +335,24 @@ export function PresenterShell() {
     // 1. Welcome slide
     slideComponents.push(<CarouselItem key="welcome"><WelcomeSlide tournament={tournament} /></CarouselItem>);
     
-    // 2. Event Images slide
-    if (tournament?.eventImages && tournament.eventImages.length > 0) {
-        slideComponents.push(<CarouselItem key="event-images"><ImageSlide images={tournament.eventImages} title="Event Moments" icon={ImageIcon} /></CarouselItem>);
-    }
-
-    // 3. Recent Winner slides
+    // 2. Recent Winner slides
     recentWinners.forEach(match => slideComponents.push(
         <CarouselItem key={`winner-${match.id}`}><WinnerSlide match={match} /></CarouselItem>
     ));
 
-    // 4. Live matches
+    // 3. Live matches
     liveMatches.forEach(match => slideComponents.push(
         <CarouselItem key={match.id}><LiveMatchSlide match={match} teamCounts={teamCounts}/></CarouselItem>
     ));
     
-    // 5. Scheduled fixtures
+    // 4. Scheduled fixtures
     scheduledFixtures.forEach(match => slideComponents.push(
         <CarouselItem key={match.id}><FixtureSlide match={match} teamCounts={teamCounts} /></CarouselItem>
     ));
     
-    // 6. Completed matches table
+    // 5. Completed matches table
     if (olderCompleted.length > 0) {
         slideComponents.push(<CarouselItem key="completed"><CompletedMatchesSlide matches={olderCompleted} teamCounts={teamCounts} /></CarouselItem>);
-    }
-    
-    // 7. Sponsors slide
-    if (tournament?.sponsorImages && tournament.sponsorImages.length > 0) {
-        slideComponents.push(<CarouselItem key="sponsors"><ImageSlide images={tournament.sponsorImages} title="Our Sponsors" icon={Handshake} /></CarouselItem>);
     }
     
     return slideComponents;

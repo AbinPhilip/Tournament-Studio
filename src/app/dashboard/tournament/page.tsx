@@ -61,8 +61,6 @@ const tournamentFormSchema = z.object({
   courtNames: z.array(z.object({ name: z.string().min(1, {message: 'Court name cannot be empty.'}) })),
   restTime: z.coerce.number().min(0, { message: 'Rest time cannot be negative.'}).optional(),
   logoUrl: z.string().url().optional(),
-  sponsorImages: z.array(z.string().url()).optional(),
-  eventImages: z.array(z.string().url()).optional(),
 });
 
 
@@ -90,8 +88,6 @@ export default function TournamentSettingsPage() {
       courtNames: Array.from({ length: 4 }, (_, i) => ({ name: `Court ${i+1}` })),
       restTime: 10,
       logoUrl: '',
-      sponsorImages: [],
-      eventImages: [],
     },
   });
   
@@ -133,8 +129,6 @@ export default function TournamentSettingsPage() {
             date: data.date.toDate(), 
             restTime: data.restTime ?? 10,
             logoUrl: data.logoUrl || '',
-            sponsorImages: data.sponsorImages || [],
-            eventImages: data.eventImages || [],
           });
         } else {
             setTournamentDocRef(null);
@@ -428,36 +422,6 @@ export default function TournamentSettingsPage() {
                                         onUpload={(urls) => form.setValue('logoUrl', urls[0], { shouldDirty: true })}
                                         onRemove={() => form.setValue('logoUrl', '', { shouldDirty: true })}
                                         multiple={false}
-                                        disabled={isTournamentStarted}
-                                    />
-                                </CardContent>
-                            </Card>
-                         </div>
-                         <div>
-                            <FormLabel>Sponsor Images</FormLabel>
-                            <Card className="mt-2">
-                                <CardContent className="pt-6">
-                                     <ImageUploader 
-                                        folder="sponsors"
-                                        currentImages={form.watch('sponsorImages')}
-                                        onUpload={(urls) => form.setValue('sponsorImages', [...(form.getValues('sponsorImages') || []), ...urls], { shouldDirty: true })}
-                                        onRemove={(url) => form.setValue('sponsorImages', form.getValues('sponsorImages')?.filter(u => u !== url), { shouldDirty: true })}
-                                        multiple={true}
-                                        disabled={isTournamentStarted}
-                                    />
-                                </CardContent>
-                            </Card>
-                         </div>
-                         <div>
-                            <FormLabel>Event Images</FormLabel>
-                             <Card className="mt-2">
-                                <CardContent className="pt-6">
-                                     <ImageUploader 
-                                        folder="event-images"
-                                        currentImages={form.watch('eventImages')}
-                                        onUpload={(urls) => form.setValue('eventImages', [...(form.getValues('eventImages') || []), ...urls], { shouldDirty: true })}
-                                        onRemove={(url) => form.setValue('eventImages', form.getValues('eventImages')?.filter(u => u !== url), { shouldDirty: true })}
-                                        multiple={true}
                                         disabled={isTournamentStarted}
                                     />
                                 </CardContent>
