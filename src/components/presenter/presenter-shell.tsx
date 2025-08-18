@@ -6,7 +6,7 @@ import { db } from '@/lib/firebase';
 import { collection, onSnapshot, query, Timestamp, orderBy, limit } from 'firebase/firestore';
 import type { Match, Tournament, Team, TeamType } from '@/types';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, WifiOff, Trophy, Crown } from 'lucide-react';
+import { Loader2, WifiOff, Trophy, Crown, Ticket } from 'lucide-react';
 import { AnimatePresence, m } from 'framer-motion';
 import { Carousel, CarouselContent, CarouselItem } from "@/components/ui/carousel";
 import Autoplay from "embla-carousel-autoplay";
@@ -254,9 +254,106 @@ const WinnerSlide = ({ match }: { match: Match }) => {
     );
 };
 
+const LotteryDrawSlide = ({ teamsWithLots }: { teamsWithLots: Team[] }) => {
+    const [revealedCount, setRevealedCount] = useState(0);
+    const [eventIndex, setEventIndex] = useState(0);
+
+    const teamsByEvent = useMemo(() => {
+        const grouped = teamsWithLots.reduce((acc, team) => {
+            if (!acc[team.type]) acc[team.type] = [];
+            acc[team.type].push(team);
+            return acc;
+        }, {} as Record<TeamType, Team[]>);
+
+        for (const eventType in grouped) {
+            grouped[eventType as TeamType].sort((a,b) => (a.lotNumber || 0) - (b.lotNumber || 0));
+        }
+
+        const eventOrder: TeamType[] = ['mens_doubles', 'womens_doubles', 'mixed_doubles', 'singles'];
+        return eventOrder.filter(key => grouped[key]).map(key => ({
+            eventType: key,
+            teams: grouped[key]
+        }));
+    }, [teamsWithLots]);
+
+    const currentEvent = teamsByEvent[eventIndex];
+
+    useEffect(() => {
+        if (!currentEvent) return;
+
+        setRevealedCount(0); // Reset for new event
+        
+        const interval = setInterval(() => {
+            setRevealedCount(prev => {
+                if (prev < currentEvent.teams.length) {
+                    return prev + 1;
+                } else {
+                    // Move to next event after a pause
+                    setTimeout(() => {
+                        setEventIndex(i => (i + 1) % teamsByEvent.length);
+                    }, 3000); 
+                    return prev;
+                }
+            });
+        }, 2000); // Reveal one team every 2 seconds
+
+        return () => clearInterval(interval);
+    }, [eventIndex, currentEvent, teamsByEvent.length]);
+
+    if (!currentEvent) {
+        return null;
+    }
+
+    const itemVariants = {
+        hidden: { opacity: 0, x: -50 },
+        visible: { opacity: 1, x: 0, transition: { type: 'spring', stiffness: 100 } },
+    };
+
+    return (
+        <m.div
+            className="h-full flex flex-col justify-center p-4 sm:p-6 md:p-8 bg-black/30 rounded-2xl border border-white/20"
+            initial={{opacity: 0, scale: 0.95}}
+            animate={{opacity: 1, scale: 1}}
+            transition={{duration: 0.5}}
+        >
+            <header className="text-center mb-6" style={{ textShadow: '2px 2px 8px rgba(0,0,0,0.7)' }}>
+                <h2 className="text-4xl md:text-5xl font-bold text-white font-headline flex items-center justify-center gap-4">
+                    <Ticket className="text-yellow-400" />
+                    Picking of Lots
+                </h2>
+                 <EventBadge eventType={currentEvent.eventType} className="mt-4 text-2xl px-6 py-2" />
+            </header>
+            <main className="text-white flex-grow overflow-hidden">
+                <AnimatePresence>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-x-8 gap-y-4">
+                        {currentEvent.teams.slice(0, revealedCount).map((team) => (
+                             <m.div 
+                                key={team.id}
+                                className="flex items-center gap-4 bg-white/5 p-3 rounded-lg border-l-4 border-yellow-400"
+                                variants={itemVariants}
+                                initial="hidden"
+                                animate="visible"
+                             >
+                                <div className="text-4xl font-black text-yellow-300 font-headline w-16 text-center">{team.lotNumber}</div>
+                                <div className="border-l border-white/20 pl-4">
+                                    <p className="font-bold text-xl">{team.player1Name}{team.player2Name && ` & ${team.player2Name}`}</p>
+                                    <p className="text-sm text-slate-300">{team.organizationId}</p>
+                                </div>
+                            </m.div>
+                        ))}
+                    </div>
+                </AnimatePresence>
+            </main>
+        </m.div>
+    );
+};
+
+
 export function PresenterShell() {
   const { toast } = useToast();
   const [matches, setMatches] = useState<Match[]>([]);
+  const [teams, setTeams] = useState<Team[]>([]);
+  const [organizations, setOrganizations] = useState<Organization[]>([]);
   const [tournament, setTournament] = useState<Tournament | null>(null);
   const [teamCounts, setTeamCounts] = useState<Record<TeamType, number>>({});
   const [isLoading, setIsLoading] = useState(true);
@@ -265,6 +362,7 @@ export function PresenterShell() {
     const matchesQuery = query(collection(db, 'matches'));
     const tournamentQuery = query(collection(db, 'tournaments'));
     const teamsQuery = query(collection(db, 'teams'));
+    const orgsQuery = query(collection(db, 'organizations'));
 
     const unsubscribeMatches = onSnapshot(matchesQuery, (snapshot) => {
       const matchesData = snapshot.docs.map(doc => {
@@ -298,14 +396,18 @@ export function PresenterShell() {
     });
 
     const unsubscribeTeams = onSnapshot(teamsQuery, (snapshot) => {
+        const teamData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Team));
+        setTeams(teamData);
         const counts: Record<TeamType, number> = { singles: 0, mens_doubles: 0, womens_doubles: 0, mixed_doubles: 0 };
-        snapshot.forEach(doc => {
-            const team = doc.data() as { type: TeamType };
-            if (counts[team.type] !== undefined) {
-                counts[team.type]++;
-            }
+        teamData.forEach(team => {
+            if (counts[team.type] !== undefined) counts[team.type]++;
         });
         setTeamCounts(counts);
+    });
+    
+    const unsubscribeOrgs = onSnapshot(orgsQuery, (snapshot) => {
+        const orgData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Organization));
+        setOrganizations(orgData);
     });
 
 
@@ -313,6 +415,7 @@ export function PresenterShell() {
       unsubscribeMatches();
       unsubscribeTournament();
       unsubscribeTeams();
+      unsubscribeOrgs();
     };
   }, [toast]);
 
@@ -321,6 +424,11 @@ export function PresenterShell() {
     const liveMatches = matches.filter(m => m.status === 'IN_PROGRESS' && m.courtName).sort((a,b) => (a.courtName || '').localeCompare(b.courtName || ''));
     const scheduledFixtures = matches.filter(m => m.status === 'SCHEDULED' && m.courtName).sort((a, b) => (a.startTime as any) - (b.startTime as any));
     const allCompleted = matches.filter(m => m.status === 'COMPLETED' && m.winnerId).sort((a, b) => (b.lastUpdateTime?.getTime() || 0) - (a.lastUpdateTime?.getTime() || 0));
+    
+    const orgMap = new Map(organizations.map(o => [o.id, o.name]));
+    const teamsWithLots = teams
+        .filter(t => t.lotNumber)
+        .map(t => ({...t, organizationId: orgMap.get(t.organizationId) || t.organizationId }));
     
     // Show winner slide for matches completed in the last 5 minutes
     const recentWinners = allCompleted.filter(m => m.lastUpdateTime && (now - m.lastUpdateTime.getTime()) < 5 * 60 * 1000);
@@ -331,28 +439,33 @@ export function PresenterShell() {
     // 1. Welcome slide
     slideComponents.push(<CarouselItem key="welcome"><WelcomeSlide tournament={tournament} /></CarouselItem>);
     
-    // 2. Recent Winner slides
+    // 2. Lottery Draw slide if tournament is pending and lots are assigned
+    if (tournament?.status === 'PENDING' && teamsWithLots.length > 0) {
+        slideComponents.push(<CarouselItem key="lottery-draw"><LotteryDrawSlide teamsWithLots={teamsWithLots} /></CarouselItem>);
+    }
+
+    // 3. Recent Winner slides
     recentWinners.forEach(match => slideComponents.push(
         <CarouselItem key={`winner-${match.id}`}><WinnerSlide match={match} /></CarouselItem>
     ));
 
-    // 3. Live matches
+    // 4. Live matches
     liveMatches.forEach(match => slideComponents.push(
         <CarouselItem key={match.id}><LiveMatchSlide match={match} teamCounts={teamCounts}/></CarouselItem>
     ));
     
-    // 4. Scheduled fixtures
+    // 5. Scheduled fixtures
     scheduledFixtures.forEach(match => slideComponents.push(
         <CarouselItem key={match.id}><FixtureSlide match={match} teamCounts={teamCounts} /></CarouselItem>
     ));
     
-    // 5. Completed matches table
+    // 6. Completed matches table
     if (olderCompleted.length > 0) {
         slideComponents.push(<CarouselItem key="completed"><CompletedMatchesSlide matches={olderCompleted} teamCounts={teamCounts} /></CarouselItem>);
     }
     
     return slideComponents;
-  }, [matches, tournament, teamCounts]);
+  }, [matches, tournament, teams, organizations, teamCounts]);
   
   if (isLoading) {
     return (

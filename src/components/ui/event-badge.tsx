@@ -19,7 +19,7 @@ export function EventBadge({ eventType, className }: EventBadgeProps) {
   const text = eventType.replace(/_/g, ' ');
 
   return (
-    <Badge variant="default" className={cn("capitalize font-semibold text-sm py-1 px-3", eventStyles[eventType], className)}>
+    <Badge variant="default" className={cn("capitalize font-semibold text-sm py-1 px-3 whitespace-nowrap", eventStyles[eventType], className)}>
         {text}
     </Badge>
   );
