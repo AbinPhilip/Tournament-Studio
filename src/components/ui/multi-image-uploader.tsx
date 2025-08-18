@@ -40,6 +40,20 @@ export function ImageUploader({
         toast({ title: "Single File Only", description: "You can only upload one logo.", variant: "destructive"});
         return;
     }
+    
+    const MAX_FILE_SIZE = 1048576; // 1MB in bytes
+
+    for (const file of Array.from(files)) {
+      if (file.size > MAX_FILE_SIZE) {
+        toast({
+          title: "File Too Large",
+          description: `"${file.name}" is larger than 1MB. Please upload a smaller image.`,
+          variant: "destructive"
+        });
+        return; // Stop the upload process
+      }
+    }
+
 
     setIsUploading(true);
     try {
