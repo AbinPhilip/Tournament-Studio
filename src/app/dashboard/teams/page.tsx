@@ -25,7 +25,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { MoreHorizontal, Trash2, Edit, CheckCircle, Users, ArrowUpDown, Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { db } from '@/lib/firebase';
+import { db, storage } from '@/lib/firebase';
 import { collection, doc, getDocs, updateDoc, addDoc, deleteDoc, query, where, onSnapshot } from 'firebase/firestore';
 import type { Team, Organization } from '@/types';
 import {
@@ -52,6 +52,8 @@ import Image from 'next/image';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { EventBadge } from '@/components/ui/event-badge';
+import { ref, uploadString, getDownloadURL, deleteObject } from 'firebase/storage';
+import { v4 as uuidv4 } from 'uuid';
 
 
 const teamFormSchema = z.object({
@@ -286,6 +288,30 @@ export default function TeamsPage() {
     setIsAddTeamOpen(false);
     setIsEditTeamOpen(false);
   }, [teamForm]);
+  
+  const handlePhotoUpload = async (file: File): Promise<string | null> => {
+    const MAX_FILE_SIZE = 1048576; // 1MB
+    if (file.size > MAX_FILE_SIZE) {
+        toast({ title: "File Too Large", description: `"${file.name}" is larger than 1MB.`, variant: "destructive" });
+        return null;
+    }
+    const storageRef = ref(storage, `team-photos/${uuidv4()}-${file.name}`);
+    
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.readAsDataURL(file);
+        reader.onload = async (e) => {
+            try {
+                const dataUrl = e.target?.result as string;
+                await uploadString(storageRef, dataUrl, 'data_url');
+                const downloadUrl = await getDownloadURL(storageRef);
+                resolve(downloadUrl);
+            } catch (error) {
+                reject(error);
+            }
+        };
+    });
+  };
 
   const handleTeamSubmit = async (values: z.infer<typeof teamFormSchema>) => {
     setIsSubmitting(true);
@@ -303,6 +329,7 @@ export default function TeamsPage() {
         const playerSnapshot = await getDocs(qPlayers);
         if (!playerSnapshot.empty && (!teamToEdit || playerSnapshot.docs[0].id !== teamToEdit.id)) {
             toast({ title: 'Duplicate Team', description: 'A team with these players from this organization in this event already exists.', variant: 'destructive' });
+            setIsSubmitting(false);
             return;
         }
 
@@ -312,12 +339,27 @@ export default function TeamsPage() {
             if (!lotSnapshot.empty && (!teamToEdit || lotSnapshot.docs[0].id !== teamToEdit.id)) {
                 const existingTeam = lotSnapshot.docs[0].data() as Team;
                 toast({ title: 'Duplicate Lot Number', description: `Lot number ${lotNumber} is already taken by "${existingTeam.player1Name}" in the ${type} event.`, variant: 'destructive' });
+                setIsSubmitting(false);
                 return;
             }
+        }
+        
+        let finalPhotoUrl = teamToEdit?.photoUrl || '';
+        const file = fileInputRef.current?.files?.[0];
+        if (file && photoPreview && photoPreview.startsWith('blob:')) { // New file was selected
+             if (teamToEdit?.photoUrl) {
+                try {
+                    await deleteObject(ref(storage, teamToEdit.photoUrl));
+                } catch (e) {
+                    console.warn("Old photo deletion failed, might not exist:", e);
+                }
+            }
+            finalPhotoUrl = (await handlePhotoUpload(file)) || '';
         }
 
         let teamData: Omit<Team, 'id'> = {
             ...values,
+            photoUrl: finalPhotoUrl,
             player2Name: values.player2Name || '',
         };
 
@@ -339,7 +381,7 @@ export default function TeamsPage() {
               description: `Team "${dataToSave.player1Name}${dataToSave.player2Name ? ' & ' + dataToSave.player2Name : ''}" has been registered.`,
             });
         }
-        fetchData(); // Refetch all data to keep component in sync
+        fetchData(); 
         resetFormAndClose();
     } catch(error) {
         console.error(error);
@@ -353,6 +395,13 @@ export default function TeamsPage() {
   const handleDeleteTeam = async () => {
     if (!teamToDelete) return;
     try {
+        if (teamToDelete.photoUrl) {
+            try {
+                await deleteObject(ref(storage, teamToDelete.photoUrl));
+            } catch(e) {
+                console.warn("Could not delete photo from storage, it might not exist:", e);
+            }
+        }
         await deleteDoc(doc(db, 'teams', teamToDelete.id));
         setTeams(prev => prev.filter(t => t.id !== teamToDelete.id));
         toast({ title: 'Success', description: 'Team has been deleted.' });
@@ -371,13 +420,13 @@ export default function TeamsPage() {
   const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-        const reader = new FileReader();
-        reader.onloadend = () => {
-            const dataUrl = reader.result as string;
-            setPhotoPreview(dataUrl);
-            teamForm.setValue('photoUrl', dataUrl, { shouldDirty: true });
-        };
-        reader.readAsDataURL(file);
+        const MAX_FILE_SIZE = 1048576; // 1MB
+        if (file.size > MAX_FILE_SIZE) {
+            toast({ title: "File Too Large", description: `The image must be under 1MB.`, variant: "destructive"});
+            if (fileInputRef.current) fileInputRef.current.value = "";
+            return;
+        }
+        setPhotoPreview(URL.createObjectURL(file));
     }
   };
   
@@ -385,18 +434,28 @@ export default function TeamsPage() {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    const reader = new FileReader();
-    reader.onloadend = async () => {
-      const dataUrl = reader.result as string;
-      try {
-        await updateDoc(doc(db, 'teams', teamId), { photoUrl: dataUrl });
-        setTeams(prevTeams => prevTeams.map(t => t.id === teamId ? { ...t, photoUrl: dataUrl } : t));
-        toast({ title: 'Photo Updated', description: 'The team photo has been changed.' });
-      } catch (error) {
+    setIsSubmitting(true);
+    try {
+        const team = teams.find(t => t.id === teamId);
+        if (team?.photoUrl) {
+             try {
+                await deleteObject(ref(storage, team.photoUrl));
+            } catch (e) {
+                console.warn("Old photo deletion failed, might not exist:", e);
+            }
+        }
+
+        const newPhotoUrl = await handlePhotoUpload(file);
+        if (newPhotoUrl) {
+            await updateDoc(doc(db, 'teams', teamId), { photoUrl: newPhotoUrl });
+            setTeams(prevTeams => prevTeams.map(t => t.id === teamId ? { ...t, photoUrl: newPhotoUrl } : t));
+            toast({ title: 'Photo Updated', description: 'The team photo has been changed.' });
+        }
+    } catch (error) {
         toast({ title: 'Error', description: 'Failed to update photo.', variant: 'destructive' });
-      }
-    };
-    reader.readAsDataURL(file);
+    } finally {
+        setIsSubmitting(false);
+    }
   };
   
    const handleLotNumberChange = async (teamId: string, newLotNumberStr: string) => {
@@ -503,7 +562,7 @@ export default function TeamsPage() {
             </div>
             <Dialog open={isAddTeamOpen} onOpenChange={setIsAddTeamOpen}>
               <DialogTrigger asChild>
-                <Button><Users className="mr-2 h-4 w-4" />Register Team</Button>
+                <Button onClick={() => teamForm.reset()}><Users className="mr-2 h-4 w-4" />Register Team</Button>
               </DialogTrigger>
               <DialogContent className="sm:max-w-[425px] max-h-[90vh] overflow-y-auto">
                 <DialogHeader>
@@ -591,7 +650,10 @@ export default function TeamsPage() {
         </AlertDialogContent>
       </AlertDialog>
 
-      <Dialog open={isEditTeamOpen} onOpenChange={setIsEditTeamOpen}>
+      <Dialog open={isEditTeamOpen} onOpenChange={(isOpen) => {
+          if (!isOpen) resetFormAndClose();
+          setIsEditTeamOpen(isOpen);
+      }}>
           <DialogContent className="sm:max-w-[425px] max-h-[90vh] overflow-y-auto">
           <DialogHeader><DialogTitle>Edit Team</DialogTitle></DialogHeader>
            <TeamForm
@@ -624,3 +686,5 @@ export default function TeamsPage() {
     </div>
   );
 }
+
+    

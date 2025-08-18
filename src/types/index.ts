@@ -54,9 +54,9 @@ export interface Tournament {
     numberOfCourts: number;
     courtNames: { name: string }[];
     tournamentType: TournamentType;
-    date: string;
+    date: Date;
     status?: TournamentStatus;
-    startedAt?: string;
+    startedAt?: Date;
     restTime?: number; // in minutes
     logoUrl?: string;
 }
@@ -97,6 +97,8 @@ export interface Match {
     restingPlayers?: string[];
 }
 
+
+    
 
     
 

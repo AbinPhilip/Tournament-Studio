@@ -292,7 +292,7 @@ export function PresenterShell() {
         const tourneyData = { 
             id: snapshot.docs[0].id, 
             ...docData, 
-            date: (docData.date as Timestamp)?.toDate().toISOString() 
+            date: (docData.date as Timestamp)?.toDate(),
         } as Tournament;
         setTournament(tourneyData);
       } else {
@@ -394,3 +394,5 @@ export function PresenterShell() {
     </div>
   );
 }
+
+    

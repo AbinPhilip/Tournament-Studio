@@ -60,7 +60,7 @@ const tournamentFormSchema = z.object({
   numberOfCourts: z.coerce.number().min(1, { message: 'There must be at least 1 court.' }).max(50, { message: "Cannot exceed 50 courts."}),
   courtNames: z.array(z.object({ name: z.string().min(1, {message: 'Court name cannot be empty.'}) })),
   restTime: z.coerce.number().min(0, { message: 'Rest time cannot be negative.'}).optional(),
-  logoUrl: z.string().url().optional(),
+  logoUrl: z.string().url().optional().or(z.literal('')),
 });
 
 
@@ -419,7 +419,7 @@ export default function TournamentSettingsPage() {
                                     <ImageUploader 
                                         folder="event-logo"
                                         currentImages={form.watch('logoUrl') ? [form.watch('logoUrl')!] : []}
-                                        onUpload={(urls) => form.setValue('logoUrl', urls[0], { shouldDirty: true })}
+                                        onUpload={(urls) => form.setValue('logoUrl', urls[0] || '', { shouldDirty: true })}
                                         onRemove={() => form.setValue('logoUrl', '', { shouldDirty: true })}
                                         multiple={false}
                                         disabled={isTournamentStarted}
@@ -469,3 +469,5 @@ export default function TournamentSettingsPage() {
     </div>
   );
 }
+
+    
