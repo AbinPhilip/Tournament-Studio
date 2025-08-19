@@ -121,7 +121,7 @@ export default function DrawPage() {
         const team2 = teams.find(t => t.id === match.team2Id);
 
         return (
-            <div key={match.id} className="border-2 rounded-xl p-4 text-base bg-background shadow-md transition-all hover:shadow-lg min-h-[190px]">
+            <div key={match.id} className="border-2 rounded-xl p-4 text-base bg-background shadow-md transition-all hover:shadow-lg min-h-[190px] flex flex-col">
                 <div className={`flex flex-col ${match.winnerId === match.team1Id ? 'font-extrabold text-foreground' : 'text-muted-foreground'}`}>
                     <div className="flex justify-between items-baseline">
                         <span className="text-lg">{match.team1Name}</span>
@@ -131,13 +131,15 @@ export default function DrawPage() {
                     </div>
                     <span className="text-sm font-bold">{match.team1OrgName}</span>
                 </div>
-                <div className="flex items-center my-3">
-                    <div className="flex-grow border-t border-dashed"></div>
-                    <span className="flex-shrink mx-3 text-sm font-bold text-muted-foreground">VS</span>
-                    <div className="flex-grow border-t border-dashed"></div>
-                </div>
+                {!isBye && (
+                    <div className="flex items-center my-3">
+                        <div className="flex-grow border-t border-dashed"></div>
+                        <span className="flex-shrink mx-3 text-sm font-bold text-muted-foreground">VS</span>
+                        <div className="flex-grow border-t border-dashed"></div>
+                    </div>
+                )}
                 {isBye ? (
-                    <div className="flex flex-col items-center justify-center text-center h-[56px]">
+                    <div className="flex flex-col items-center justify-center text-center h-[56px] flex-grow">
                         <span className="text-lg font-bold text-primary">BYE</span>
                          <p className="text-xs text-muted-foreground mt-1">
                             {match.round === 1 

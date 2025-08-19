@@ -56,7 +56,14 @@ export default function CourtUmpireView() {
             } as Match;
         });
         
-        matchesData.sort((a, b) => (b.startTime?.getTime() || 0) - (a.startTime?.getTime() || 0));
+        matchesData.sort((a, b) => {
+            const statusOrder = { 'IN_PROGRESS': 1, 'SCHEDULED': 2, 'COMPLETED': 3, 'PENDING': 4};
+            if (statusOrder[a.status] !== statusOrder[b.status]) {
+                return statusOrder[a.status] - statusOrder[b.status];
+            }
+            return (b.startTime?.getTime() || 0) - (a.startTime?.getTime() || 0);
+        });
+
         setMatches(matchesData);
         setIsLoading(false);
     }, (error) => {

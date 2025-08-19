@@ -49,13 +49,17 @@ export default function CourtViewPage() {
                  const data = doc.data() as Omit<Match, 'startTime'> & {startTime: Timestamp | null};
                  return { id: doc.id, ...data, startTime: data.startTime?.toDate() ?? new Date() } as Match;
             });
-
-            // If user is a court umpire, filter to their court
-            if (user?.role === 'court' && user.courtName) {
-                matchesData = matchesData.filter(m => m.courtName === user.courtName);
-            }
             
-            matchesData.sort((a,b) => (a.courtName || 'ZZZ').localeCompare(b.courtName || 'ZZZ') || (b.startTime?.getTime() || 0) - (a.startTime?.getTime() || 0));
+            matchesData.sort((a,b) => {
+                if (a.courtName !== b.courtName) {
+                    return (a.courtName || 'ZZZ').localeCompare(b.courtName || 'ZZZ');
+                }
+                const statusOrder = { 'IN_PROGRESS': 1, 'SCHEDULED': 2, 'COMPLETED': 3, 'PENDING': 4};
+                if (statusOrder[a.status] !== statusOrder[b.status]) {
+                    return statusOrder[a.status] - statusOrder[b.status];
+                }
+                return (b.startTime?.getTime() || 0) - (a.startTime?.getTime() || 0)
+            });
 
             setMatches(matchesData);
             setIsLoading(false);
@@ -83,7 +87,7 @@ export default function CourtViewPage() {
             unsubscribeMatches();
             unsubscribeTeams();
         };
-    }, [toast, user]);
+    }, [toast]);
 
     const handleScorerClick = (match: Match) => {
         if (match.status === 'COMPLETED') {
@@ -97,8 +101,18 @@ export default function CourtViewPage() {
         router.push(`/dashboard/umpire/${match.id}`);
     };
 
+    const isCourtUmpire = user?.role === 'court';
+    
+    const displayedMatches = useMemo(() => {
+        if (isCourtUmpire && user.courtName) {
+            return matches.filter(m => m.courtName === user.courtName);
+        }
+        return matches;
+    }, [matches, isCourtUmpire, user]);
+
+
     const groupedMatchesByCourt = useMemo(() => {
-        const assignedMatches = matches.filter(match => match.courtName);
+        const assignedMatches = displayedMatches.filter(match => match.courtName);
         return assignedMatches.reduce((acc, match) => {
             const courtName = match.courtName;
             if (!acc[courtName]) {
@@ -107,7 +121,7 @@ export default function CourtViewPage() {
             acc[courtName].push(match);
             return acc;
         }, {} as Record<string, Match[]>);
-    }, [matches]);
+    }, [displayedMatches]);
 
     const courtNames = useMemo(() => {
         return Object.keys(groupedMatchesByCourt).sort((a, b) => a.localeCompare(b));
@@ -121,8 +135,6 @@ export default function CourtViewPage() {
             </div>
         );
     }
-
-    const isCourtUmpire = user?.role === 'court';
 
     return (
         <Card>

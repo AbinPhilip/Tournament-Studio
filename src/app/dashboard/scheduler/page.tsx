@@ -298,12 +298,13 @@ export default function SchedulerPage() {
     const handleCourtChange = useCallback((matchId: string, courtName: string) => {
         setAssignedMatches(current => {
             const newAssignments = { ...current };
-            // Unassign any other match that was assigned to this court
-            Object.keys(newAssignments).forEach(key => {
-                if (newAssignments[key] === courtName) {
-                    delete newAssignments[key];
-                }
-            });
+            
+            // Find any other match assigned to this court and unassign it.
+            const existingMatchOnCourt = Object.keys(newAssignments).find(key => newAssignments[key] === courtName);
+            if (existingMatchOnCourt) {
+                delete newAssignments[existingMatchOnCourt];
+            }
+            
             // Assign the new match
             newAssignments[matchId] = courtName;
             return newAssignments;

@@ -463,7 +463,7 @@ export default function SettingsPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {users.map((u) => (
+              {users.filter(u => u.role !== 'court').map((u) => (
                 <TableRow key={u.id}>
                   <TableCell className="font-medium">{u.name}</TableCell>
                   <TableCell>{u.email}</TableCell>
@@ -626,5 +626,3 @@ export default function SettingsPage() {
     </div>
   );
 }
-
-    

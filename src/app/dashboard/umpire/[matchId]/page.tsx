@@ -148,7 +148,7 @@ export default function LiveScorerPage() {
                 status: 'COMPLETED',
             });
              toast({ title: "Match Finalized!", description: "The final result has been recorded." });
-             router.push('/dashboard/umpire');
+             router.push('/dashboard');
          } catch(e) {
              console.error("Finalization error:", e);
              toast({ title: "Error", description: "Could not finalize match.", variant: "destructive" });
@@ -298,5 +298,3 @@ function TeamScorePanel({ teamName, points, setsWon, isServing, onPointChange }:
         </div>
     );
 }
-
-    
