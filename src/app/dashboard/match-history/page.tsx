@@ -20,6 +20,17 @@ import { getRoundName } from '@/lib/utils';
 import { EventBadge } from '@/components/ui/event-badge';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from '@/components/ui/dialog';
+import { Separator } from '@/components/ui/separator';
+import { cn } from '@/lib/utils';
+
 
 const PAGE_SIZE = 10;
 
@@ -33,6 +44,7 @@ export default function MatchHistoryPage() {
     const [lastVisible, setLastVisible] = useState<DocumentData | null>(null);
     const [isLastPage, setIsLastPage] = useState(false);
     const [currentPage, setCurrentPage] = useState(1);
+    const [selectedMatch, setSelectedMatch] = useState<Match | null>(null);
 
     const fetchMatches = async (nextPage = false) => {
         setIsLoading(true);
@@ -133,7 +145,7 @@ export default function MatchHistoryPage() {
         <div className="space-y-8">
              <div>
                 <h1 className="text-3xl font-bold mb-2">Match History</h1>
-                <p className="text-muted-foreground">View all completed match results from the tournament.</p>
+                <p className="text-muted-foreground">View all completed match results from the tournament. Click a row for details.</p>
             </div>
             
             {matches.length === 0 && !isLoading ? (
@@ -175,7 +187,7 @@ export default function MatchHistoryPage() {
                                             const diff = match.pointDifferential;
 
                                             return (
-                                                 <TableRow key={match.id}>
+                                                 <TableRow key={match.id} onClick={() => setSelectedMatch(match)} className="cursor-pointer">
                                                     <TableCell className="font-medium">{getRoundName(match.round || 0, eventType, teamCounts[eventType])}</TableCell>
                                                     <TableCell>
                                                         <div>
@@ -212,7 +224,86 @@ export default function MatchHistoryPage() {
                 </div>
                 </>
             )}
+
+            {selectedMatch && (
+                <Dialog open={!!selectedMatch} onOpenChange={(isOpen) => !isOpen && setSelectedMatch(null)}>
+                    <DialogContent className="max-w-2xl">
+                        <DialogHeader>
+                            <DialogTitle>Match Scorecard</DialogTitle>
+                            <DialogDescription>
+                                Final result for {getRoundName(selectedMatch.round || 0, selectedMatch.eventType, teamCounts[selectedMatch.eventType])} of the <span className="capitalize font-semibold">{selectedMatch.eventType.replace(/_/g, ' ')}</span> event.
+                            </DialogDescription>
+                        </DialogHeader>
+                        <Scorecard match={selectedMatch} />
+                        <DialogFooter>
+                            <Button type="button" variant="secondary" onClick={() => setSelectedMatch(null)}>Close</Button>
+                        </DialogFooter>
+                    </DialogContent>
+                </Dialog>
+            )}
         </div>
     )
 }
 
+function Scorecard({ match }: { match: Match }) {
+  const { team1SetsWon, team2SetsWon } = useMemo(() => {
+    if (!match || !match.scores) return { team1SetsWon: 0, team2SetsWon: 0 };
+    return match.scores.reduce((acc, set) => {
+        if (set.team1 > set.team2) acc.team1SetsWon++;
+        else acc.team2SetsWon++;
+        return acc;
+    }, { team1SetsWon: 0, team2SetsWon: 0 });
+  }, [match]);
+  
+  const winnerIsTeam1 = match.winnerId === match.team1Id;
+
+  return (
+    <div className="space-y-6 py-4">
+        <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-4 text-center">
+            <TeamDisplay name={match.team1Name} org={match.team1OrgName || ''} isWinner={winnerIsTeam1} />
+            <div className="text-4xl font-bold text-muted-foreground">vs</div>
+            <TeamDisplay name={match.team2Name} org={match.team2OrgName || ''} isWinner={!winnerIsTeam1} />
+        </div>
+
+        <Separator />
+
+        <div className="text-center">
+            <h4 className="text-lg font-semibold">Final Score</h4>
+            <div className="flex items-baseline justify-center gap-4 text-4xl font-bold">
+                <span className={cn(winnerIsTeam1 && "text-primary")}>{team1SetsWon}</span>
+                <span className="text-muted-foreground">-</span>
+                <span className={cn(!winnerIsTeam1 && "text-primary")}>{team2SetsWon}</span>
+            </div>
+            {match.pointDifferential !== undefined && match.pointDifferential !== 0 && (
+                <p className="text-sm text-muted-foreground">
+                    Point Differential: <span className="font-bold text-green-600">+{match.pointDifferential}</span> for winner
+                </p>
+            )}
+        </div>
+
+        {match.scores && match.scores.length > 0 && (
+            <div className="space-y-2">
+                <h4 className="text-center font-semibold">Set Breakdown</h4>
+                <div className="grid grid-cols-3 gap-x-4 gap-y-2 text-center border rounded-md p-4 max-w-sm mx-auto">
+                    {match.scores.map((set, index) => (
+                        <React.Fragment key={index}>
+                            <div className={cn("font-medium", set.team1 > set.team2 && "font-extrabold")}>{set.team1}</div>
+                            <div className="text-sm text-muted-foreground">Set {index + 1}</div>
+                            <div className={cn("font-medium", set.team2 > set.team1 && "font-extrabold")}>{set.team2}</div>
+                        </React.Fragment>
+                    ))}
+                </div>
+            </div>
+        )}
+    </div>
+  )
+}
+
+function TeamDisplay({ name, org, isWinner }: { name: string; org: string; isWinner: boolean; }) {
+    return (
+        <div className={cn("p-4 rounded-lg", isWinner && "bg-primary/10 border-primary border")}>
+            <h3 className={cn("text-xl font-bold", isWinner && "text-primary")}>{name}</h3>
+            <p className="text-sm text-muted-foreground">{org}</p>
+        </div>
+    )
+}
