@@ -126,34 +126,36 @@ const FixtureSlide = ({ match, teamCounts }: { match: Match, teamCounts: Record<
     )
 }
 
-const UnassignedFixtureSlide = ({ match, teamCounts }: { match: Match, teamCounts: Record<TeamType, number>}) => {
+const UnassignedFixtureSlide = ({ matches, teamCounts }: { matches: Match[], teamCounts: Record<TeamType, number>}) => {
     return (
         <m.div
-            className="h-full flex flex-col justify-between p-4 sm:p-6 md:p-8 bg-black/30 rounded-2xl border border-white/20"
+            className="h-full flex flex-col p-4 sm:p-6 md:p-8 bg-black/30 rounded-2xl border border-white/20"
             initial={{opacity: 0, scale: 0.95}}
             animate={{opacity: 1, scale: 1}}
             transition={{duration: 0.5}}
         >
-            <header className="flex justify-between items-center text-slate-200" style={{ textShadow: '1px 1px 4px rgba(0,0,0,0.5)' }}>
-                <EventBadge eventType={match.eventType} />
-                 <span className="font-semibold text-lg md:text-2xl">{getRoundName(match.round || 0, match.eventType, teamCounts[match.eventType] || 0)}</span>
+            <header className="text-center mb-6">
+                <h2 className="text-4xl md:text-5xl font-bold text-white font-headline" style={{ textShadow: '2px 2px 8px rgba(0,0,0,0.7)' }}>
+                    Upcoming Unassigned Matches
+                </h2>
             </header>
             
-            <main className="flex-grow flex flex-col items-center justify-center text-white text-center">
-                 <div className="w-full" style={{ textShadow: '2px 2px 8px rgba(0,0,0,0.7)' }}>
-                    <h3 className="text-3xl md:text-5xl font-bold text-white break-words font-headline">{match.team1Name}</h3>
-                    <p className="text-lg md:text-2xl text-slate-200 mt-2">{match.team1OrgName}</p>
-                 </div>
-                 <h4 className="text-4xl md:text-6xl font-bold text-yellow-300 my-8 font-headline" style={{ textShadow: '2px 2px 8px rgba(0,0,0,0.7)' }}>VS</h4>
-                 <div className="w-full" style={{ textShadow: '2px 2px 8px rgba(0,0,0,0.7)' }}>
-                    <h3 className="text-3xl md:text-5xl font-bold text-white break-words font-headline">{match.team2Name}</h3>
-                    <p className="text-lg md:text-2xl text-slate-200 mt-2">{match.team2OrgName}</p>
-                 </div>
+            <main className="flex-grow grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-x-8 gap-y-6 text-white text-center">
+                {matches.map(match => (
+                    <div key={match.id} className="flex flex-col justify-center">
+                        <EventBadge eventType={match.eventType} className="mb-3 mx-auto" />
+                         <div className="w-full" style={{ textShadow: '2px 2px 8px rgba(0,0,0,0.7)' }}>
+                            <h3 className="text-2xl font-bold text-white break-words font-headline">{match.team1Name}</h3>
+                            <p className="text-md text-slate-200">{match.team1OrgName}</p>
+                         </div>
+                         <h4 className="text-2xl font-bold text-yellow-300 my-3 font-headline" style={{ textShadow: '2px 2px 8px rgba(0,0,0,0.7)' }}>VS</h4>
+                         <div className="w-full" style={{ textShadow: '2px 2px 8px rgba(0,0,0,0.7)' }}>
+                            <h3 className="text-2xl font-bold text-white break-words font-headline">{match.team2Name}</h3>
+                            <p className="text-md text-slate-200">{match.team2OrgName}</p>
+                         </div>
+                    </div>
+                ))}
             </main>
-
-            <footer className="text-center text-slate-400" style={{ textShadow: '1px 1px 4px rgba(0,0,0,0.5)' }}>
-                Upcoming Unassigned Match
-            </footer>
         </m.div>
     )
 }
@@ -481,9 +483,13 @@ export function PresenterShell() {
     }
 
     // 3. Unassigned Fixtures
-    unassignedFixtures.forEach(match => slideComponents.push(
-        <CarouselItem key={`unassigned-${match.id}`}><UnassignedFixtureSlide match={match} teamCounts={teamCounts} /></CarouselItem>
-    ));
+    const CHUNK_SIZE = 6;
+    for (let i = 0; i < unassignedFixtures.length; i += CHUNK_SIZE) {
+        const chunk = unassignedFixtures.slice(i, i + CHUNK_SIZE);
+        slideComponents.push(
+            <CarouselItem key={`unassigned-chunk-${i}`}><UnassignedFixtureSlide matches={chunk} teamCounts={teamCounts} /></CarouselItem>
+        );
+    }
 
     // 4. Recent Winner slides
     recentWinners.forEach(match => slideComponents.push(
