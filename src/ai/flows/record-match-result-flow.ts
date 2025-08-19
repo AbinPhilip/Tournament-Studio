@@ -53,6 +53,7 @@ const recordMatchResultFlow = ai.defineFlow(
     if (input.status === 'COMPLETED') {
         let finalWinnerId = input.winnerId;
         let scoreSummary = '';
+        
         updates.scores = input.scores || [];
 
         if (input.isForfeited) {

@@ -136,6 +136,7 @@ export default function LiveScorerPage() {
          setIsSubmitting(true);
          try {
             let finalScores = [...(match.scores || [])];
+            // Add the current set's score if it hasn't been added and it's not a forfeit
             if (!isForfeited && match.live && (match.live.team1Points > 0 || match.live.team2Points > 0)) {
                  finalScores.push({ team1: match.live.team1Points, team2: match.live.team2Points });
             }
@@ -143,7 +144,7 @@ export default function LiveScorerPage() {
             await recordMatchResult({
                 matchId: match.id,
                 scores: finalScores,
-                winnerId: winnerId, // Let backend calculate if not provided
+                winnerId: winnerId, // Let backend calculate if not provided for non-forfeit
                 isForfeited,
                 status: 'COMPLETED',
             });
