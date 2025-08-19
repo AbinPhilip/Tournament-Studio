@@ -178,7 +178,7 @@ export default function LiveScorerPage() {
         if (!match || !match.scores) return { team1SetsWon: 0, team2SetsWon: 0 };
         return match.scores.reduce((acc, set) => {
             if (set.team1 > set.team2) acc.team1SetsWon++;
-            else acc.team2SetsWon++;
+            else if (set.team2 > set.team1) acc.team2SetsWon++;
             return acc;
         }, { team1SetsWon: 0, team2SetsWon: 0 });
     }, [match]);
@@ -332,6 +332,3 @@ function TeamScorePanel({ teamName, points, setsWon, isServing, onPointChange }:
         </div>
     );
 }
-
-
-    
