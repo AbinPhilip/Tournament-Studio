@@ -36,6 +36,7 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
+  AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"
 import {
   Dialog,
@@ -88,7 +89,7 @@ const userFormSchema = z.object({
   username: z.string().min(1, { message: "Username is required." }),
   email: z.string().email({ message: "Please enter a valid email." }),
   phoneNumber: z.string().regex(/^\d{10}$/, { message: 'Please enter a valid 10-digit phone number.' }),
-  role: z.enum(['individual', 'update', 'admin', 'inquiry', 'super', 'court']),
+  role: z.enum(['individual', 'update', 'admin', 'inquiry', 'super']),
 });
 
 const userRoles: UserRole[] = ['super', 'admin', 'update', 'inquiry', 'individual'];
