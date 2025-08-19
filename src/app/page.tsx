@@ -5,44 +5,20 @@ import { useAuth } from '@/hooks/use-auth';
 import { useRouter } from 'next/navigation';
 import { useEffect } from 'react';
 import { Loader2 } from 'lucide-react';
-import { db } from '@/lib/firebase';
-import { collection, getDocs, query, limit } from 'firebase/firestore';
 
 export default function Home() {
   const { user, loading: authLoading } = useAuth();
   const router = useRouter();
   
   useEffect(() => {
-    const checkDatabaseAndRedirect = async () => {
-      try {
-        const usersCollectionRef = collection(db, 'users');
-        const q = query(usersCollectionRef, limit(1));
-        const snapshot = await getDocs(q);
-        
-        if (snapshot.empty) {
-          // If DB is empty, go straight to seeding. This page is now public.
-          router.replace('/dashboard/seed-database');
-          return;
-        }
-      } catch (error) {
-        console.error("Failed to check database:", error);
-        // Fallback to login on error, but in a real app might show an error page.
+    // We wait until the auth state is resolved before redirecting.
+    if (!authLoading) {
+      if (user) {
+        router.replace('/dashboard');
+      } else {
         router.replace('/login');
-        return;
       }
-
-      // This part only runs if the database is NOT empty.
-      // We wait until the auth state is resolved before redirecting.
-      if (!authLoading) {
-        if (user) {
-          router.replace('/dashboard');
-        } else {
-          router.replace('/login');
-        }
-      }
-    };
-
-    checkDatabaseAndRedirect();
+    }
   }, [router, authLoading, user]);
   
   return (

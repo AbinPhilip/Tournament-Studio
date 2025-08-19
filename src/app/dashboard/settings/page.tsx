@@ -36,7 +36,6 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-  AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"
 import {
   Dialog,
@@ -68,7 +67,6 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { useToast } from '@/hooks/use-toast';
 import { db } from '@/lib/firebase';
 import { collection, getDocs, addDoc, deleteDoc, doc, query, where, updateDoc, writeBatch, onSnapshot } from 'firebase/firestore';
-import { mockUsers, mockOrganizations, mockTeams } from '@/lib/mock-data';
 import { useRouter } from 'next/navigation';
 
 
@@ -126,9 +124,7 @@ export default function SettingsPage() {
   const [successModalTitle, setSuccessModalTitle] = useState('');
   const [successModalMessage, setSuccessModalMessage] = useState('');
   
-  const [isSeeding, setIsSeeding] = useState(false);
   const [isSavingPermissions, setIsSavingPermissions] = useState(false);
-  const [isSeedAlertOpen, setIsSeedAlertOpen] = useState(false);
 
   const [permissions, setPermissions] = useState<RolePermissions>({
     super: [], admin: [], update: [], inquiry: [], individual: [], court: []
@@ -248,68 +244,6 @@ export default function SettingsPage() {
     }
   };
   
-  const handleSeed = async () => {
-    setIsSeeding(true);
-    setIsSeedAlertOpen(false);
-    try {
-        const collectionsToClear = ['users', 'organizations', 'teams', 'tournaments', 'matches', 'rolePermissions'];
-        
-        for (const coll of collectionsToClear) {
-            const batch = writeBatch(db);
-            const querySnapshot = await getDocs(collection(db, coll));
-            querySnapshot.forEach(doc => batch.delete(doc.ref));
-            await batch.commit();
-        }
-
-        const seedBatch = writeBatch(db);
-
-        const orgsCollectionRef = collection(db, 'organizations');
-        const orgNameIdMap: { [key: string]: string } = {};
-
-        for (const org of mockOrganizations) {
-          const docRef = doc(orgsCollectionRef);
-          seedBatch.set(docRef, org);
-          orgNameIdMap[org.name] = docRef.id;
-        }
-        
-        const teamsCollectionRef = collection(db, 'teams');
-        mockTeams.forEach(team => {
-            const orgId = orgNameIdMap[team.organizationName];
-            if (orgId) {
-                const docRef = doc(teamsCollectionRef);
-                const { organizationName, ...teamData } = team;
-                seedBatch.set(docRef, { ...teamData, organizationId: orgId });
-            }
-        });
-
-        const usersCollectionRef = collection(db, 'users');
-        mockUsers.forEach(user => {
-            const docRef = doc(usersCollectionRef);
-            seedBatch.set(docRef, user);
-        });
-
-        await seedBatch.commit();
-        
-        // Re-fetch after seeding
-        fetchUsersAndPermissions();
-
-        toast({
-            title: 'Database Reset!',
-            description: 'Your database has been cleared and re-seeded with mock data.',
-        });
-
-    } catch (error) {
-        console.error("Seeding failed:", error);
-        toast({
-            title: 'Seeding Failed',
-            description: 'An error occurred. Check console for details.',
-            variant: 'destructive',
-        });
-    } finally {
-        setIsSeeding(false);
-    }
-  };
-  
   const handlePermissionChange = (role: UserRole, moduleId: string, isChecked: boolean) => {
     setPermissions(prev => {
         const currentModules = prev[role] || [];
@@ -345,7 +279,7 @@ export default function SettingsPage() {
         <div className="flex justify-between items-start">
             <div>
                 <h1 className="text-3xl font-bold mb-2">System Settings</h1>
-                <p className="text-muted-foreground">Manage users, permissions, and database operations.</p>
+                <p className="text-muted-foreground">Manage users and permissions.</p>
             </div>
             <Button variant="outline" onClick={() => router.push('/dashboard')}>
                 <ArrowLeft className="mr-2" />
@@ -517,39 +451,6 @@ export default function SettingsPage() {
         </CardContent>
       </Card>
       
-        <Card>
-          <CardHeader>
-            <CardTitle>Database Management</CardTitle>
-            <CardDescription>
-              Clear all current data and re-seed your Firestore database with mock data.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <AlertDialog open={isSeedAlertOpen} onOpenChange={setIsSeedAlertOpen}>
-                <AlertDialogTrigger asChild>
-                    <Button variant="destructive" disabled={isSeeding}>
-                      {isSeeding ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Database className="mr-2 h-4 w-4" />}
-                      Clear and Reseed Database
-                    </Button>
-                </AlertDialogTrigger>
-                <AlertDialogContent>
-                    <AlertDialogHeader>
-                        <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
-                        <AlertDialogDescription>
-                            This will permanently delete ALL data in your database, including users, teams, and matches, before repopulating it with mock data. This action cannot be undone.
-                        </AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <AlertDialogFooter>
-                        <AlertDialogCancel>Cancel</AlertDialogCancel>
-                        <AlertDialogAction onClick={handleSeed} className="bg-destructive hover:bg-destructive/90">
-                            Yes, delete and reseed
-                        </AlertDialogAction>
-                    </AlertDialogFooter>
-                </AlertDialogContent>
-            </AlertDialog>
-          </CardContent>
-        </Card>
-
       {/* Edit User Dialog */}
       <Dialog open={isEditUserOpen} onOpenChange={setIsEditUserOpen}>
         <DialogContent>
