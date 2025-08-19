@@ -1,4 +1,5 @@
 
+
 "use client";
 
 import React, { useState, useEffect, useMemo } from 'react';
@@ -276,7 +277,7 @@ function Scorecard({ match }: { match: Match }) {
             </div>
             {match.pointDifferential !== undefined && match.pointDifferential !== 0 && (
                 <p className="text-sm text-muted-foreground">
-                    Point Differential: <span className="font-bold text-green-600">+{match.pointDifferential}</span> for winner
+                    Point Differential: <span className="font-bold text-green-600">+{match.pointDifferential}</span>
                 </p>
             )}
         </div>
@@ -307,3 +308,5 @@ function TeamDisplay({ name, org, isWinner }: { name: string; org: string; isWin
         </div>
     )
 }
+
+    
