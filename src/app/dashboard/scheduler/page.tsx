@@ -216,7 +216,7 @@ export default function SchedulerPage() {
         }
     }, [toast, router]);
 
-    const { restingTeams, pendingSummary } = useMemo(() => {
+    const { restingTeams, initialReadyMatches, pendingSummary } = useMemo(() => {
         const allPendingMatches = matches.filter(m => m.status === 'PENDING');
         const minRestTimeMs = (tournament?.restTime || 10) * 60 * 1000;
         
@@ -292,12 +292,6 @@ export default function SchedulerPage() {
             }
         });
         
-        const inProgressOrScheduled = new Set(matches
-            .filter(m => (m.status === 'IN_PROGRESS' || m.status === 'SCHEDULED') && m.courtName)
-            .map(m => m.courtName)
-            .filter((name): name is string => !!name)
-        );
-
         const summary = allPendingMatches.reduce((acc, match) => {
             const event = match.eventType;
             const round = match.round || 1;
@@ -312,11 +306,11 @@ export default function SchedulerPage() {
         }, {} as Record<TeamType, Record<number, number>>);
 
 
-        return { initialReadyMatches: ready, busyCourts: inProgressOrScheduled, restingTeams: resting, pendingSummary: summary };
+        return { initialReadyMatches: ready, restingTeams: resting, pendingSummary: summary };
     }, [matches, teams, assignedMatches, tournament]);
 
     useEffect(() => {
-        let filteredReady = restingTeams.concat(unassignedMatches.filter(um => !restingTeams.find(rm => rm.id === um.id)));
+        let filteredReady = [...initialReadyMatches];
         
         if (eventFilter !== 'all') {
             filteredReady = filteredReady.filter(m => m.eventType === eventFilter);
@@ -338,6 +332,7 @@ export default function SchedulerPage() {
                 return 0;
             });
         } else {
+             // Default sort: Finals > Semis > Prelims, then by round number (desc), then by event type
             filteredReady.sort((a, b) => {
                 const getRoundStage = (round: number, teamCount: number) => {
                     if (teamCount < 2) return 3; 
@@ -359,11 +354,9 @@ export default function SchedulerPage() {
             });
         }
         
-        // Exclude resting teams from the sortable list
-        const readyForScheduling = filteredReady.filter(m => !m.restEndTime || m.restEndTime <= Date.now() || m.isRestOverridden);
-        setUnassignedMatches(readyForScheduling);
+        setUnassignedMatches(filteredReady);
 
-    }, [matches, teams, teamCounts, eventFilter, sortConfig, restingTeams]);
+    }, [initialReadyMatches, eventFilter, sortConfig, teamCounts]);
 
 
     const handleCourtChange = useCallback((matchId: string, courtName: string) => {
@@ -708,4 +701,3 @@ export default function SchedulerPage() {
         </div>
     );
 }
-
