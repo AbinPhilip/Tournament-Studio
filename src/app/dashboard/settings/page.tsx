@@ -68,6 +68,7 @@ import { useToast } from '@/hooks/use-toast';
 import { db } from '@/lib/firebase';
 import { collection, getDocs, addDoc, deleteDoc, doc, query, where, updateDoc, writeBatch, onSnapshot } from 'firebase/firestore';
 import { useRouter } from 'next/navigation';
+import { mockUsers, mockOrganizations, mockTeams } from '@/lib/mock-data';
 
 
 function RoleBadge({ role }: { role: UserRole }) {
@@ -124,6 +125,7 @@ export default function SettingsPage() {
   const [successModalTitle, setSuccessModalTitle] = useState('');
   const [successModalMessage, setSuccessModalMessage] = useState('');
   
+  const [isSeeding, setIsSeeding] = useState(false);
   const [isSavingPermissions, setIsSavingPermissions] = useState(false);
 
   const [permissions, setPermissions] = useState<RolePermissions>({
@@ -243,6 +245,48 @@ export default function SettingsPage() {
         toast({ title: 'Error', description: 'Failed to update user.', variant: 'destructive' });
     }
   };
+
+  const handleSeed = async () => {
+    setIsSeeding(true);
+    try {
+      const batch = writeBatch(db);
+      
+      const collectionsToDelete = ['users', 'organizations', 'teams', 'matches', 'tournaments'];
+      for (const collectionName of collectionsToDelete) {
+          const snapshot = await getDocs(collection(db, collectionName));
+          snapshot.forEach(doc => batch.delete(doc.ref));
+      }
+
+      // Add Organizations
+      const orgRefs: Record<string, string> = {};
+      for (const org of mockOrganizations) {
+        const orgRef = doc(collection(db, 'organizations'));
+        batch.set(orgRef, org);
+        orgRefs[org.name] = orgRef.id;
+      }
+      
+      // Add Users
+      mockUsers.forEach(user => {
+        const userRef = doc(collection(db, 'users'));
+        batch.set(userRef, user);
+      });
+
+      // Add Teams
+      mockTeams.forEach(team => {
+        const teamRef = doc(collection(db, 'teams'));
+        const { organizationName, ...teamData } = team;
+        batch.set(teamRef, { ...teamData, organizationId: orgRefs[organizationName] });
+      });
+
+      await batch.commit();
+      toast({ title: 'Database Seeded', description: 'Your database has been reset with mock data.' });
+    } catch (error) {
+      console.error('Seeding failed:', error);
+      toast({ title: 'Seeding Failed', description: 'Could not seed the database.', variant: 'destructive' });
+    } finally {
+      setIsSeeding(false);
+    }
+  };
   
   const handlePermissionChange = (role: UserRole, moduleId: string, isChecked: boolean) => {
     setPermissions(prev => {
@@ -279,7 +323,7 @@ export default function SettingsPage() {
         <div className="flex justify-between items-start">
             <div>
                 <h1 className="text-3xl font-bold mb-2">System Settings</h1>
-                <p className="text-muted-foreground">Manage users and permissions.</p>
+                <p className="text-muted-foreground">Manage users, permissions, and the database.</p>
             </div>
             <Button variant="outline" onClick={() => router.push('/dashboard')}>
                 <ArrowLeft className="mr-2" />
@@ -451,6 +495,37 @@ export default function SettingsPage() {
         </CardContent>
       </Card>
       
+      <Card>
+        <CardHeader>
+            <CardTitle>Database Management</CardTitle>
+            <CardDescription>Use mock data to seed the database for testing and demonstration purposes.</CardDescription>
+        </CardHeader>
+        <CardContent>
+             <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button variant="destructive" disabled={isSeeding}>
+                  {isSeeding ? <Loader2 className="animate-spin" /> : <Database className="mr-2" />}
+                  Clear and Reseed Database
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    This action cannot be undone. This will permanently delete all current data (users, teams, matches, etc.) and replace it with the initial mock data.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogAction onClick={handleSeed} className="bg-destructive hover:bg-destructive/90 text-destructive-foreground">
+                    Yes, clear and reseed
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+        </CardContent>
+      </Card>
+
       {/* Edit User Dialog */}
       <Dialog open={isEditUserOpen} onOpenChange={setIsEditUserOpen}>
         <DialogContent>
