@@ -54,7 +54,11 @@ const recordMatchResultFlow = ai.defineFlow(
         let finalWinnerId = input.winnerId;
         let scoreSummary = '';
         
-        updates.scores = input.scores || [];
+        let finalScores = [...(completedMatch.scores || [])];
+        if (input.scores && input.scores.length > (completedMatch.scores?.length ?? 0) && !input.isForfeited) {
+            finalScores = input.scores;
+        }
+        updates.scores = finalScores;
 
         if (input.isForfeited) {
             scoreSummary = 'Forfeited';
@@ -66,17 +70,28 @@ const recordMatchResultFlow = ai.defineFlow(
             let team2Sets = 0;
             updates.scores.forEach(set => {
                 if(set.team1 > set.team2) team1Sets++;
-                else team2Sets++;
+                else if (set.team2 > set.team1) team2Sets++;
             });
             scoreSummary = `${team1Sets}-${team2Sets}`;
             
             if (!finalWinnerId) {
-                finalWinnerId = team1Sets > team2Sets ? completedMatch.team1Id : completedMatch.team2Id;
+                if (team1Sets > team2Sets) {
+                    finalWinnerId = completedMatch.team1Id;
+                } else if (team2Sets > team1Sets) {
+                    finalWinnerId = completedMatch.team2Id;
+                } else {
+                    // Tie in sets, do not assign a winner. Keep status as IN_PROGRESS.
+                    updates.status = 'IN_PROGRESS';
+                    updates.live = null; // Clear live data but don't complete
+                    batch.update(matchRef, { ...updates, lastUpdateTime: Timestamp.now() });
+                    await batch.commit();
+                    return; // Exit flow early
+                }
             }
         }
         
         updates.score = scoreSummary;
-        updates.winnerId = finalWinnerId || completedMatch.team2Id;
+        updates.winnerId = finalWinnerId;
         updates.status = 'COMPLETED';
         updates.live = null; // Clear live data on completion
 
