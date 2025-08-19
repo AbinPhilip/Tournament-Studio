@@ -8,6 +8,8 @@ export const mockUsers: Omit<User, 'id'>[] = [
   { name: 'Diana Prince', username: 'dianap', email: 'diana.p@example.com', phoneNumber: '1234567890', role: 'inquiry' },
   { name: 'Ethan Hunt', username: 'ethanh', email: 'ethan.h@example.com', phoneNumber: '0987654321', role: 'individual' },
   { name: 'Fiona Glenanne', username: 'fionag', email: 'fiona.g@example.com', phoneNumber: '1122334455', role: 'individual' },
+  { name: 'Sajan Varghese', username: 'sajanvarghese', email: 'sajan.varghese@example.com', phoneNumber: '1234567890', role: 'admin' },
+  { name: 'Sharon Thomas', username: 'sharonthomas', email: 'sharon.thomas@example.com', phoneNumber: '1234567890', role: 'admin' },
 ];
 
 export const mockAppData: Omit<AppData, 'id'>[] = [
