@@ -13,6 +13,7 @@ import { Badge } from '@/components/ui/badge';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { EventBadge } from '@/components/ui/event-badge';
+import { cn } from '@/lib/utils';
 
 
 export default function DrawPage() {
@@ -119,6 +120,7 @@ export default function DrawPage() {
         const isBye = match.team2Id === 'BYE';
         const team1 = teams.find(t => t.id === match.team1Id);
         const team2 = teams.find(t => t.id === match.team2Id);
+        const hasPointDiff = match.pointDifferential !== undefined && match.pointDifferential !== 0;
 
         return (
             <div key={match.id} className="border-2 rounded-xl p-4 text-base bg-background shadow-md transition-all hover:shadow-lg min-h-[190px] flex flex-col">
@@ -161,9 +163,9 @@ export default function DrawPage() {
                 )}
                 {match.status === 'COMPLETED' && !isBye && (
                     <div className="text-center mt-3 pt-3 border-t">
-                        <Badge variant="secondary" className="text-base px-4 py-1">
+                        <Badge variant="secondary" className={cn("text-base px-4 py-1", hasPointDiff && "border-green-600 border-2")}>
                             {match.score}
-                             {match.pointDifferential !== undefined && match.pointDifferential !== 0 && (
+                             {hasPointDiff && (
                                 <span className="ml-2 font-bold text-green-600">+{match.pointDifferential}</span>
                             )}
                         </Badge>
