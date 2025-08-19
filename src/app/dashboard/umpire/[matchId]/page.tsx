@@ -7,7 +7,7 @@ import { db } from '@/lib/firebase';
 import { doc, onSnapshot, Unsubscribe, Timestamp, updateDoc } from 'firebase/firestore';
 import type { Match } from '@/types';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, ArrowLeft, Send, Repeat, CheckCircle, Smartphone } from 'lucide-react';
+import { Loader2, ArrowLeft, Send, Repeat, CheckCircle, Smartphone, AlertTriangle } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { updateLiveScore } from '@/ai/flows/update-live-score-flow';
@@ -34,6 +34,8 @@ export default function LiveScorerPage() {
     const [match, setMatch] = useState<Match | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [isFinalizeDialogOpen, setIsFinalizeDialogOpen] = useState(false);
+    const [isTieConfirmOpen, setIsTieConfirmOpen] = useState(false);
     
     useEffect(() => {
         if (!matchId) return;
@@ -155,8 +157,22 @@ export default function LiveScorerPage() {
              toast({ title: "Error", description: "Could not finalize match.", variant: "destructive" });
          } finally {
              setIsSubmitting(false);
+             setIsFinalizeDialogOpen(false);
          }
     }, [match, router, toast]);
+
+    const handleFinalizeClick = () => {
+        if (!match?.live) {
+            setIsFinalizeDialogOpen(true);
+            return;
+        }
+        const { team1Points, team2Points } = match.live;
+        if (team1Points === team2Points && team1Points > 0) {
+            setIsTieConfirmOpen(true);
+        } else {
+            setIsFinalizeDialogOpen(true);
+        }
+    };
     
     const { team1SetsWon, team2SetsWon } = useMemo(() => {
         if (!match || !match.scores) return { team1SetsWon: 0, team2SetsWon: 0 };
@@ -232,50 +248,67 @@ export default function LiveScorerPage() {
                           </Button>
                       </div>
                       
-                       <AlertDialog>
-                          <AlertDialogTrigger asChild>
-                              <Button variant="destructive" className="w-full" disabled={isSubmitting}>Finalize Match</Button>
-                          </AlertDialogTrigger>
-                          <AlertDialogContent>
-                              <AlertDialogHeader>
-                                  <AlertDialogTitle>Finalize Match</AlertDialogTitle>
-                                  <AlertDialogDescription>
-                                      Click confirm to finalize the match. The winner will be calculated automatically from the scores. You can also declare a forfeit below.
-                                  </AlertDialogDescription>
-                              </AlertDialogHeader>
-                              <div className="space-y-4 py-4">
-                                  <AlertDialogAction 
-                                      onClick={() => handleFinalizeMatch()} 
-                                      className="w-full bg-green-600 hover:bg-green-700"
-                                   >
-                                       <CheckCircle className="mr-2"/> Confirm and Finalize Match
-                                  </AlertDialogAction>
-                                  
-                                  <div className="relative">
-                                      <div className="absolute inset-0 flex items-center"><span className="w-full border-t" /></div>
-                                      <div className="relative flex justify-center text-xs uppercase"><span className="bg-background px-2 text-muted-foreground">Or Declare Forfeit</span></div>
-                                  </div>
-                                  <div className="grid grid-cols-2 gap-2">
-                                      <AlertDialogAction asChild>
-                                          <Button variant="destructive" onClick={() => handleFinalizeMatch(match.team2Id, true)} className="h-auto py-2 text-wrap">
-                                              {match.team1Name} Forfeits
-                                          </Button>
-                                      </AlertDialogAction>
-                                      <AlertDialogAction asChild>
-                                           <Button variant="destructive" onClick={() => handleFinalizeMatch(match.team1Id, true)} className="h-auto py-2 text-wrap">
-                                              {match.team2Name} Forfeits
-                                           </Button>
-                                      </AlertDialogAction>
-                                  </div>
-                              </div>
-                              <AlertDialogFooter>
-                                  <AlertDialogCancel>Cancel</AlertDialogCancel>
-                              </AlertDialogFooter>
-                          </AlertDialogContent>
-                      </AlertDialog>
+                        <Button variant="destructive" className="w-full" disabled={isSubmitting} onClick={handleFinalizeClick}>
+                            Finalize Match
+                        </Button>
                   </div>
               </CardContent>
           </Card>
+            
+          <AlertDialog open={isTieConfirmOpen} onOpenChange={setIsTieConfirmOpen}>
+              <AlertDialogContent>
+                  <AlertDialogHeader>
+                      <AlertDialogTitle className="flex items-center gap-2"><AlertTriangle className="text-yellow-500"/> Confirm Tied Score</AlertDialogTitle>
+                      <AlertDialogDescription>
+                          The current set score is tied at {match.live?.team1Points} - {match.live?.team2Points}. Are you sure you want to proceed to finalize the match? This is unusual.
+                      </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                      <AlertDialogCancel>Cancel</AlertDialogCancel>
+                      <AlertDialogAction onClick={() => { setIsTieConfirmOpen(false); setIsFinalizeDialogOpen(true); }}>
+                          Yes, proceed
+                      </AlertDialogAction>
+                  </AlertDialogFooter>
+              </AlertDialogContent>
+          </AlertDialog>
+
+
+          <AlertDialog open={isFinalizeDialogOpen} onOpenChange={setIsFinalizeDialogOpen}>
+              <AlertDialogContent>
+                  <AlertDialogHeader>
+                      <AlertDialogTitle>Finalize Match</AlertDialogTitle>
+                      <AlertDialogDescription>
+                          Click confirm to finalize the match. The winner will be calculated automatically from the scores. You can also declare a forfeit below.
+                      </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <div className="space-y-4 py-4">
+                      <Button 
+                          onClick={() => handleFinalizeMatch()} 
+                          className="w-full bg-green-600 hover:bg-green-700"
+                          disabled={isSubmitting}
+                        >
+                           {isSubmitting ? <Loader2 className="animate-spin" /> : <CheckCircle className="mr-2"/>}
+                            Confirm and Finalize Match
+                      </Button>
+                      
+                      <div className="relative">
+                          <div className="absolute inset-0 flex items-center"><span className="w-full border-t" /></div>
+                          <div className="relative flex justify-center text-xs uppercase"><span className="bg-background px-2 text-muted-foreground">Or Declare Forfeit</span></div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2">
+                           <Button variant="destructive" onClick={() => handleFinalizeMatch(match.team2Id, true)} className="h-auto py-2 text-wrap" disabled={isSubmitting}>
+                                {match.team1Name} Forfeits
+                            </Button>
+                            <Button variant="destructive" onClick={() => handleFinalizeMatch(match.team1Id, true)} className="h-auto py-2 text-wrap" disabled={isSubmitting}>
+                                {match.team2Name} Forfeits
+                            </Button>
+                      </div>
+                  </div>
+                  <AlertDialogFooter>
+                      <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  </AlertDialogFooter>
+              </AlertDialogContent>
+          </AlertDialog>
       </div>
     );
 }
@@ -299,3 +332,6 @@ function TeamScorePanel({ teamName, points, setsWon, isServing, onPointChange }:
         </div>
     );
 }
+
+
+    
