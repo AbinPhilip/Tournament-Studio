@@ -126,6 +126,39 @@ const FixtureSlide = ({ match, teamCounts }: { match: Match, teamCounts: Record<
     )
 }
 
+const UnassignedFixtureSlide = ({ match, teamCounts }: { match: Match, teamCounts: Record<TeamType, number>}) => {
+    return (
+        <m.div
+            className="h-full flex flex-col justify-between p-4 sm:p-6 md:p-8 bg-black/30 rounded-2xl border border-white/20"
+            initial={{opacity: 0, scale: 0.95}}
+            animate={{opacity: 1, scale: 1}}
+            transition={{duration: 0.5}}
+        >
+            <header className="flex justify-between items-center text-slate-200" style={{ textShadow: '1px 1px 4px rgba(0,0,0,0.5)' }}>
+                <EventBadge eventType={match.eventType} />
+                 <span className="font-semibold text-lg md:text-2xl">{getRoundName(match.round || 0, match.eventType, teamCounts[match.eventType] || 0)}</span>
+            </header>
+            
+            <main className="flex-grow flex flex-col items-center justify-center text-white text-center">
+                 <div className="w-full" style={{ textShadow: '2px 2px 8px rgba(0,0,0,0.7)' }}>
+                    <h3 className="text-3xl md:text-5xl font-bold text-white break-words font-headline">{match.team1Name}</h3>
+                    <p className="text-lg md:text-2xl text-slate-200 mt-2">{match.team1OrgName}</p>
+                 </div>
+                 <h4 className="text-4xl md:text-6xl font-bold text-yellow-300 my-8 font-headline" style={{ textShadow: '2px 2px 8px rgba(0,0,0,0.7)' }}>VS</h4>
+                 <div className="w-full" style={{ textShadow: '2px 2px 8px rgba(0,0,0,0.7)' }}>
+                    <h3 className="text-3xl md:text-5xl font-bold text-white break-words font-headline">{match.team2Name}</h3>
+                    <p className="text-lg md:text-2xl text-slate-200 mt-2">{match.team2OrgName}</p>
+                 </div>
+            </main>
+
+            <footer className="text-center text-slate-400" style={{ textShadow: '1px 1px 4px rgba(0,0,0,0.5)' }}>
+                Upcoming Unassigned Match
+            </footer>
+        </m.div>
+    )
+}
+
+
 const WelcomeSlide = ({ tournament }: { tournament: Tournament | null }) => (
     <m.div
         className="h-full flex flex-col justify-center items-center p-8 text-white text-center bg-black/30 rounded-2xl border border-white/20"
@@ -423,8 +456,9 @@ export function PresenterShell() {
     const now = Date.now();
     const liveMatches = matches.filter(m => m.status === 'IN_PROGRESS' && m.courtName).sort((a,b) => (a.courtName || '').localeCompare(b.courtName || ''));
     const scheduledFixtures = matches.filter(m => m.status === 'SCHEDULED' && m.courtName).sort((a, b) => (a.startTime as any) - (b.startTime as any));
+    const unassignedFixtures = matches.filter(m => m.status === 'PENDING').sort((a, b) => (a.round || 0) - (b.round || 0));
     
-    // Filter out BYE matches
+    // Filter out BYE matches from results
     const allCompleted = matches.filter(m => m.status === 'COMPLETED' && m.winnerId && m.team2Id !== 'BYE').sort((a, b) => (b.lastUpdateTime?.getTime() || 0) - (a.lastUpdateTime?.getTime() || 0));
     
     const orgMap = new Map(organizations.map(o => [o.id, o.name]));
@@ -446,22 +480,27 @@ export function PresenterShell() {
         slideComponents.push(<CarouselItem key="lottery-draw"><LotteryDrawSlide teamsWithLots={teamsWithLots} /></CarouselItem>);
     }
 
-    // 3. Recent Winner slides
+    // 3. Unassigned Fixtures
+    unassignedFixtures.forEach(match => slideComponents.push(
+        <CarouselItem key={`unassigned-${match.id}`}><UnassignedFixtureSlide match={match} teamCounts={teamCounts} /></CarouselItem>
+    ));
+
+    // 4. Recent Winner slides
     recentWinners.forEach(match => slideComponents.push(
         <CarouselItem key={`winner-${match.id}`}><WinnerSlide match={match} /></CarouselItem>
     ));
 
-    // 4. Live matches
+    // 5. Live matches
     liveMatches.forEach(match => slideComponents.push(
         <CarouselItem key={match.id}><LiveMatchSlide match={match} teamCounts={teamCounts}/></CarouselItem>
     ));
     
-    // 5. Scheduled fixtures
+    // 6. Scheduled fixtures
     scheduledFixtures.forEach(match => slideComponents.push(
         <CarouselItem key={match.id}><FixtureSlide match={match} teamCounts={teamCounts} /></CarouselItem>
     ));
     
-    // 6. Completed matches table
+    // 7. Completed matches table
     if (olderCompleted.length > 0) {
         slideComponents.push(<CarouselItem key="completed"><CompletedMatchesSlide matches={olderCompleted} teamCounts={teamCounts} /></CarouselItem>);
     }
