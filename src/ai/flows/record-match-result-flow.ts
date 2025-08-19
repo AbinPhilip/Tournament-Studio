@@ -196,12 +196,8 @@ const recordMatchResultFlow = ai.defineFlow(
 
                 if (match.team2Id === 'BYE' && match.round === 1) {
                     pointDiff = 0; 
-                } else if (match.pointDifferential) {
+                } else if (match.pointDifferential !== undefined) {
                     pointDiff = match.pointDifferential;
-                } else if (match.scores && match.scores.length > 0) {
-                    const totalScoreWinner = match.scores.reduce((sum, set) => sum + (winnerId === match.team1Id ? set.team1 : set.team2), 0);
-                    const totalScoreLoser = match.scores.reduce((sum, set) => sum + (winnerId === match.team1Id ? set.team2 : set.team1), 0);
-                    pointDiff = totalScoreWinner - totalScoreLoser;
                 }
                 const lotNumber = teamMap.get(winnerId)?.lotNumber ?? Infinity;
                 return { winnerId, pointDiff, lotNumber };

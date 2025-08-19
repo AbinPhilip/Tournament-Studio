@@ -163,7 +163,7 @@ export default function DrawPage() {
                     <div className="text-center mt-3 pt-3 border-t">
                         <Badge variant="secondary" className="text-base px-4 py-1">
                             {match.score}
-                             {match.pointDifferential !== undefined && match.pointDifferential > 0 && (
+                             {match.pointDifferential !== undefined && match.pointDifferential !== 0 && (
                                 <span className="ml-2 font-bold text-green-600">+{match.pointDifferential}</span>
                             )}
                         </Badge>
