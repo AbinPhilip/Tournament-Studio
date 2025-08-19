@@ -5,7 +5,7 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, Loader2, Play, XCircle, TimerOff, ArrowUpDown } from 'lucide-react';
+import { ArrowLeft, Loader2, Play, XCircle, TimerOff, ArrowUpDown, GripVertical } from 'lucide-react';
 import type { Match, Team, TeamType, Tournament } from '@/types';
 import { db } from '@/lib/firebase';
 import { collection, doc, writeBatch, query, Timestamp, onSnapshot, getDocs, updateDoc } from 'firebase/firestore';
@@ -34,6 +34,10 @@ import {
 import { EventBadge } from '@/components/ui/event-badge';
 import { getRoundName } from '@/lib/utils';
 import { useAuth } from '@/hooks/use-auth';
+import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
+import { arrayMove, SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
+
 
 const CountdownTimer = ({ endTime }: { endTime: number }) => {
     const [timeLeft, setTimeLeft] = useState(endTime - Date.now());
@@ -89,12 +93,72 @@ const TimeSince = ({ startTime }: { startTime: number | null }) => {
     return <span>{minutes}m ago</span>;
 }
 
+const SortableMatchRow = ({ match, teamCounts, availableCourts, assignedMatches, handleCourtChange }: { match: Match; teamCounts: Record<TeamType, number>; availableCourts: { name: string }[]; assignedMatches: Record<string, string>; handleCourtChange: (matchId: string, courtName: string) => void; }) => {
+    const {
+        attributes,
+        listeners,
+        setNodeRef,
+        transform,
+        transition,
+    } = useSortable({ id: match.id });
+
+    const style = {
+        transform: CSS.Transform.toString(transform),
+        transition,
+    };
+    
+    const currentAssignment = assignedMatches[match.id];
+
+    return (
+        <TableRow ref={setNodeRef} style={style} {...attributes} className={currentAssignment ? 'bg-blue-50 dark:bg-blue-900/20' : ''}>
+             <TableCell className="w-12">
+                 <div {...listeners} className="cursor-grab p-2">
+                    <GripVertical />
+                 </div>
+            </TableCell>
+            <TableCell><EventBadge eventType={match.eventType} /></TableCell>
+            <TableCell className="font-medium whitespace-nowrap">{getRoundName(match.round || 0, match.eventType, teamCounts[match.eventType])}</TableCell>
+            <TableCell>
+                <div>
+                    <span>{match.team1Name}</span>
+                    <p className="text-sm text-muted-foreground">{match.team1OrgName}</p>
+                </div>
+                <p className="text-muted-foreground my-1">vs</p>
+                <div>
+                    <span>{match.team2Name}</span>
+                    <p className="text-sm text-muted-foreground">{match.team2OrgName}</p>
+                </div>
+            </TableCell>
+            <TableCell className="text-sm text-muted-foreground">
+                <div><TimeSince startTime={match.team1LastPlayed ?? null} /></div>
+                <div><TimeSince startTime={match.team2LastPlayed ?? null} /></div>
+            </TableCell>
+            <TableCell>
+                 <Select onValueChange={(value) => handleCourtChange(match.id, value)} value={currentAssignment || ''}>
+                    <SelectTrigger className="w-[180px]">
+                        <SelectValue placeholder="Select Court" />
+                    </SelectTrigger>
+                    <SelectContent>
+                        {currentAssignment && <SelectItem value={currentAssignment}>{currentAssignment}</SelectItem>}
+                        {availableCourts.map(court => (
+                            <SelectItem key={court.name} value={court.name}>
+                                {court.name}
+                            </SelectItem>
+                        ))}
+                    </SelectContent>
+                </Select>
+            </TableCell>
+        </TableRow>
+    );
+};
+
 
 export default function SchedulerPage() {
     const { user } = useAuth();
     const [tournament, setTournament] = useState<Tournament | null>(null);
     const [matches, setMatches] = useState<Match[]>([]);
     const [teams, setTeams] = useState<Team[]>([]);
+    const [unassignedMatches, setUnassignedMatches] = useState<Match[]>([]);
     const [assignedMatches, setAssignedMatches] = useState<Record<string, string>>({}); // { matchId: courtName }
     const [isLoading, setIsLoading] = useState(true);
     const [isSaving, setIsSaving] = useState(false);
@@ -103,6 +167,8 @@ export default function SchedulerPage() {
     });
     const [eventFilter, setEventFilter] = useState<TeamType | 'all'>('all');
     const [sortConfig, setSortConfig] = useState<{ key: keyof Match | 'lastPlayed'; direction: 'ascending' | 'descending' } | null>(null);
+    const sensors = useSensors(useSensor(PointerSensor), useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }));
+
 
     const { toast } = useToast();
     const router = useRouter();
@@ -150,7 +216,7 @@ export default function SchedulerPage() {
         }
     }, [toast, router]);
 
-    const { unassignedMatches, busyCourts, restingTeams, pendingSummary } = useMemo(() => {
+    const { restingTeams, pendingSummary } = useMemo(() => {
         const allPendingMatches = matches.filter(m => m.status === 'PENDING');
         const minRestTimeMs = (tournament?.restTime || 10) * 60 * 1000;
         
@@ -225,53 +291,7 @@ export default function SchedulerPage() {
                 ready.push(m);
             }
         });
-
-        // Filter before sorting
-        let filteredReady = ready;
-        if (eventFilter !== 'all') {
-            filteredReady = ready.filter(m => m.eventType === eventFilter);
-        }
         
-        // Sorting logic
-        if (sortConfig) {
-            filteredReady.sort((a,b) => {
-                let aVal: any;
-                let bVal: any;
-                if (sortConfig.key === 'lastPlayed') {
-                    aVal = Math.max(a.team1LastPlayed || 0, a.team2LastPlayed || 0);
-                    bVal = Math.max(b.team1LastPlayed || 0, b.team2LastPlayed || 0);
-                } else {
-                    aVal = a[sortConfig.key as keyof Match] ?? 0;
-                    bVal = b[sortConfig.key as keyof Match] ?? 0;
-                }
-                if (aVal < bVal) return sortConfig.direction === 'ascending' ? -1 : 1;
-                if (aVal > bVal) return sortConfig.direction === 'ascending' ? 1 : -1;
-                return 0;
-            });
-        } else {
-            // Default sort: Finals > Semis > Prelims, then by round number
-            filteredReady.sort((a, b) => {
-                const getRoundStage = (round: number, teamCount: number) => {
-                    if (teamCount < 2) return 3; 
-                    const totalRounds = Math.ceil(Math.log2(teamCount));
-                    if (round === totalRounds) return 2; // Final
-                    if (round === totalRounds - 1) return 1; // Semi-Final
-                    return 0; // Preliminary round
-                };
-                const aRound = a.round || 0;
-                const bRound = b.round || 0;
-                const aTeamCount = teamCounts[a.eventType] || 0;
-                const bTeamCount = teamCounts[b.eventType] || 0;
-                const aStage = getRoundStage(aRound, aTeamCount);
-                const bStage = getRoundStage(bRound, bTeamCount);
-
-                if (aStage !== bStage) return bStage - aStage;
-                if (aRound !== bRound) return aRound - bRound;
-                return a.eventType.localeCompare(b.eventType);
-            });
-        }
-
-
         const inProgressOrScheduled = new Set(matches
             .filter(m => (m.status === 'IN_PROGRESS' || m.status === 'SCHEDULED') && m.courtName)
             .map(m => m.courtName)
@@ -292,20 +312,69 @@ export default function SchedulerPage() {
         }, {} as Record<TeamType, Record<number, number>>);
 
 
-        return { unassignedMatches: filteredReady, busyCourts: inProgressOrScheduled, restingTeams: resting, pendingSummary: summary };
-    }, [matches, teams, teamCounts, assignedMatches, tournament, eventFilter, sortConfig]);
+        return { initialReadyMatches: ready, busyCourts: inProgressOrScheduled, restingTeams: resting, pendingSummary: summary };
+    }, [matches, teams, assignedMatches, tournament]);
+
+    useEffect(() => {
+        let filteredReady = restingTeams.concat(unassignedMatches.filter(um => !restingTeams.find(rm => rm.id === um.id)));
+        
+        if (eventFilter !== 'all') {
+            filteredReady = filteredReady.filter(m => m.eventType === eventFilter);
+        }
+        
+        if (sortConfig) {
+            filteredReady.sort((a,b) => {
+                let aVal: any;
+                let bVal: any;
+                if (sortConfig.key === 'lastPlayed') {
+                    aVal = Math.max(a.team1LastPlayed || 0, a.team2LastPlayed || 0);
+                    bVal = Math.max(b.team1LastPlayed || 0, b.team2LastPlayed || 0);
+                } else {
+                    aVal = a[sortConfig.key as keyof Match] ?? 0;
+                    bVal = b[sortConfig.key as keyof Match] ?? 0;
+                }
+                if (aVal < bVal) return sortConfig.direction === 'ascending' ? -1 : 1;
+                if (aVal > bVal) return sortConfig.direction === 'ascending' ? 1 : -1;
+                return 0;
+            });
+        } else {
+            filteredReady.sort((a, b) => {
+                const getRoundStage = (round: number, teamCount: number) => {
+                    if (teamCount < 2) return 3; 
+                    const totalRounds = Math.ceil(Math.log2(teamCount));
+                    if (round === totalRounds) return 2; // Final
+                    if (round === totalRounds - 1) return 1; // Semi-Final
+                    return 0; // Preliminary round
+                };
+                const aRound = a.round || 0;
+                const bRound = b.round || 0;
+                const aTeamCount = teamCounts[a.eventType] || 0;
+                const bTeamCount = teamCounts[b.eventType] || 0;
+                const aStage = getRoundStage(aRound, aTeamCount);
+                const bStage = getRoundStage(bRound, bTeamCount);
+
+                if (aStage !== bStage) return bStage - aStage;
+                if (aRound !== bRound) return aRound - bRound;
+                return a.eventType.localeCompare(b.eventType);
+            });
+        }
+        
+        // Exclude resting teams from the sortable list
+        const readyForScheduling = filteredReady.filter(m => !m.restEndTime || m.restEndTime <= Date.now() || m.isRestOverridden);
+        setUnassignedMatches(readyForScheduling);
+
+    }, [matches, teams, teamCounts, eventFilter, sortConfig, restingTeams]);
+
 
     const handleCourtChange = useCallback((matchId: string, courtName: string) => {
         setAssignedMatches(current => {
             const newAssignments = { ...current };
             
-            // Find any other match assigned to this court and unassign it.
             const existingMatchOnCourt = Object.keys(newAssignments).find(key => newAssignments[key] === courtName);
             if (existingMatchOnCourt) {
                 delete newAssignments[existingMatchOnCourt];
             }
             
-            // Assign the new match
             newAssignments[matchId] = courtName;
             return newAssignments;
         });
@@ -377,6 +446,23 @@ export default function SchedulerPage() {
         }
     };
     
+    const handleDragEnd = (event: any) => {
+        const { active, over } = event;
+        if (active.id !== over.id) {
+            setUnassignedMatches((items) => {
+                const oldIndex = items.findIndex((item) => item.id === active.id);
+                const newIndex = items.findIndex((item) => item.id === over.id);
+                return arrayMove(items, oldIndex, newIndex);
+            });
+        }
+    };
+
+    const busyCourts = useMemo(() => new Set(matches
+            .filter(m => (m.status === 'IN_PROGRESS' || m.status === 'SCHEDULED') && m.courtName)
+            .map(m => m.courtName)
+            .filter((name): name is string => !!name)
+    ), [matches]);
+    
     const currentlyAssignedCourts = useMemo(() => new Set(Object.values(assignedMatches)), [assignedMatches]);
     const availableCourts = useMemo(() => {
         return tournament?.courtNames.filter(c => !busyCourts.has(c.name) && !currentlyAssignedCourts.has(c.name)) || [];
@@ -418,7 +504,7 @@ export default function SchedulerPage() {
             <div className="flex justify-between items-start flex-wrap gap-4">
                 <div>
                     <h1 className="text-3xl font-bold mb-2">Assign Matches to Courts</h1>
-                    <p className="text-muted-foreground">Select a court for each match from the dropdown to schedule it.</p>
+                    <p className="text-muted-foreground">Select a court for each match. Drag rows to prioritize the queue.</p>
                 </div>
                  <div className="flex gap-2 flex-wrap">
                     <Button variant="outline" onClick={() => router.push('/dashboard')}>
@@ -581,58 +667,34 @@ export default function SchedulerPage() {
                 </CardHeader>
                 <CardContent>
                     {unassignedMatches.length > 0 ? (
-                        <Table>
-                            <TableHeader>
-                                <TableRow>
-                                    <TableHead>Event</TableHead>
-                                    <TableHead><SortableHeader sortKey="round">Round</SortableHeader></TableHead>
-                                    <TableHead>Match</TableHead>
-                                    <TableHead><SortableHeader sortKey="lastPlayed">Last Played</SortableHeader></TableHead>
-                                    <TableHead>Assign Court</TableHead>
-                                </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                                {unassignedMatches.map((match) => {
-                                    const currentAssignment = assignedMatches[match.id];
-                                    return (
-                                        <TableRow key={match.id} className={currentAssignment ? 'bg-blue-50 dark:bg-blue-900/20' : ''}>
-                                            <TableCell><EventBadge eventType={match.eventType} /></TableCell>
-                                            <TableCell className="font-medium whitespace-nowrap">{getRoundName(match.round || 0, match.eventType, teamCounts[match.eventType])}</TableCell>
-                                            <TableCell>
-                                                <div>
-                                                    <span>{match.team1Name}</span>
-                                                    <p className="text-sm text-muted-foreground">{match.team1OrgName}</p>
-                                                </div>
-                                                <p className="text-muted-foreground my-1">vs</p>
-                                                <div>
-                                                    <span>{match.team2Name}</span>
-                                                    <p className="text-sm text-muted-foreground">{match.team2OrgName}</p>
-                                                </div>
-                                            </TableCell>
-                                            <TableCell className="text-sm text-muted-foreground">
-                                                <div><TimeSince startTime={match.team1LastPlayed ?? null} /></div>
-                                                <div><TimeSince startTime={match.team2LastPlayed ?? null} /></div>
-                                            </TableCell>
-                                            <TableCell>
-                                                 <Select onValueChange={(value) => handleCourtChange(match.id, value)} value={currentAssignment || ''}>
-                                                    <SelectTrigger className="w-[180px]">
-                                                        <SelectValue placeholder="Select Court" />
-                                                    </SelectTrigger>
-                                                    <SelectContent>
-                                                        {currentAssignment && <SelectItem value={currentAssignment}>{currentAssignment}</SelectItem>}
-                                                        {availableCourts.map(court => (
-                                                            <SelectItem key={court.name} value={court.name}>
-                                                                {court.name}
-                                                            </SelectItem>
-                                                        ))}
-                                                    </SelectContent>
-                                                </Select>
-                                            </TableCell>
-                                        </TableRow>
-                                    )
-                                })}
-                            </TableBody>
-                        </Table>
+                        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+                            <Table>
+                                <TableHeader>
+                                    <TableRow>
+                                        <TableHead className="w-12"></TableHead>
+                                        <TableHead>Event</TableHead>
+                                        <TableHead><SortableHeader sortKey="round">Round</SortableHeader></TableHead>
+                                        <TableHead>Match</TableHead>
+                                        <TableHead><SortableHeader sortKey="lastPlayed">Last Played</SortableHeader></TableHead>
+                                        <TableHead>Assign Court</TableHead>
+                                    </TableRow>
+                                </TableHeader>
+                                <SortableContext items={unassignedMatches} strategy={verticalListSortingStrategy}>
+                                    <TableBody>
+                                        {unassignedMatches.map((match) => (
+                                            <SortableMatchRow
+                                                key={match.id}
+                                                match={match}
+                                                teamCounts={teamCounts}
+                                                availableCourts={availableCourts}
+                                                assignedMatches={assignedMatches}
+                                                handleCourtChange={handleCourtChange}
+                                            />
+                                        ))}
+                                    </TableBody>
+                                </SortableContext>
+                            </Table>
+                        </DndContext>
                     ) : (
                          <p className="text-sm text-muted-foreground py-4 text-center">
                             {eventFilter === 'all'
@@ -646,3 +708,4 @@ export default function SchedulerPage() {
         </div>
     );
 }
+
