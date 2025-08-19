@@ -162,16 +162,38 @@ export default function LiveScorerPage() {
     }, [match, router, toast]);
 
     const handleFinalizeClick = () => {
-        if (!match?.live) {
-            setIsFinalizeDialogOpen(true);
+        if (!match) return;
+
+        // Calculate what the final set score would be
+        let potentialT1Sets = team1SetsWon;
+        let potentialT2Sets = team2SetsWon;
+
+        if (match.live && (match.live.team1Points > 0 || match.live.team2Points > 0)) {
+            if (match.live.team1Points > match.live.team2Points) {
+                potentialT1Sets++;
+            } else if (match.live.team2Points > match.live.team1Points) {
+                potentialT2Sets++;
+            }
+        }
+        
+        if (potentialT1Sets === potentialT2Sets) {
+            toast({
+                title: "Cannot Finalize Match",
+                description: "The sets are tied. A clear winner is required to finalize the match.",
+                variant: "destructive"
+            });
             return;
         }
-        const { team1Points, team2Points } = match.live;
-        if (team1Points === team2Points && team1Points > 0) {
-            setIsTieConfirmOpen(true);
-        } else {
-            setIsFinalizeDialogOpen(true);
+
+        if (match.live) {
+            const { team1Points, team2Points } = match.live;
+            if (team1Points === team2Points && team1Points > 0) {
+                setIsTieConfirmOpen(true);
+                return; // Wait for user confirmation
+            }
         }
+        
+        setIsFinalizeDialogOpen(true);
     };
     
     const { team1SetsWon, team2SetsWon } = useMemo(() => {
@@ -332,3 +354,5 @@ function TeamScorePanel({ teamName, points, setsWon, isServing, onPointChange }:
         </div>
     );
 }
+
+    
