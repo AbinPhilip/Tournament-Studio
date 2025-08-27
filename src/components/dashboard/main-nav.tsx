@@ -4,7 +4,7 @@
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { cn } from "@/lib/utils"
-import { LayoutDashboard, ListOrdered, Shield, Cog, Settings, Trophy, Users, Building, GitBranch, MonitorPlay } from "lucide-react"
+import { LayoutDashboard, ListOrdered, Shield, Cog, Settings, Trophy, Users, Building, GitBranch, MonitorPlay, HeartHandshake } from "lucide-react"
 import type { User, UserRole } from "@/types"
 import { useState, useEffect } from "react"
 import { db } from "@/lib/firebase"
@@ -24,6 +24,7 @@ const allNavItems: NavItem[] = [
     { id: "tournament", href: "/dashboard/tournament", label: "Tournament Setup", icon: Cog },
     { id: "organizations", href: "/dashboard/organizations", label: "Organizations", icon: Building },
     { id: "teams", href: "/dashboard/teams", label: "Teams", icon: Users },
+    { id: "sponsors", href: "/dashboard/sponsors", label: "Sponsors", icon: HeartHandshake },
     { id: "scheduler", href: "/dashboard/scheduler", label: "Scheduler", icon: ListOrdered },
     { id: "umpire", href: "/dashboard/umpire", label: "Umpire View", icon: Shield },
     { id: "draw", href: "/dashboard/draw", label: "Tournament Draw", icon: GitBranch },

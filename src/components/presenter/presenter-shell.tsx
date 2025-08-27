@@ -4,9 +4,9 @@
 import { useState, useEffect, useMemo } from 'react';
 import { db } from '@/lib/firebase';
 import { collection, onSnapshot, query, Timestamp, orderBy, limit } from 'firebase/firestore';
-import type { Match, Tournament, Team, TeamType } from '@/types';
+import type { Match, Tournament, Team, TeamType, Sponsor } from '@/types';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, WifiOff, Trophy, Crown, Ticket } from 'lucide-react';
+import { Loader2, WifiOff, Trophy, Crown, Ticket, HeartHandshake } from 'lucide-react';
 import { AnimatePresence, m } from 'framer-motion';
 import { Carousel, CarouselContent, CarouselItem } from "@/components/ui/carousel";
 import Autoplay from "embla-carousel-autoplay";
@@ -383,12 +383,81 @@ const LotteryDrawSlide = ({ teamsWithLots }: { teamsWithLots: Team[] }) => {
     );
 };
 
+const SponsorsSlide = ({ sponsors }: { sponsors: Sponsor[] }) => {
+    const sponsorsWithImages = sponsors.filter(s => s.photoUrl);
+    const sponsorsWithoutImages = sponsors.filter(s => !s.photoUrl);
+
+    if (sponsorsWithImages.length > 0) {
+        return (
+            <m.div
+                className="h-full flex flex-col justify-center p-4 sm:p-6 md:p-8 bg-black/30 rounded-2xl border border-white/20"
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ duration: 0.5 }}
+            >
+                <header className="text-center mb-6" style={{ textShadow: '2px 2px 8px rgba(0,0,0,0.7)' }}>
+                    <h2 className="text-4xl md:text-5xl font-bold text-white font-headline flex items-center justify-center gap-4">
+                        <HeartHandshake className="text-pink-400" />
+                        Our Sponsors
+                    </h2>
+                </header>
+                <main className="flex-grow grid grid-cols-1 md:grid-cols-3 gap-8 items-center justify-items-center">
+                    {sponsorsWithImages.map(sponsor => (
+                        <div key={sponsor.id} className="flex flex-col items-center gap-4">
+                            <div className="w-64 h-32 relative bg-white/90 rounded-lg p-2 flex items-center justify-center">
+                                <Image
+                                    data-ai-hint="company logo"
+                                    src={sponsor.photoUrl!}
+                                    alt={`${sponsor.name} logo`}
+                                    layout="fill"
+                                    className="object-contain"
+                                />
+                            </div>
+                            <p className="text-2xl font-bold text-white font-headline" style={{ textShadow: '1px 1px 4px rgba(0,0,0,0.5)' }}>{sponsor.name}</p>
+                        </div>
+                    ))}
+                </main>
+            </m.div>
+        );
+    }
+
+    if (sponsorsWithoutImages.length > 0) {
+        return (
+             <m.div
+                className="h-full flex flex-col justify-center p-4 sm:p-6 md:p-8 bg-black/30 rounded-2xl border border-white/20"
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ duration: 0.5 }}
+            >
+                <header className="text-center mb-6" style={{ textShadow: '2px 2px 8px rgba(0,0,0,0.7)' }}>
+                    <h2 className="text-4xl md:text-5xl font-bold text-white font-headline flex items-center justify-center gap-4">
+                        <HeartHandshake className="text-pink-400" />
+                        Our Sponsors
+                    </h2>
+                </header>
+                 <main className="flex-grow flex items-center justify-center">
+                    <div className="grid grid-cols-2 md:grid-cols-3 gap-x-12 gap-y-6">
+                        {sponsorsWithoutImages.map(sponsor => (
+                            <p key={sponsor.id} className="text-2xl font-bold text-white text-center font-headline" style={{ textShadow: '1px 1px 4px rgba(0,0,0,0.5)' }}>
+                                {sponsor.name}
+                            </p>
+                        ))}
+                    </div>
+                </main>
+            </m.div>
+        )
+    }
+
+    return null;
+}
+
 
 export function PresenterShell() {
   const { toast } = useToast();
   const [matches, setMatches] = useState<Match[]>([]);
   const [teams, setTeams] = useState<Team[]>([]);
   const [organizations, setOrganizations] = useState<Organization[]>([]);
+  const [sponsors, setSponsors] = useState<Sponsor[]>([]);
   const [tournament, setTournament] = useState<Tournament | null>(null);
   const [teamCounts, setTeamCounts] = useState<Record<TeamType, number>>({});
   const [isLoading, setIsLoading] = useState(true);
@@ -398,6 +467,7 @@ export function PresenterShell() {
     const tournamentQuery = query(collection(db, 'tournaments'));
     const teamsQuery = query(collection(db, 'teams'));
     const orgsQuery = query(collection(db, 'organizations'));
+    const sponsorsQuery = query(collection(db, 'sponsors'));
 
     const unsubscribeMatches = onSnapshot(matchesQuery, (snapshot) => {
       const matchesData = snapshot.docs.map(doc => {
@@ -445,12 +515,18 @@ export function PresenterShell() {
         setOrganizations(orgData);
     });
 
+    const unsubscribeSponsors = onSnapshot(sponsorsQuery, (snapshot) => {
+        const sponsorData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Sponsor));
+        setSponsors(sponsorData);
+    });
+
 
     return () => {
       unsubscribeMatches();
       unsubscribeTournament();
       unsubscribeTeams();
       unsubscribeOrgs();
+      unsubscribeSponsors();
     };
   }, [toast]);
 
@@ -460,7 +536,6 @@ export function PresenterShell() {
     const scheduledFixtures = matches.filter(m => m.status === 'SCHEDULED' && m.courtName).sort((a, b) => (a.startTime as any) - (b.startTime as any));
     const unassignedFixtures = matches.filter(m => m.status === 'PENDING').sort((a, b) => (a.round || 0) - (b.round || 0));
     
-    // Filter out BYE matches from results
     const allCompleted = matches.filter(m => m.status === 'COMPLETED' && m.winnerId && m.team2Id !== 'BYE').sort((a, b) => (b.lastUpdateTime?.getTime() || 0) - (a.lastUpdateTime?.getTime() || 0));
     
     const orgMap = new Map(organizations.map(o => [o.id, o.name]));
@@ -468,51 +543,58 @@ export function PresenterShell() {
         .filter(t => t.lotNumber)
         .map(t => ({...t, organizationId: orgMap.get(t.organizationId) || t.organizationId }));
     
-    // Show winner slide for matches completed in the last 5 minutes
     const recentWinners = allCompleted.filter(m => m.lastUpdateTime && (now - m.lastUpdateTime.getTime()) < 5 * 60 * 1000);
     const olderCompleted = allCompleted.slice(0, 8);
     
     const slideComponents = [];
 
-    // 1. Welcome slide
     slideComponents.push(<CarouselItem key="welcome"><WelcomeSlide tournament={tournament} /></CarouselItem>);
     
-    // 2. Lottery Draw slide if tournament is pending and lots are assigned
     if (tournament?.status === 'PENDING' && teamsWithLots.length > 0) {
         slideComponents.push(<CarouselItem key="lottery-draw"><LotteryDrawSlide teamsWithLots={teamsWithLots} /></CarouselItem>);
     }
 
-    // 3. Unassigned Fixtures
-    const CHUNK_SIZE = 6;
-    for (let i = 0; i < unassignedFixtures.length; i += CHUNK_SIZE) {
-        const chunk = unassignedFixtures.slice(i, i + CHUNK_SIZE);
+    const SPONSOR_CHUNK_SIZE = 3;
+    const sponsorsWithImages = sponsors.filter(s => s.photoUrl);
+    if (sponsorsWithImages.length > 0) {
+        for (let i = 0; i < sponsorsWithImages.length; i += SPONSOR_CHUNK_SIZE) {
+            const chunk = sponsorsWithImages.slice(i, i + SPONSOR_CHUNK_SIZE);
+            slideComponents.push(
+                <CarouselItem key={`sponsor-chunk-${i}`}><SponsorsSlide sponsors={chunk} /></CarouselItem>
+            );
+        }
+    } else if (sponsors.length > 0) {
+        slideComponents.push(
+            <CarouselItem key="sponsor-list"><SponsorsSlide sponsors={sponsors} /></CarouselItem>
+        );
+    }
+
+    const UNASSIGNED_CHUNK_SIZE = 6;
+    for (let i = 0; i < unassignedFixtures.length; i += UNASSIGNED_CHUNK_SIZE) {
+        const chunk = unassignedFixtures.slice(i, i + UNASSIGNED_CHUNK_SIZE);
         slideComponents.push(
             <CarouselItem key={`unassigned-chunk-${i}`}><UnassignedFixtureSlide matches={chunk} teamCounts={teamCounts} /></CarouselItem>
         );
     }
 
-    // 4. Recent Winner slides
     recentWinners.forEach(match => slideComponents.push(
         <CarouselItem key={`winner-${match.id}`}><WinnerSlide match={match} /></CarouselItem>
     ));
 
-    // 5. Live matches
     liveMatches.forEach(match => slideComponents.push(
         <CarouselItem key={match.id}><LiveMatchSlide match={match} teamCounts={teamCounts}/></CarouselItem>
     ));
     
-    // 6. Scheduled fixtures
     scheduledFixtures.forEach(match => slideComponents.push(
         <CarouselItem key={match.id}><FixtureSlide match={match} teamCounts={teamCounts} /></CarouselItem>
     ));
     
-    // 7. Completed matches table
     if (olderCompleted.length > 0) {
         slideComponents.push(<CarouselItem key="completed"><CompletedMatchesSlide matches={olderCompleted} teamCounts={teamCounts} /></CarouselItem>);
     }
     
     return slideComponents;
-  }, [matches, tournament, teams, organizations, teamCounts]);
+  }, [matches, tournament, teams, organizations, teamCounts, sponsors]);
   
   if (isLoading) {
     return (

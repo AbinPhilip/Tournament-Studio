@@ -43,6 +43,12 @@ export interface Team {
     lotNumber?: number;
 }
 
+export interface Sponsor {
+  id: string;
+  name: string;
+  photoUrl?: string;
+}
+
 export type TournamentType = 'round-robin' | 'knockout';
 export type TournamentStatus = 'PENDING' | 'IN_PROGRESS' | 'COMPLETED';
 
@@ -95,10 +101,3 @@ export interface Match {
     team2LastPlayed?: number | null;
     restingPlayers?: string[];
 }
-
-
-    
-
-    
-
-    

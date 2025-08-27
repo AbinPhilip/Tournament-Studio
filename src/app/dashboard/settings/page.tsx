@@ -18,7 +18,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import type { User, UserRole } from '@/types';
 import { useAuth } from '@/hooks/use-auth';
-import { MoreHorizontal, Trash2, UserPlus, Edit, CheckCircle, ArrowLeft, Database, Loader2, Save, GitBranch, Trophy, Users, Building, ListOrdered, Shield, Cog, LayoutDashboard, Settings, MonitorPlay } from 'lucide-react';
+import { MoreHorizontal, Trash2, UserPlus, Edit, CheckCircle, ArrowLeft, Database, Loader2, Save, GitBranch, Trophy, Users, Building, ListOrdered, Shield, Cog, LayoutDashboard, Settings, MonitorPlay, HeartHandshake } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -99,6 +99,7 @@ const appModules = [
     { id: 'tournament', label: 'Tournament Setup', icon: Cog },
     { id: 'organizations', label: 'Organizations', icon: Building },
     { id: 'teams', label: 'Teams', icon: Users },
+    { id: 'sponsors', label: 'Sponsors', icon: HeartHandshake },
     { id: 'scheduler', label: 'Scheduler', icon: ListOrdered },
     { id: 'umpire', label: 'Umpire View', icon: Shield },
     { id: 'draw', label: 'Tournament Draw', icon: GitBranch },
@@ -252,7 +253,7 @@ export default function SettingsPage() {
     try {
       const batch = writeBatch(db);
       
-      const collectionsToDelete = ['users', 'organizations', 'teams', 'matches', 'tournaments'];
+      const collectionsToDelete = ['users', 'organizations', 'teams', 'matches', 'tournaments', 'sponsors'];
       for (const collectionName of collectionsToDelete) {
           const snapshot = await getDocs(collection(db, collectionName));
           snapshot.forEach(doc => batch.delete(doc.ref));
