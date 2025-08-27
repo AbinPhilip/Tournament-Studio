@@ -44,7 +44,7 @@ export function MainNav({ user, isMobile = false, isCollapsed = false }: { user:
     const allModuleIds = allNavItems.map(m => m.id);
     const defaultPerms: RolePermissions = {
         super: allModuleIds,
-        admin: allModuleIds,
+        admin: allModuleIds.filter(id => id !== 'settings'), // Admin can't change permissions
         update: ['dashboard', 'umpire', 'draw', 'match-history', 'presenter'],
         inquiry: ['dashboard', 'draw', 'match-history', 'presenter'],
         individual: ['dashboard', 'draw', 'match-history', 'presenter'],
