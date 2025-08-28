@@ -679,7 +679,7 @@ export function PresenterShell() {
   }
   
   return (
-    <div className="h-screen w-screen bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-gray-900 via-black to-black font-sans flex flex-col p-4 relative">
+    <div className="h-screen w-screen bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-[#002366] via-[#00173D] to-black font-sans flex flex-col p-4 relative">
        {slides.length <= 1 && slides[0]?.key === 'welcome' ? (
             <WelcomeSlide tournament={tournament} />
         ) : (
