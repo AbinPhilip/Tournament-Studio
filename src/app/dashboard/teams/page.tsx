@@ -27,7 +27,7 @@ import { MoreHorizontal, Trash2, Edit, CheckCircle, Users, ArrowUpDown, Loader2 
 import { useToast } from '@/hooks/use-toast';
 import { db, storage } from '@/lib/firebase';
 import { collection, doc, getDocs, updateDoc, addDoc, deleteDoc, query, where, onSnapshot } from 'firebase/firestore';
-import type { Team, Organization } from '@/types';
+import type { Team, Organization, TeamType } from '@/types';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -241,6 +241,7 @@ export default function TeamsPage() {
   const [isSuccessModalOpen, setIsSuccessModalOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [sortConfig, setSortConfig] = useState<{ key: keyof Team | 'organizationName'; direction: 'ascending' | 'descending' } | null>(null);
+  const [eventFilter, setEventFilter] = useState<TeamType | 'all'>('all');
 
   const teamForm = useForm<z.infer<typeof teamFormSchema>>({
     resolver: zodResolver(teamFormSchema),
@@ -536,6 +537,14 @@ export default function TeamsPage() {
     }
     return sortableTeams;
   }, [teams, sortConfig, getOrgName]);
+  
+  const filteredAndSortedTeams = useMemo(() => {
+    if (eventFilter === 'all') {
+      return sortedTeams;
+    }
+    return sortedTeams.filter(team => team.type === eventFilter);
+  }, [sortedTeams, eventFilter]);
+
 
   const requestSort = (key: keyof Team | 'organizationName') => {
     let direction: 'ascending' | 'descending' = 'ascending';
@@ -551,35 +560,51 @@ export default function TeamsPage() {
         <ArrowUpDown className="ml-2 h-4 w-4" />
     </Button>
   );
+  
+  const eventTypes: TeamType[] = ['singles', 'mens_doubles', 'womens_doubles', 'mixed_doubles'];
+
 
   return (
     <div className="space-y-8 p-4 md:p-8">
       <Card>
-          <CardHeader className="flex flex-row items-center justify-between">
+          <CardHeader className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
             <div>
               <CardTitle>Team Management</CardTitle>
               <CardDescription>Register and manage teams. Assign lot numbers before starting the tournament.</CardDescription>
             </div>
-            <Dialog open={isAddTeamOpen} onOpenChange={setIsAddTeamOpen}>
-              <DialogTrigger asChild>
-                <Button onClick={() => teamForm.reset()}><Users className="mr-2 h-4 w-4" />Register Team</Button>
-              </DialogTrigger>
-              <DialogContent className="sm:max-w-[425px] max-h-[90vh] overflow-y-auto">
-                <DialogHeader>
-                  <DialogTitle>Register New Team</DialogTitle>
-                </DialogHeader>
-                <TeamForm
-                    form={teamForm}
-                    onSubmit={handleTeamSubmit}
-                    isSubmitting={isSubmitting}
-                    organizations={organizations}
-                    playersByOrg={playersByOrg}
-                    photoPreview={photoPreview}
-                    handlePhotoChange={handlePhotoChange}
-                    fileInputRef={fileInputRef}
-                />
-              </DialogContent>
-            </Dialog>
+             <div className="flex flex-col-reverse sm:flex-row gap-2 items-center">
+                 <Select value={eventFilter} onValueChange={(value) => setEventFilter(value as TeamType | 'all')}>
+                    <SelectTrigger className="w-full sm:w-[200px]">
+                        <SelectValue placeholder="Filter by event" />
+                    </SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="all">All Events</SelectItem>
+                        {eventTypes.map(event => (
+                            <SelectItem key={event} value={event} className="capitalize">{event.replace(/_/g, ' ')}</SelectItem>
+                        ))}
+                    </SelectContent>
+                </Select>
+                <Dialog open={isAddTeamOpen} onOpenChange={setIsAddTeamOpen}>
+                  <DialogTrigger asChild>
+                    <Button onClick={() => teamForm.reset()} className="w-full sm:w-auto"><Users className="mr-2 h-4 w-4" />Register Team</Button>
+                  </DialogTrigger>
+                  <DialogContent className="sm:max-w-[425px] max-h-[90vh] overflow-y-auto">
+                    <DialogHeader>
+                      <DialogTitle>Register New Team</DialogTitle>
+                    </DialogHeader>
+                    <TeamForm
+                        form={teamForm}
+                        onSubmit={handleTeamSubmit}
+                        isSubmitting={isSubmitting}
+                        organizations={organizations}
+                        playersByOrg={playersByOrg}
+                        photoPreview={photoPreview}
+                        handlePhotoChange={handlePhotoChange}
+                        fileInputRef={fileInputRef}
+                    />
+                  </DialogContent>
+                </Dialog>
+            </div>
           </CardHeader>
           <CardContent>
              {isLoading ? (
@@ -599,7 +624,7 @@ export default function TeamsPage() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {sortedTeams.map((t) => (
+                    {filteredAndSortedTeams.map((t) => (
                       <TableRow key={t.id}>
                         <TableCell>
                           <Input type="number" className="w-20" defaultValue={t.lotNumber ?? ''}
@@ -686,5 +711,3 @@ export default function TeamsPage() {
     </div>
   );
 }
-
-    
