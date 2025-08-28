@@ -297,7 +297,7 @@ const LotteryDrawSlide = ({ teamsWithLots }: { teamsWithLots: Team[] }) => {
         }));
     }, [teamsWithLots]);
 
-    const currentEvent = teamsByEvent[eventIndex];
+    const currentEvent = teamsByEvent.length > 0 ? teamsByEvent[eventIndex] : null;
 
     useEffect(() => {
         if (!currentEvent) return;
