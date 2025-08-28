@@ -134,45 +134,43 @@ export default function SponsorsPage() {
   const handleFormSubmit = async (values: z.infer<typeof sponsorFormSchema>) => {
     setIsSubmitting(true);
     try {
-        let finalPhotoUrl = sponsorToEdit?.photoUrl || '';
-        let finalPhotoPath = sponsorToEdit?.photoPath || '';
+        let submissionData = { ...values };
         const file = fileInputRef.current?.files?.[0];
 
-        if (file) { // A new file has been selected for upload
-            // Upload the new logo first
+        if (file) { // A new file has been selected
             const uploadResult = await handlePhotoUpload(file);
-            if (uploadResult) {
-                // If there was an old logo, try to delete it from storage *after* the new one is uploaded.
-                if (sponsorToEdit?.photoPath) {
-                    try {
-                        const oldLogoRef = ref(storage, sponsorToEdit.photoPath);
-                        await deleteObject(oldLogoRef);
-                    } catch (e: any) {
-                        // Log a warning if deletion fails, but don't block the update.
-                        if (e.code !== 'storage/object-not-found') {
-                            console.warn("Could not delete old logo, but proceeding with update:", e);
-                        }
-                    }
-                }
-                finalPhotoUrl = uploadResult.downloadUrl;
-                finalPhotoPath = uploadResult.photoPath;
-            } else {
-                // If upload fails, don't proceed with the form submission
+            if (!uploadResult) { // Handle upload failure
                 setIsSubmitting(false);
                 return;
             }
-        }
-        
-        const sponsorData = { name: values.name, photoUrl: finalPhotoUrl, photoPath: finalPhotoPath };
 
-        if (sponsorToEdit) {
+            // If we are editing and there was an old photo path, delete the old one.
+            if (sponsorToEdit?.photoPath) {
+                try {
+                    const oldLogoRef = ref(storage, sponsorToEdit.photoPath);
+                    await deleteObject(oldLogoRef);
+                } catch (e: any) {
+                    if (e.code !== 'storage/object-not-found') {
+                        console.warn("Could not delete old logo:", e);
+                    }
+                }
+            }
+            submissionData.photoUrl = uploadResult.downloadUrl;
+            submissionData.photoPath = uploadResult.photoPath;
+        }
+
+        const { photoPath, ...dataToSave } = submissionData;
+        const finalData = { ...dataToSave, photoPath: photoPath || null };
+
+        if (sponsorToEdit) { // Editing an existing sponsor
             const sponsorRef = doc(db, 'sponsors', sponsorToEdit.id);
-            await updateDoc(sponsorRef, sponsorData);
+            await updateDoc(sponsorRef, finalData);
             toast({ title: 'Sponsor Updated', description: `Details for "${values.name}" have been updated.` });
-        } else {
-            await addDoc(collection(db, 'sponsors'), sponsorData);
+        } else { // Adding a new sponsor
+            await addDoc(collection(db, 'sponsors'), finalData);
             toast({ title: 'Sponsor Added', description: `Sponsor "${values.name}" has been added.` });
         }
+        
         handleCloseForm();
     } catch (error) {
         console.error("Error submitting sponsor:", error);
