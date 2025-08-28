@@ -1,10 +1,46 @@
+
 rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Allow read/write access to all documents for any signed-in user.
-    // This is not recommended for production apps, but is useful for development.
+    
+    // Default deny all
     match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Allow public read access for presenter view data
+    match /tournaments/{docId} {
+      allow read: if true;
+      allow write: if request.auth != null;
+    }
+
+    match /matches/{docId} {
+      allow read: if true;
+      allow write: if request.auth != null;
+    }
+
+    match /teams/{docId} {
+      allow read: if true;
+      allow write: if request.auth != null;
+    }
+    
+    match /organizations/{docId} {
+      allow read: if true;
+      allow write: if request.auth != null;
+    }
+
+    match /sponsors/{docId} {
+      allow read: if true;
+      allow write: if request.auth != null;
+    }
+    
+    // Allow authenticated users to manage their own data and app data
+    match /users/{userId} {
+      allow read, write: if request.auth != null;
+    }
+
+    match /rolePermissions/{role} {
       allow read, write: if request.auth != null;
     }
   }

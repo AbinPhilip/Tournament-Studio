@@ -20,7 +20,7 @@ export default function DashboardLayout({
   const [isCollapsed, setIsCollapsed] = useState(false);
 
 
-  const isPublicPage = pathname === '/dashboard/seed-database' || pathname === '/presenter';
+  const isPublicPage = pathname === '/dashboard/seed-database';
 
   useEffect(() => {
     if (!loading && !user && !isPublicPage) {
@@ -35,18 +35,16 @@ export default function DashboardLayout({
       </div>
     );
   }
-
-  if (isPublicPage) {
-    return <>{children}</>;
-  }
   
-  if (!user) {
+  if (!user && !isPublicPage) {
      return (
       <div className="flex h-screen w-full items-center justify-center bg-background">
         <Loader2 className="h-12 w-12 animate-spin text-primary" />
       </div>
     );
   }
+
+  if(!user) return <>{children}</>;
 
   const isCourtUmpire = user.role === 'court';
 
