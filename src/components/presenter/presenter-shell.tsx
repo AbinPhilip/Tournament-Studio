@@ -625,7 +625,13 @@ export function PresenterShell() {
         
         const allCompleted = matches.filter(m => m.status === 'COMPLETED' && m.winnerId && m.team2Id !== 'BYE').sort((a, b) => (b.lastUpdateTime?.getTime() || 0) - (a.lastUpdateTime?.getTime() || 0));
         const recentWinners = allCompleted.filter(m => m.lastUpdateTime && (now - m.lastUpdateTime.getTime()) < 5 * 60 * 1000);
-        const olderCompleted = allCompleted.slice(0, 5);
+        
+        const COMPLETED_CHUNK_SIZE = 5;
+        const olderCompletedChunks = [];
+        const olderCompleted = allCompleted.filter(m => !recentWinners.find(rw => rw.id === m.id));
+        for (let i = 0; i < olderCompleted.length; i += COMPLETED_CHUNK_SIZE) {
+            olderCompletedChunks.push(olderCompleted.slice(i, i + COMPLETED_CHUNK_SIZE));
+        }
 
         const UNASSIGNED_CHUNK_SIZE = 6;
         for (let i = 0; i < unassignedFixtures.length; i += UNASSIGNED_CHUNK_SIZE) {
@@ -647,9 +653,11 @@ export function PresenterShell() {
             <CarouselItem key={`fixture-${match.id}`}><FixtureSlide match={match} teamCounts={teamCounts} /></CarouselItem>
         ));
         
-        if (olderCompleted.length > 0) {
-            slideComponents.push(<CarouselItem key="completed"><CompletedMatchesSlide matches={olderCompleted} teamCounts={teamCounts} /></CarouselItem>);
-        }
+        olderCompletedChunks.forEach((chunk, index) => {
+            if (chunk.length > 0) {
+                 slideComponents.push(<CarouselItem key={`completed-chunk-${index}`}><CompletedMatchesSlide matches={chunk} teamCounts={teamCounts} /></CarouselItem>);
+            }
+        });
     }
     
     // Fallback to just the welcome slide if no other slides are generated
@@ -679,7 +687,7 @@ export function PresenterShell() {
   }
   
   return (
-    <div className="h-screen w-screen bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-[#002366] via-[#00173D] to-black font-sans flex flex-col p-4 relative">
+    <div className="h-screen w-screen bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-blue-950 via-blue-950 to-black font-sans flex flex-col p-4 relative">
        {slides.length <= 1 && slides[0]?.key === 'welcome' ? (
             <WelcomeSlide tournament={tournament} />
         ) : (
@@ -696,3 +704,5 @@ export function PresenterShell() {
     </div>
   );
 }
+
+    
