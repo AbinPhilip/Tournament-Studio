@@ -139,14 +139,16 @@ export default function SponsorsPage() {
 
         // A new file has been selected for upload
         if (file && photoPreview && photoPreview.startsWith('blob:')) {
-            // If there was an old logo, delete it from storage
+            // If there was an old logo, try to delete it from storage
             if (sponsorToEdit?.photoPath) {
                 try {
                     const oldLogoRef = ref(storage, sponsorToEdit.photoPath);
                     await deleteObject(oldLogoRef);
                 } catch (e: any) {
+                    // Log a warning if deletion fails, but don't block the upload.
+                    // This handles cases where the file might have been deleted manually.
                     if (e.code !== 'storage/object-not-found') {
-                      console.warn("Old logo deletion failed:", e);
+                        console.warn("Could not delete old logo, but proceeding with upload:", e);
                     }
                 }
             }
@@ -328,3 +330,5 @@ export default function SponsorsPage() {
     </div>
   );
 }
+
+    
