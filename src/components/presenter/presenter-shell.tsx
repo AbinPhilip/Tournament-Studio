@@ -571,32 +571,27 @@ export function PresenterShell() {
 
   const slides = useMemo(() => {
     const now = Date.now();
-    const liveMatches = matches.filter(m => m.status === 'IN_PROGRESS' && m.courtName).sort((a,b) => (a.courtName || '').localeCompare(b.courtName || ''));
-    const scheduledFixtures = matches.filter(m => m.status === 'SCHEDULED' && m.courtName).sort((a, b) => (a.startTime as any) - (b.startTime as any));
-    const unassignedFixtures = matches.filter(m => m.status === 'PENDING').sort((a, b) => (a.round || 0) - (b.round || 0));
-    
-    const allCompleted = matches.filter(m => m.status === 'COMPLETED' && m.winnerId && m.team2Id !== 'BYE').sort((a, b) => (b.lastUpdateTime?.getTime() || 0) - (a.lastUpdateTime?.getTime() || 0));
-    
-    const orgMap = new Map(organizations.map(o => [o.id, o.name]));
-    const teamsWithLots = teams
-        .filter(t => t.lotNumber)
-        .map(t => ({...t, organizationId: orgMap.get(t.organizationId) || t.organizationId }));
-    
-    const recentWinners = allCompleted.filter(m => m.lastUpdateTime && (now - m.lastUpdateTime.getTime()) < 5 * 60 * 1000);
-    const olderCompleted = allCompleted.slice(0, 5);
-    
     const slideComponents = [];
 
+    // Always show the welcome slide first.
     slideComponents.push(<CarouselItem key="welcome"><WelcomeSlide tournament={tournament} /></CarouselItem>);
-    
-    if (tournament?.status === 'PENDING' && tournament.date && tournament.date.getTime() > now) {
-        slideComponents.push(<CarouselItem key="countdown"><CountdownSlide tournament={tournament} /></CarouselItem>);
+
+    // Pre-tournament slides
+    if (tournament?.status === 'PENDING') {
+        if (tournament.date && tournament.date.getTime() > now) {
+            slideComponents.push(<CarouselItem key="countdown"><CountdownSlide tournament={tournament} /></CarouselItem>);
+        }
+
+        const orgMap = new Map(organizations.map(o => [o.id, o.name]));
+        const teamsWithLots = teams
+            .filter(t => t.lotNumber)
+            .map(t => ({...t, organizationId: orgMap.get(t.organizationId) || t.organizationId }));
+        if (teamsWithLots.length > 0) {
+            slideComponents.push(<CarouselItem key="lottery-draw"><LotteryDrawSlide teamsWithLots={teamsWithLots} /></CarouselItem>);
+        }
     }
 
-    if (tournament?.status === 'PENDING' && teamsWithLots.length > 0) {
-        slideComponents.push(<CarouselItem key="lottery-draw"><LotteryDrawSlide teamsWithLots={teamsWithLots} /></CarouselItem>);
-    }
-
+    // Sponsors are shown anytime after tournament is created
     const sponsorsWithImages = sponsors.filter(s => s.photoUrl);
     const SPONSOR_CHUNK_SIZE_IMG = 3;
     if (sponsorsWithImages.length > 0) {
@@ -618,30 +613,46 @@ export function PresenterShell() {
         }
     }
 
-    const UNASSIGNED_CHUNK_SIZE = 6;
-    for (let i = 0; i < unassignedFixtures.length; i += UNASSIGNED_CHUNK_SIZE) {
-        const chunk = unassignedFixtures.slice(i, i + UNASSIGNED_CHUNK_SIZE);
-        slideComponents.push(
-            <CarouselItem key={`unassigned-chunk-${i}`}><UnassignedFixtureSlide matches={chunk} teamCounts={teamCounts} /></CarouselItem>
-        );
+    // Slides for active or completed tournaments
+    if (tournament?.status === 'IN_PROGRESS' || tournament?.status === 'COMPLETED') {
+        const liveMatches = matches.filter(m => m.status === 'IN_PROGRESS' && m.courtName).sort((a,b) => (a.courtName || '').localeCompare(b.courtName || ''));
+        const scheduledFixtures = matches.filter(m => m.status === 'SCHEDULED' && m.courtName).sort((a, b) => (a.startTime as any) - (b.startTime as any));
+        const unassignedFixtures = matches.filter(m => m.status === 'PENDING').sort((a, b) => (a.round || 0) - (b.round || 0));
+        
+        const allCompleted = matches.filter(m => m.status === 'COMPLETED' && m.winnerId && m.team2Id !== 'BYE').sort((a, b) => (b.lastUpdateTime?.getTime() || 0) - (a.lastUpdateTime?.getTime() || 0));
+        const recentWinners = allCompleted.filter(m => m.lastUpdateTime && (now - m.lastUpdateTime.getTime()) < 5 * 60 * 1000);
+        const olderCompleted = allCompleted.slice(0, 5);
+
+        const UNASSIGNED_CHUNK_SIZE = 6;
+        for (let i = 0; i < unassignedFixtures.length; i += UNASSIGNED_CHUNK_SIZE) {
+            const chunk = unassignedFixtures.slice(i, i + UNASSIGNED_CHUNK_SIZE);
+            slideComponents.push(
+                <CarouselItem key={`unassigned-chunk-${i}`}><UnassignedFixtureSlide matches={chunk} teamCounts={teamCounts} /></CarouselItem>
+            );
+        }
+
+        recentWinners.forEach(match => slideComponents.push(
+            <CarouselItem key={`winner-${match.id}`}><WinnerSlide match={match} /></CarouselItem>
+        ));
+
+        liveMatches.forEach(match => slideComponents.push(
+            <CarouselItem key={`live-${match.id}`}><LiveMatchSlide match={match} teamCounts={teamCounts}/></CarouselItem>
+        ));
+        
+        scheduledFixtures.forEach(match => slideComponents.push(
+            <CarouselItem key={`fixture-${match.id}`}><FixtureSlide match={match} teamCounts={teamCounts} /></CarouselItem>
+        ));
+        
+        if (olderCompleted.length > 0) {
+            slideComponents.push(<CarouselItem key="completed"><CompletedMatchesSlide matches={olderCompleted} teamCounts={teamCounts} /></CarouselItem>);
+        }
+    }
+    
+    // Fallback to just the welcome slide if no other slides are generated
+    if (slideComponents.length <= 1) {
+        return [<CarouselItem key="welcome"><WelcomeSlide tournament={tournament} /></CarouselItem>];
     }
 
-    recentWinners.forEach(match => slideComponents.push(
-        <CarouselItem key={`winner-${match.id}`}><WinnerSlide match={match} /></CarouselItem>
-    ));
-
-    liveMatches.forEach(match => slideComponents.push(
-        <CarouselItem key={match.id}><LiveMatchSlide match={match} teamCounts={teamCounts}/></CarouselItem>
-    ));
-    
-    scheduledFixtures.forEach(match => slideComponents.push(
-        <CarouselItem key={match.id}><FixtureSlide match={match} teamCounts={teamCounts} /></CarouselItem>
-    ));
-    
-    if (olderCompleted.length > 0) {
-        slideComponents.push(<CarouselItem key="completed"><CompletedMatchesSlide matches={olderCompleted} teamCounts={teamCounts} /></CarouselItem>);
-    }
-    
     return slideComponents;
   }, [matches, tournament, teams, organizations, teamCounts, sponsors]);
   
@@ -665,7 +676,7 @@ export function PresenterShell() {
   
   return (
     <div className="h-screen w-screen bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-gray-900 via-black to-black font-sans flex flex-col p-4 relative">
-       {slides.length <= 1 ? ( // Only welcome slide exists
+       {slides.length <= 1 && slides[0]?.key === 'welcome' ? (
             <WelcomeSlide tournament={tournament} />
         ) : (
              <Carousel 
