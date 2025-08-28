@@ -6,7 +6,7 @@ import { db } from '@/lib/firebase';
 import { collection, onSnapshot, query, Timestamp, orderBy, limit } from 'firebase/firestore';
 import type { Match, Tournament, Team, TeamType, Sponsor } from '@/types';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, WifiOff, Trophy, Crown, Ticket, HeartHandshake } from 'lucide-react';
+import { Loader2, WifiOff, Trophy, Crown, Ticket, HeartHandshake, Clock } from 'lucide-react';
 import { AnimatePresence, m } from 'framer-motion';
 import { Carousel, CarouselContent, CarouselItem } from "@/components/ui/carousel";
 import Autoplay from "embla-carousel-autoplay";
@@ -435,7 +435,60 @@ const SponsorsSlide = ({ sponsors }: { sponsors: Sponsor[] }) => {
     }
 
     return null;
-}
+};
+
+const CountdownSlide = ({ tournament }: { tournament: Tournament }) => {
+    const [timeLeft, setTimeLeft] = useState(tournament.date.getTime() - Date.now());
+
+    useEffect(() => {
+        const interval = setInterval(() => {
+            const newTimeLeft = tournament.date.getTime() - Date.now();
+            if (newTimeLeft <= 0) {
+                setTimeLeft(0);
+                clearInterval(interval);
+            } else {
+                setTimeLeft(newTimeLeft);
+            }
+        }, 1000);
+        return () => clearInterval(interval);
+    }, [tournament.date]);
+    
+    const TimeBox = ({ value, label }: { value: number, label: string }) => (
+        <div className="flex flex-col items-center justify-center bg-white/10 p-4 sm:p-6 rounded-2xl w-24 h-24 sm:w-32 sm:h-32 md:w-40 md:h-40">
+            <span className="text-4xl sm:text-5xl md:text-6xl font-black text-white font-headline" style={{ textShadow: '2px 2px 8px rgba(0,0,0,0.7)' }}>{value.toString().padStart(2, '0')}</span>
+            <span className="text-sm sm:text-base md:text-lg text-slate-300 font-headline mt-1">{label}</span>
+        </div>
+    );
+
+    if (timeLeft <= 0) return null;
+
+    const days = Math.floor(timeLeft / (1000 * 60 * 60 * 24));
+    const hours = Math.floor((timeLeft % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+    const minutes = Math.floor((timeLeft % (1000 * 60 * 60)) / (1000 * 60));
+    const seconds = Math.floor((timeLeft % (1000 * 60)) / 1000);
+
+    return (
+        <m.div
+            className="h-full flex flex-col justify-center items-center p-4 sm:p-8 text-white text-center bg-black/30 rounded-2xl border border-white/20"
+            initial={{opacity: 0, scale: 0.95}}
+            animate={{opacity: 1, scale: 1}}
+            transition={{duration: 0.5}}
+        >
+            <header className="text-center mb-6 sm:mb-10" style={{ textShadow: '2px 2px 8px rgba(0,0,0,0.7)' }}>
+                <h2 className="text-3xl sm:text-4xl md:text-5xl font-bold text-white font-headline flex items-center justify-center gap-4">
+                    <Clock className="text-yellow-400" />
+                    Tournament Countdown
+                </h2>
+            </header>
+            <main className="flex items-center justify-center gap-2 sm:gap-4 md:gap-8">
+                <TimeBox value={days} label="Days" />
+                <TimeBox value={hours} label="Hours" />
+                <TimeBox value={minutes} label="Minutes" />
+                <TimeBox value={seconds} label="Seconds" />
+            </main>
+        </m.div>
+    );
+};
 
 
 export function PresenterShell() {
@@ -536,6 +589,10 @@ export function PresenterShell() {
 
     slideComponents.push(<CarouselItem key="welcome"><WelcomeSlide tournament={tournament} /></CarouselItem>);
     
+    if (tournament?.status === 'PENDING' && tournament.date && tournament.date.getTime() > now) {
+        slideComponents.push(<CarouselItem key="countdown"><CountdownSlide tournament={tournament} /></CarouselItem>);
+    }
+
     if (tournament?.status === 'PENDING' && teamsWithLots.length > 0) {
         slideComponents.push(<CarouselItem key="lottery-draw"><LotteryDrawSlide teamsWithLots={teamsWithLots} /></CarouselItem>);
     }
@@ -624,4 +681,3 @@ export function PresenterShell() {
     </div>
   );
 }
-
