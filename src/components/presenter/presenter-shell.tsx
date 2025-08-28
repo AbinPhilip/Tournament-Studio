@@ -1,14 +1,14 @@
 
 "use client";
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { db } from '@/lib/firebase';
 import { collection, onSnapshot, query, Timestamp, orderBy, limit } from 'firebase/firestore';
 import type { Match, Tournament, Team, TeamType, Sponsor } from '@/types';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2, WifiOff, Trophy, Crown, Ticket, HeartHandshake, Clock } from 'lucide-react';
 import { AnimatePresence, m } from 'framer-motion';
-import { Carousel, CarouselContent, CarouselItem } from "@/components/ui/carousel";
+import { Carousel, CarouselApi, CarouselContent, CarouselItem } from "@/components/ui/carousel";
 import Autoplay from "embla-carousel-autoplay";
 import { getRoundName } from '@/lib/utils';
 import { EventBadge } from '../ui/event-badge';
@@ -275,7 +275,7 @@ const WinnerSlide = ({ match }: { match: Match }) => {
     );
 };
 
-const LotteryDrawSlide = ({ teamsWithLots }: { teamsWithLots: Team[] }) => {
+const LotteryDrawSlide = ({ teamsWithLots, onComplete }: { teamsWithLots: Team[], onComplete: () => void }) => {
     const [revealedCount, setRevealedCount] = useState(0);
     const [eventIndex, setEventIndex] = useState(0);
 
@@ -309,18 +309,27 @@ const LotteryDrawSlide = ({ teamsWithLots }: { teamsWithLots: Team[] }) => {
             setRevealedCount(prev => {
                 if (prev < currentEvent.teams.length) {
                     return prev + 1;
-                } else {
-                    // Move to next event after a pause
-                    setTimeout(() => {
-                        setEventIndex(i => (i + 1) % teamsByEvent.length);
-                    }, 3000); 
-                    return prev;
                 }
+                
+                // All teams for the current event are revealed
+                clearInterval(interval);
+                
+                // If there are more events, move to the next one
+                if (eventIndex < teamsByEvent.length - 1) {
+                    setTimeout(() => {
+                        setEventIndex(i => i + 1);
+                    }, 3000); // Pause before switching event
+                } else {
+                    // This was the last event
+                    onComplete();
+                }
+                
+                return prev;
             });
-        }, 2000); // Reveal one team every 2 seconds
+        }, 1500); // Reveal one team every 1.5 seconds
 
         return () => clearInterval(interval);
-    }, [eventIndex, currentEvent, teamsByEvent.length]);
+    }, [eventIndex, currentEvent, teamsByEvent.length, onComplete]);
 
     if (!currentEvent) {
         return null;
@@ -501,6 +510,11 @@ export function PresenterShell() {
   const [tournament, setTournament] = useState<Tournament | null>(null);
   const [teamCounts, setTeamCounts] = useState<Record<TeamType, number>>({});
   const [isLoading, setIsLoading] = useState(true);
+  const [api, setApi] = useState<CarouselApi>();
+  const [currentSlide, setCurrentSlide] = useState(0);
+
+  const autoplayPlugin = useMemo(() => Autoplay({ delay: 15000, stopOnInteraction: false }), []);
+
 
   useEffect(() => {
     const matchesQuery = query(collection(db, 'matches'));
@@ -569,18 +583,34 @@ export function PresenterShell() {
       unsubscribeSponsors();
     };
   }, [toast]);
+  
+  const handleLotteryComplete = useCallback(() => {
+    if (api) {
+        // Find the next slide that is NOT a lottery slide to jump to
+        const nextSlideIndex = api.scrollSnapList().findIndex((_, index) => {
+            const slideNode = api.slideNodes()[index];
+            return !slideNode.querySelector('[data-slide-type="lottery-draw"]');
+        });
+
+        if (nextSlideIndex !== -1) {
+            api.scrollTo(nextSlideIndex);
+        }
+        
+        autoplayPlugin.play();
+    }
+  }, [api, autoplayPlugin]);
 
   const slides = useMemo(() => {
     const now = Date.now();
     const slideComponents = [];
 
     // Always show the welcome slide first.
-    slideComponents.push(<CarouselItem key="welcome"><WelcomeSlide tournament={tournament} /></CarouselItem>);
+    slideComponents.push({ key: "welcome", component: <WelcomeSlide tournament={tournament} /> });
 
     // Pre-tournament slides
     if (tournament?.status === 'PENDING') {
         if (tournament.date && tournament.date.getTime() > now) {
-            slideComponents.push(<CarouselItem key="countdown"><CountdownSlide tournament={tournament} /></CarouselItem>);
+            slideComponents.push({ key: "countdown", component: <CountdownSlide tournament={tournament} /> });
         }
 
         const orgMap = new Map(organizations.map(o => [o.id, o.name]));
@@ -588,7 +618,11 @@ export function PresenterShell() {
             .filter(t => t.lotNumber)
             .map(t => ({...t, organizationId: orgMap.get(t.organizationId) || t.organizationId }));
         if (teamsWithLots.length > 0) {
-            slideComponents.push(<CarouselItem key="lottery-draw"><LotteryDrawSlide teamsWithLots={teamsWithLots} /></CarouselItem>);
+             slideComponents.push({ 
+                key: "lottery-draw", 
+                component: <LotteryDrawSlide teamsWithLots={teamsWithLots} onComplete={handleLotteryComplete} />,
+                type: "lottery-draw"
+            });
         }
     }
 
@@ -599,9 +633,10 @@ export function PresenterShell() {
         if (sponsorsWithImages.length > 0) {
             for (let i = 0; i < sponsorsWithImages.length; i += SPONSOR_CHUNK_SIZE_IMG) {
                 const chunk = sponsorsWithImages.slice(i, i + SPONSOR_CHUNK_SIZE_IMG);
-                slideComponents.push(
-                    <CarouselItem key={`sponsor-chunk-img-${i}`}><SponsorsSlide sponsors={chunk} /></CarouselItem>
-                );
+                slideComponents.push({
+                    key: `sponsor-chunk-img-${i}`, 
+                    component: <SponsorsSlide sponsors={chunk} />
+                });
             }
         }
         const sponsorsWithoutImages = sponsors.filter(s => !s.photoUrl);
@@ -609,9 +644,10 @@ export function PresenterShell() {
          if (sponsorsWithoutImages.length > 0) {
             for (let i = 0; i < sponsorsWithoutImages.length; i += SPONSOR_CHUNK_SIZE_TEXT) {
                 const chunk = sponsorsWithoutImages.slice(i, i + SPONSOR_CHUNK_SIZE_TEXT);
-                slideComponents.push(
-                    <CarouselItem key={`sponsor-chunk-text-${i}`}><SponsorsSlide sponsors={chunk} /></CarouselItem>
-                );
+                slideComponents.push({
+                    key: `sponsor-chunk-text-${i}`,
+                    component: <SponsorsSlide sponsors={chunk} />
+                });
             }
         }
     }
@@ -636,38 +672,68 @@ export function PresenterShell() {
         const UNASSIGNED_CHUNK_SIZE = 6;
         for (let i = 0; i < unassignedFixtures.length; i += UNASSIGNED_CHUNK_SIZE) {
             const chunk = unassignedFixtures.slice(i, i + UNASSIGNED_CHUNK_SIZE);
-            slideComponents.push(
-                <CarouselItem key={`unassigned-chunk-${i}`}><UnassignedFixtureSlide matches={chunk} teamCounts={teamCounts} /></CarouselItem>
-            );
+            slideComponents.push({
+                key: `unassigned-chunk-${i}`,
+                component: <UnassignedFixtureSlide matches={chunk} teamCounts={teamCounts} />
+            });
         }
 
-        recentWinners.forEach(match => slideComponents.push(
-            <CarouselItem key={`winner-${match.id}`}><WinnerSlide match={match} /></CarouselItem>
-        ));
+        recentWinners.forEach(match => slideComponents.push({
+            key: `winner-${match.id}`,
+            component: <WinnerSlide match={match} />
+        }));
 
-        liveMatches.forEach(match => slideComponents.push(
-            <CarouselItem key={`live-${match.id}`}><LiveMatchSlide match={match} teamCounts={teamCounts}/></CarouselItem>
-        ));
+        liveMatches.forEach(match => slideComponents.push({
+            key: `live-${match.id}`,
+            component: <LiveMatchSlide match={match} teamCounts={teamCounts}/>
+        }));
         
-        scheduledFixtures.forEach(match => slideComponents.push(
-            <CarouselItem key={`fixture-${match.id}`}><FixtureSlide match={match} teamCounts={teamCounts} /></CarouselItem>
-        ));
+        scheduledFixtures.forEach(match => slideComponents.push({
+            key: `fixture-${match.id}`,
+            component: <FixtureSlide match={match} teamCounts={teamCounts} />
+        }));
         
         olderCompletedChunks.forEach((chunk, index) => {
             if (chunk.length > 0) {
-                 slideComponents.push(<CarouselItem key={`completed-chunk-${index}`}><CompletedMatchesSlide matches={chunk} teamCounts={teamCounts} /></CarouselItem>);
+                 slideComponents.push({
+                    key: `completed-chunk-${index}`,
+                    component: <CompletedMatchesSlide matches={chunk} teamCounts={teamCounts} />
+                 });
             }
         });
     }
     
     // Fallback to just the welcome slide if no other slides are generated
     if (slideComponents.length <= 1) {
-        return [<CarouselItem key="welcome"><WelcomeSlide tournament={tournament} /></CarouselItem>];
+        return [{ key: "welcome", component: <WelcomeSlide tournament={tournament} /> }];
     }
 
     return slideComponents;
-  }, [matches, tournament, teams, organizations, teamCounts, sponsors]);
-  
+  }, [matches, tournament, teams, organizations, teamCounts, sponsors, handleLotteryComplete]);
+
+   useEffect(() => {
+    if (!api) return;
+
+    const onSelect = () => {
+      const currentSlideData = slides[api.selectedScrollSnap()];
+      if (currentSlideData?.type === 'lottery-draw') {
+        autoplayPlugin.stop();
+      } else {
+        if(!autoplayPlugin.isPlaying()) {
+            autoplayPlugin.play();
+        }
+      }
+    };
+
+    api.on('select', onSelect);
+    // Initial check
+    onSelect();
+
+    return () => {
+      api.off('select', onSelect);
+    };
+  }, [api, slides, autoplayPlugin]);
+
   if (isLoading) {
     return (
       <div className="flex h-screen w-screen items-center justify-center bg-gray-900 text-white">
@@ -692,17 +758,20 @@ export function PresenterShell() {
             <WelcomeSlide tournament={tournament} />
         ) : (
              <Carousel 
+                setApi={setApi}
                 className="h-full w-full"
-                plugins={[Autoplay({ delay: 15000, stopOnInteraction: false })]}
+                plugins={[autoplayPlugin]}
                 opts={{ loop: true }}
              >
                 <CarouselContent className="h-full">
-                    {slides}
+                    {slides.map(slide => (
+                        <CarouselItem key={slide.key} data-slide-type={slide.type}>
+                            {slide.component}
+                        </CarouselItem>
+                    ))}
                 </CarouselContent>
             </Carousel>
         )}
     </div>
   );
 }
-
-    
