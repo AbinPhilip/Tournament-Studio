@@ -280,6 +280,7 @@ const LotteryDrawSlide = ({ teamsWithLots }: { teamsWithLots: Team[] }) => {
     const [eventIndex, setEventIndex] = useState(0);
 
     const teamsByEvent = useMemo(() => {
+        if (!teamsWithLots || teamsWithLots.length === 0) return [];
         const grouped = teamsWithLots.reduce((acc, team) => {
             if (!acc[team.type]) acc[team.type] = [];
             acc[team.type].push(team);
@@ -592,26 +593,29 @@ export function PresenterShell() {
     }
 
     // Sponsors are shown anytime after tournament is created
-    const sponsorsWithImages = sponsors.filter(s => s.photoUrl);
-    const SPONSOR_CHUNK_SIZE_IMG = 3;
-    if (sponsorsWithImages.length > 0) {
-        for (let i = 0; i < sponsorsWithImages.length; i += SPONSOR_CHUNK_SIZE_IMG) {
-            const chunk = sponsorsWithImages.slice(i, i + SPONSOR_CHUNK_SIZE_IMG);
-            slideComponents.push(
-                <CarouselItem key={`sponsor-chunk-img-${i}`}><SponsorsSlide sponsors={chunk} /></CarouselItem>
-            );
+    if (sponsors && sponsors.length > 0) {
+        const sponsorsWithImages = sponsors.filter(s => s.photoUrl);
+        const SPONSOR_CHUNK_SIZE_IMG = 3;
+        if (sponsorsWithImages.length > 0) {
+            for (let i = 0; i < sponsorsWithImages.length; i += SPONSOR_CHUNK_SIZE_IMG) {
+                const chunk = sponsorsWithImages.slice(i, i + SPONSOR_CHUNK_SIZE_IMG);
+                slideComponents.push(
+                    <CarouselItem key={`sponsor-chunk-img-${i}`}><SponsorsSlide sponsors={chunk} /></CarouselItem>
+                );
+            }
+        }
+        const sponsorsWithoutImages = sponsors.filter(s => !s.photoUrl);
+        const SPONSOR_CHUNK_SIZE_TEXT = 9;
+         if (sponsorsWithoutImages.length > 0) {
+            for (let i = 0; i < sponsorsWithoutImages.length; i += SPONSOR_CHUNK_SIZE_TEXT) {
+                const chunk = sponsorsWithoutImages.slice(i, i + SPONSOR_CHUNK_SIZE_TEXT);
+                slideComponents.push(
+                    <CarouselItem key={`sponsor-chunk-text-${i}`}><SponsorsSlide sponsors={chunk} /></CarouselItem>
+                );
+            }
         }
     }
-    const sponsorsWithoutImages = sponsors.filter(s => !s.photoUrl);
-    const SPONSOR_CHUNK_SIZE_TEXT = 9;
-     if (sponsorsWithoutImages.length > 0) {
-        for (let i = 0; i < sponsorsWithoutImages.length; i += SPONSOR_CHUNK_SIZE_TEXT) {
-            const chunk = sponsorsWithoutImages.slice(i, i + SPONSOR_CHUNK_SIZE_TEXT);
-            slideComponents.push(
-                <CarouselItem key={`sponsor-chunk-text-${i}`}><SponsorsSlide sponsors={chunk} /></CarouselItem>
-            );
-        }
-    }
+
 
     // Slides for active or completed tournaments
     if (tournament?.status === 'IN_PROGRESS' || tournament?.status === 'COMPLETED') {
