@@ -50,6 +50,7 @@ import { v4 as uuidv4 } from 'uuid';
 const sponsorFormSchema = z.object({
     name: z.string().min(2, { message: "Sponsor name must be at least 2 characters." }),
     photoUrl: z.string().url().optional().or(z.literal('')),
+    photoPath: z.string().optional(),
 });
 
 export default function SponsorsPage() {
@@ -67,7 +68,7 @@ export default function SponsorsPage() {
 
   const form = useForm<z.infer<typeof sponsorFormSchema>>({
     resolver: zodResolver(sponsorFormSchema),
-    defaultValues: { name: '', photoUrl: '' },
+    defaultValues: { name: '', photoUrl: '', photoPath: '' },
   });
   
   useEffect(() => {
@@ -91,7 +92,7 @@ export default function SponsorsPage() {
       setPhotoPreview(sponsor.photoUrl || null);
     } else {
       setSponsorToEdit(null);
-      form.reset({ name: '', photoUrl: '' });
+      form.reset({ name: '', photoUrl: '', photoPath: '' });
       setPhotoPreview(null);
     }
     setIsFormOpen(true);
@@ -100,17 +101,19 @@ export default function SponsorsPage() {
   const handleCloseForm = useCallback(() => {
     setIsFormOpen(false);
     setSponsorToEdit(null);
-    form.reset({ name: '', photoUrl: '' });
+    form.reset({ name: '', photoUrl: '', photoPath: '' });
     setPhotoPreview(null);
   }, [form]);
 
-  const handlePhotoUpload = async (file: File): Promise<string | null> => {
+  const handlePhotoUpload = async (file: File): Promise<{ downloadUrl: string, photoPath: string } | null> => {
     const MAX_FILE_SIZE = 2 * 1024 * 1024; // 2MB
     if (file.size > MAX_FILE_SIZE) {
         toast({ title: "File Too Large", description: `"${file.name}" is larger than 2MB.`, variant: "destructive" });
         return null;
     }
-    const storageRef = ref(storage, `sponsor-logos/${uuidv4()}-${file.name}`);
+    const photoPath = `sponsor-logos/${uuidv4()}-${file.name}`;
+    const storageRef = ref(storage, photoPath);
+
     return new Promise((resolve, reject) => {
         const reader = new FileReader();
         reader.readAsDataURL(file);
@@ -119,7 +122,7 @@ export default function SponsorsPage() {
                 const dataUrl = e.target?.result as string;
                 await uploadString(storageRef, dataUrl, 'data_url');
                 const downloadUrl = await getDownloadURL(storageRef);
-                resolve(downloadUrl);
+                resolve({ downloadUrl, photoPath });
             } catch (error) {
                 reject(error);
             }
@@ -131,14 +134,15 @@ export default function SponsorsPage() {
     setIsSubmitting(true);
     try {
         let finalPhotoUrl = sponsorToEdit?.photoUrl || '';
+        let finalPhotoPath = sponsorToEdit?.photoPath || '';
         const file = fileInputRef.current?.files?.[0];
 
         // A new file has been selected for upload
         if (file && photoPreview && photoPreview.startsWith('blob:')) {
             // If there was an old logo, delete it from storage
-            if (sponsorToEdit?.photoUrl) {
+            if (sponsorToEdit?.photoPath) {
                 try {
-                    const oldLogoRef = ref(storage, sponsorToEdit.photoUrl);
+                    const oldLogoRef = ref(storage, sponsorToEdit.photoPath);
                     await deleteObject(oldLogoRef);
                 } catch (e: any) {
                     if (e.code !== 'storage/object-not-found') {
@@ -146,11 +150,13 @@ export default function SponsorsPage() {
                     }
                 }
             }
-            // Upload the new logo and get its URL
-            finalPhotoUrl = await handlePhotoUpload(file) || '';
+            // Upload the new logo and get its URL and path
+            const uploadResult = await handlePhotoUpload(file);
+            finalPhotoUrl = uploadResult?.downloadUrl || '';
+            finalPhotoPath = uploadResult?.photoPath || '';
         }
         
-        const sponsorData = { ...values, photoUrl: finalPhotoUrl };
+        const sponsorData = { name: values.name, photoUrl: finalPhotoUrl, photoPath: finalPhotoPath };
 
         if (sponsorToEdit) {
             const sponsorRef = doc(db, 'sponsors', sponsorToEdit.id);
@@ -173,9 +179,9 @@ export default function SponsorsPage() {
     if (!sponsorToDelete) return;
     setIsSubmitting(true);
     try {
-        if (sponsorToDelete.photoUrl) {
+        if (sponsorToDelete.photoPath) {
             try {
-                const logoRef = ref(storage, sponsorToDelete.photoUrl);
+                const logoRef = ref(storage, sponsorToDelete.photoPath);
                 await deleteObject(logoRef);
             } catch (e: any) {
                  if (e.code !== 'storage/object-not-found') {
