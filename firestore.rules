@@ -1,15 +1,13 @@
-
 rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
-  
-    // Default deny all
+    // Default deny all reads and writes
     match /{document=**} {
       allow read, write: if false;
     }
-
-    // Allow public read for presenter view
+    
+    // Allow public read access for presenter view data
     match /tournaments/{docId} {
       allow read: if true;
       allow write: if request.auth != null;
@@ -18,11 +16,11 @@ service cloud.firestore {
       allow read: if true;
       allow write: if request.auth != null;
     }
-    match /teams/{docId} {
+     match /teams/{docId} {
       allow read: if true;
       allow write: if request.auth != null;
     }
-    match /organizations/{docId} {
+     match /organizations/{docId} {
       allow read: if true;
       allow write: if request.auth != null;
     }
@@ -30,15 +28,15 @@ service cloud.firestore {
       allow read: if true;
       allow write: if request.auth != null;
     }
-
-    // Allow authenticated users to read/write their own data
-    // and admins to manage all users and permissions.
+    
+    // Allow authenticated users to manage users and permissions
     match /users/{userId} {
-      allow read, write: if request.auth != null && (request.auth.uid == userId || get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['admin', 'super']);
-    }
-    match /rolePermissions/{role} {
       allow read: if request.auth != null;
-      allow write: if request.auth != null && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'super';
+      allow write: if request.auth != null;
+    }
+     match /rolePermissions/{role} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null;
     }
   }
 }
