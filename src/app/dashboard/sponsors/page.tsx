@@ -103,9 +103,12 @@ export default function SponsorsPage() {
     setSponsorToEdit(null);
     form.reset({ name: '', photoUrl: '', photoPath: '' });
     setPhotoPreview(null);
+     if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
   }, [form]);
 
-  const handlePhotoUpload = async (file: File): Promise<{ downloadUrl: string, photoPath: string } | null> => {
+  const handlePhotoUpload = async (file: File): Promise<{ photoUrl: string, photoPath: string } | null> => {
     const MAX_FILE_SIZE = 2 * 1024 * 1024; // 2MB
     if (file.size > MAX_FILE_SIZE) {
         toast({ title: "File Too Large", description: `"${file.name}" is larger than 2MB.`, variant: "destructive" });
@@ -122,7 +125,7 @@ export default function SponsorsPage() {
                 const dataUrl = e.target?.result as string;
                 await uploadString(storageRef, dataUrl, 'data_url');
                 const downloadUrl = await getDownloadURL(storageRef);
-                resolve({ downloadUrl, photoPath });
+                resolve({ photoUrl: downloadUrl, photoPath });
             } catch (error) {
                 reject(error);
             }
@@ -134,40 +137,46 @@ export default function SponsorsPage() {
   const handleFormSubmit = async (values: z.infer<typeof sponsorFormSchema>) => {
     setIsSubmitting(true);
     try {
-        let submissionData = { ...values };
         const file = fileInputRef.current?.files?.[0];
-
-        if (file) { // A new file has been selected
-            const uploadResult = await handlePhotoUpload(file);
-            if (!uploadResult) { // Handle upload failure
+        let newImageInfo: { photoUrl: string, photoPath: string } | null = null;
+        
+        // 1. Upload new image if one is selected
+        if (file) {
+            newImageInfo = await handlePhotoUpload(file);
+            if (!newImageInfo) { // Handle upload failure (e.g., file too large)
                 setIsSubmitting(false);
                 return;
             }
+        }
+        
+        // 2. Prepare data for Firestore
+        const dataToSave: Omit<Sponsor, 'id'> = {
+            name: values.name,
+            photoUrl: newImageInfo?.photoUrl ?? sponsorToEdit?.photoUrl ?? '',
+            photoPath: newImageInfo?.photoPath ?? sponsorToEdit?.photoPath ?? '',
+        };
 
-            // If we are editing and there was an old photo path, delete the old one.
-            if (sponsorToEdit?.photoPath) {
-                try {
-                    const oldLogoRef = ref(storage, sponsorToEdit.photoPath);
-                    await deleteObject(oldLogoRef);
-                } catch (e: any) {
-                    if (e.code !== 'storage/object-not-found') {
-                        console.warn("Could not delete old logo:", e);
+        if (sponsorToEdit) {
+            // --- UPDATE LOGIC ---
+            // 3a. Delete old image if a new one was uploaded
+            if (newImageInfo && sponsorToEdit.photoPath) {
+                 try {
+                    await deleteObject(ref(storage, sponsorToEdit.photoPath));
+                } catch (error: any) {
+                    if (error.code !== 'storage/object-not-found') {
+                        console.warn("Could not delete old logo during update:", error);
                     }
                 }
             }
-            submissionData.photoUrl = uploadResult.downloadUrl;
-            submissionData.photoPath = uploadResult.photoPath;
-        }
-
-        const { photoPath, ...dataToSave } = submissionData;
-        const finalData = { ...dataToSave, photoPath: photoPath || null };
-
-        if (sponsorToEdit) { // Editing an existing sponsor
+            // 4a. Update Firestore document
             const sponsorRef = doc(db, 'sponsors', sponsorToEdit.id);
-            await updateDoc(sponsorRef, finalData);
+            await updateDoc(sponsorRef, dataToSave);
             toast({ title: 'Sponsor Updated', description: `Details for "${values.name}" have been updated.` });
-        } else { // Adding a new sponsor
-            await addDoc(collection(db, 'sponsors'), finalData);
+
+        } else {
+            // --- CREATE LOGIC ---
+            // 4b. Add new document to Firestore
+            await addDoc(collection(db, 'sponsors'), dataToSave);
             toast({ title: 'Sponsor Added', description: `Sponsor "${values.name}" has been added.` });
         }
         
@@ -185,15 +194,17 @@ export default function SponsorsPage() {
     if (!sponsorToDelete) return;
     setIsSubmitting(true);
     try {
+        // Delete Firestore document first
         await deleteDoc(doc(db, 'sponsors', sponsorToDelete.id));
         
+        // Then delete the image from storage if it exists
         if (sponsorToDelete.photoPath) {
             try {
                 const logoRef = ref(storage, sponsorToDelete.photoPath);
                 await deleteObject(logoRef);
             } catch (e: any) {
                  if (e.code !== 'storage/object-not-found') {
-                    console.warn("Could not delete logo from storage, it might have been removed already:", e);
+                    console.warn("Could not delete logo from storage:", e);
                  }
             }
         }
@@ -210,6 +221,8 @@ export default function SponsorsPage() {
     const file = e.target.files?.[0];
     if (file) {
         setPhotoPreview(URL.createObjectURL(file));
+    } else {
+        setPhotoPreview(sponsorToEdit?.photoUrl ?? null);
     }
   };
 
