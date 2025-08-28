@@ -100,7 +100,9 @@ export default function SponsorsPage() {
   const handleCloseForm = useCallback(() => {
     setIsFormOpen(false);
     setSponsorToEdit(null);
-  }, []);
+    form.reset({ name: '', photoUrl: '' });
+    setPhotoPreview(null);
+  }, [form]);
 
   const handlePhotoUpload = async (file: File): Promise<string | null> => {
     const MAX_FILE_SIZE = 2 * 1024 * 1024; // 2MB
@@ -131,14 +133,20 @@ export default function SponsorsPage() {
         let finalPhotoUrl = sponsorToEdit?.photoUrl || '';
         const file = fileInputRef.current?.files?.[0];
 
+        // A new file has been selected for upload
         if (file && photoPreview && photoPreview.startsWith('blob:')) {
+            // If there was an old logo, delete it from storage
             if (sponsorToEdit?.photoUrl) {
                 try {
-                    await deleteObject(ref(storage, sponsorToEdit.photoUrl));
-                } catch (e) {
-                    console.warn("Old logo deletion failed:", e);
+                    const oldLogoRef = ref(storage, sponsorToEdit.photoUrl);
+                    await deleteObject(oldLogoRef);
+                } catch (e: any) {
+                    if (e.code !== 'storage/object-not-found') {
+                      console.warn("Old logo deletion failed:", e);
+                    }
                 }
             }
+            // Upload the new logo and get its URL
             finalPhotoUrl = await handlePhotoUpload(file) || '';
         }
         
@@ -167,9 +175,12 @@ export default function SponsorsPage() {
     try {
         if (sponsorToDelete.photoUrl) {
             try {
-                await deleteObject(ref(storage, sponsorToDelete.photoUrl));
-            } catch (e) {
-                console.warn("Could not delete logo from storage:", e);
+                const logoRef = ref(storage, sponsorToDelete.photoUrl);
+                await deleteObject(logoRef);
+            } catch (e: any) {
+                 if (e.code !== 'storage/object-not-found') {
+                    console.warn("Could not delete logo from storage:", e);
+                 }
             }
         }
         await deleteDoc(doc(db, 'sponsors', sponsorToDelete.id));
