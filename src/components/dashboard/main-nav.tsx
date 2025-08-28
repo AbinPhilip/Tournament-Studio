@@ -66,7 +66,11 @@ export function MainNav({ user, isMobile = false, isCollapsed = false }: { user:
             acc[doc.id as UserRole] = modules;
             return acc;
         }, {} as RolePermissions);
+        
+        // Ensure super role always has all permissions
+        fetchedPerms.super = allModuleIds;
         setPermissions(fetchedPerms);
+
     }, (error) => {
         console.error("Failed to fetch permissions in real-time:", error);
         setPermissions(defaultPerms); // Fallback to defaults on error

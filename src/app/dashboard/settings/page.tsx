@@ -135,21 +135,21 @@ export default function SettingsPage() {
   });
 
   const fetchUsersAndPermissions = useCallback(async () => {
+    const allModuleIds = appModules.map(m => m.id);
+    const defaultPerms: RolePermissions = {
+        super: allModuleIds,
+        admin: allModuleIds.filter(id => id !== 'settings'), // Admin can't change permissions
+        update: ['dashboard', 'umpire', 'draw', 'match-history', 'presenter'],
+        inquiry: ['dashboard', 'draw', 'match-history', 'presenter'],
+        individual: ['dashboard', 'draw', 'match-history', 'presenter'],
+        court: [],
+    };
+
     const usersUnsub = onSnapshot(collection(db, 'users'), (snapshot) => {
         setUsers(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as User)));
     });
     
     const permsUnsub = onSnapshot(collection(db, 'rolePermissions'), (snapshot) => {
-        const allModuleIds = appModules.map(m => m.id);
-        const defaultPerms: RolePermissions = {
-            super: allModuleIds,
-            admin: allModuleIds.filter(id => id !== 'settings'), // Admin can't change permissions
-            update: ['dashboard', 'umpire', 'draw', 'match-history', 'presenter'],
-            inquiry: ['dashboard', 'draw', 'match-history', 'presenter'],
-            individual: ['dashboard', 'draw', 'match-history', 'presenter'],
-            court: [],
-        };
-        
         if (snapshot.empty) {
             setPermissions(defaultPerms);
             // Optionally, save these defaults to Firestore
@@ -167,6 +167,8 @@ export default function SettingsPage() {
                 acc[doc.id as UserRole] = modules;
                 return acc;
             }, {} as RolePermissions);
+            // Ensure super always has all permissions
+            fetchedPerms.super = allModuleIds;
             setPermissions(fetchedPerms);
         }
     });
@@ -305,7 +307,7 @@ export default function SettingsPage() {
     try {
         const batch = writeBatch(db);
         Object.entries(permissions).forEach(([role, modules]) => {
-            if (role === 'court') return;
+            if (role === 'court' || role === 'super') return; // Do not save court or super permissions
             const docRef = doc(db, 'rolePermissions', role);
             batch.set(docRef, { modules });
         });
@@ -337,7 +339,7 @@ export default function SettingsPage() {
             <CardHeader className="flex flex-row items-center justify-between">
                 <div>
                     <CardTitle>Role-Based Access Control</CardTitle>
-                    <CardDescription>Define which modules each user role can access.</CardDescription>
+                    <CardDescription>Define which modules each user role can access. Super users have access to all modules by default.</CardDescription>
                 </div>
                 <Button onClick={handleSavePermissions} disabled={isSavingPermissions}>
                     {isSavingPermissions ? <Loader2 className="animate-spin" /> : <Save />}
