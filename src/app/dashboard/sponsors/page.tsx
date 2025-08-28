@@ -127,6 +127,7 @@ export default function SponsorsPage() {
                 reject(error);
             }
         };
+        reader.onerror = (error) => reject(error);
     });
   };
 
@@ -137,26 +138,28 @@ export default function SponsorsPage() {
         let finalPhotoPath = sponsorToEdit?.photoPath || '';
         const file = fileInputRef.current?.files?.[0];
 
-        // A new file has been selected for upload
-        if (file && photoPreview && photoPreview.startsWith('blob:')) {
-            // If there was an old logo, try to delete it from storage
-            if (sponsorToEdit?.photoPath) {
-                try {
-                    const oldLogoRef = ref(storage, sponsorToEdit.photoPath);
-                    await deleteObject(oldLogoRef);
-                } catch (e: any) {
-                    // Log a warning if deletion fails, but don't block the upload.
-                    // This handles cases where the file might have been deleted manually.
-                    if (e.code !== 'storage/object-not-found') {
-                        console.warn("Could not delete old logo, but proceeding with upload:", e);
+        if (file) { // A new file has been selected for upload
+            // Upload the new logo first
+            const uploadResult = await handlePhotoUpload(file);
+            if (uploadResult) {
+                // If there was an old logo, try to delete it from storage *after* the new one is uploaded.
+                if (sponsorToEdit?.photoPath) {
+                    try {
+                        const oldLogoRef = ref(storage, sponsorToEdit.photoPath);
+                        await deleteObject(oldLogoRef);
+                    } catch (e: any) {
+                        // Log a warning if deletion fails, but don't block the update.
+                        if (e.code !== 'storage/object-not-found') {
+                            console.warn("Could not delete old logo, but proceeding with update:", e);
+                        }
                     }
                 }
-            }
-            // Upload the new logo and get its URL and path
-            const uploadResult = await handlePhotoUpload(file);
-            if(uploadResult) {
                 finalPhotoUrl = uploadResult.downloadUrl;
                 finalPhotoPath = uploadResult.photoPath;
+            } else {
+                // If upload fails, don't proceed with the form submission
+                setIsSubmitting(false);
+                return;
             }
         }
         
@@ -179,21 +182,23 @@ export default function SponsorsPage() {
     }
   };
 
+
   const handleDeleteSponsor = async () => {
     if (!sponsorToDelete) return;
     setIsSubmitting(true);
     try {
+        await deleteDoc(doc(db, 'sponsors', sponsorToDelete.id));
+        
         if (sponsorToDelete.photoPath) {
             try {
                 const logoRef = ref(storage, sponsorToDelete.photoPath);
                 await deleteObject(logoRef);
             } catch (e: any) {
                  if (e.code !== 'storage/object-not-found') {
-                    console.warn("Could not delete logo from storage:", e);
+                    console.warn("Could not delete logo from storage, it might have been removed already:", e);
                  }
             }
         }
-        await deleteDoc(doc(db, 'sponsors', sponsorToDelete.id));
         toast({ title: 'Sponsor Deleted', description: `"${sponsorToDelete.name}" has been removed.` });
         setSponsorToDelete(null);
     } catch (error) {
