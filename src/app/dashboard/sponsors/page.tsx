@@ -154,8 +154,10 @@ export default function SponsorsPage() {
             }
             // Upload the new logo and get its URL and path
             const uploadResult = await handlePhotoUpload(file);
-            finalPhotoUrl = uploadResult?.downloadUrl || '';
-            finalPhotoPath = uploadResult?.photoPath || '';
+            if(uploadResult) {
+                finalPhotoUrl = uploadResult.downloadUrl;
+                finalPhotoPath = uploadResult.photoPath;
+            }
         }
         
         const sponsorData = { name: values.name, photoUrl: finalPhotoUrl, photoPath: finalPhotoPath };
@@ -330,5 +332,3 @@ export default function SponsorsPage() {
     </div>
   );
 }
-
-    
