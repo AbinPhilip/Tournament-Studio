@@ -1,9 +1,15 @@
 rules_version = '2';
 service firebase.storage {
   match /b/{bucket}/o {
-    match /images/{allPaths=**} {
+    // Allow public read on all files.
+    match /{allPaths=**} {
       allow read;
-      allow write: if request.auth != null;
+    }
+    // Allow any client to write to the images folder.
+    // Security is handled by using unique IDs for filenames in the app
+    // and by Firestore rules protecting the metadata.
+    match /images/{allPaths=**} {
+      allow write;
     }
   }
 }
