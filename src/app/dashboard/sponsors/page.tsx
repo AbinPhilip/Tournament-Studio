@@ -137,55 +137,54 @@ export default function SponsorsPage() {
   const handleFormSubmit = async (values: z.infer<typeof sponsorFormSchema>) => {
     setIsSubmitting(true);
     try {
-        const file = fileInputRef.current?.files?.[0];
-        let newImageInfo: { photoUrl: string, photoPath: string } | null = null;
-        
-        // 1. Upload new image if one is selected
-        if (file) {
-            newImageInfo = await handlePhotoUpload(file);
-            if (!newImageInfo) { // Handle upload failure (e.g., file too large)
-                setIsSubmitting(false);
-                return;
-            }
-        }
-        
-        // 2. Prepare data for Firestore
-        const dataToSave: Omit<Sponsor, 'id'> = {
-            name: values.name,
-            photoUrl: newImageInfo?.photoUrl ?? sponsorToEdit?.photoUrl ?? '',
-            photoPath: newImageInfo?.photoPath ?? sponsorToEdit?.photoPath ?? '',
-        };
+      const file = fileInputRef.current?.files?.[0];
+      let newImageInfo: { photoUrl: string; photoPath: string } | null = null;
 
-        if (sponsorToEdit) {
-            // --- UPDATE LOGIC ---
-            // 3a. Delete old image if a new one was uploaded
-            if (newImageInfo && sponsorToEdit.photoPath) {
-                 try {
-                    await deleteObject(ref(storage, sponsorToEdit.photoPath));
-                } catch (error: any) {
-                    if (error.code !== 'storage/object-not-found') {
-                        console.warn("Could not delete old logo during update:", error);
-                    }
-                }
-            }
-            // 4a. Update Firestore document
-            const sponsorRef = doc(db, 'sponsors', sponsorToEdit.id);
-            await updateDoc(sponsorRef, dataToSave);
-            toast({ title: 'Sponsor Updated', description: `Details for "${values.name}" have been updated.` });
-
-        } else {
-            // --- CREATE LOGIC ---
-            // 4b. Add new document to Firestore
-            await addDoc(collection(db, 'sponsors'), dataToSave);
-            toast({ title: 'Sponsor Added', description: `Sponsor "${values.name}" has been added.` });
+      // 1. If a new file is selected, upload it
+      if (file) {
+        newImageInfo = await handlePhotoUpload(file);
+        if (!newImageInfo) {
+          setIsSubmitting(false);
+          return; // Stop if upload fails (e.g., file too large)
         }
-        
-        handleCloseForm();
+      }
+
+      // 2. Determine data to save
+      const dataToSave: Omit<Sponsor, 'id'> = {
+        name: values.name,
+        photoUrl: newImageInfo?.photoUrl ?? sponsorToEdit?.photoUrl ?? '',
+        photoPath: newImageInfo?.photoPath ?? sponsorToEdit?.photoPath ?? '',
+      };
+
+      if (sponsorToEdit) {
+        // --- UPDATE LOGIC ---
+        // 3a. If a new image was uploaded, delete the old one
+        if (newImageInfo && sponsorToEdit.photoPath) {
+          try {
+            await deleteObject(ref(storage, sponsorToEdit.photoPath));
+          } catch (error: any) {
+            // Log error but don't block the update if old file deletion fails
+            if (error.code !== 'storage/object-not-found') {
+              console.warn("Could not delete old logo during update:", error);
+            }
+          }
+        }
+        // 4a. Update Firestore document
+        const sponsorRef = doc(db, 'sponsors', sponsorToEdit.id);
+        await updateDoc(sponsorRef, dataToSave);
+        toast({ title: 'Sponsor Updated', description: `Details for "${values.name}" have been updated.` });
+      } else {
+        // --- CREATE LOGIC ---
+        await addDoc(collection(db, 'sponsors'), dataToSave);
+        toast({ title: 'Sponsor Added', description: `Sponsor "${values.name}" has been added.` });
+      }
+
+      handleCloseForm();
     } catch (error) {
-        console.error("Error submitting sponsor:", error);
-        toast({ title: 'Error', description: `Failed to ${sponsorToEdit ? 'update' : 'add'} sponsor.`, variant: 'destructive' });
+      console.error("Error submitting sponsor:", error);
+      toast({ title: 'Error', description: `Failed to ${sponsorToEdit ? 'update' : 'add'} sponsor.`, variant: 'destructive' });
     } finally {
-        setIsSubmitting(false);
+      setIsSubmitting(false);
     }
   };
 
@@ -348,3 +347,5 @@ export default function SponsorsPage() {
     </div>
   );
 }
+
+    
