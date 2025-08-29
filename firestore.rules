@@ -1,34 +1,40 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    match /{document=**} {
-      allow read, write: if false;
+    // Allow public read access to most collections for presenter views, etc.
+    match /tournaments/{docId} {
+      allow read;
+      allow write: if request.auth != null;
+    }
+    match /organizations/{docId} {
+      allow read;
+      allow write: if request.auth != null;
+    }
+    match /teams/{docId} {
+      allow read;
+      allow write: if request.auth != null;
+    }
+     match /sponsors/{docId} {
+      allow read;
+      allow write: if request.auth != null;
+    }
+    match /matches/{docId} {
+      allow read;
+      allow write: if request.auth != null;
     }
     match /users/{userId} {
-      allow read, write: if true;
-    }
-    match /organizations/{orgId} {
-      allow read, write: if true;
-    }
-    match /teams/{teamId} {
-      allow read, write: if true;
-    }
-    match /tournaments/{tourneyId} {
-      allow read, write: if true;
-    }
-    match /matches/{matchId} {
-        allow read, write: if true;
-    }
-    match /sponsors/{sponsorId} {
-        allow read, write: if true;
+      allow read;
+      allow create; // Allow user creation
+      allow update, delete: if request.auth.uid == userId;
     }
     match /rolePermissions/{roleId} {
-        allow read, write: if true;
+      allow read;
+      allow write: if request.auth != null; // Should be restricted to 'super' role in app logic
     }
-    match /images/{imageId} {
-        allow read: if true;
-        allow create: if request.auth != null;
-        allow delete: if request.auth != null && resource.data.uploaderId == request.auth.uid;
+     match /images/{imageId} {
+      allow read;
+      allow create: if request.auth != null;
+      allow delete: if request.auth != null && resource.data.uploaderId == request.auth.uid;
     }
   }
 }
