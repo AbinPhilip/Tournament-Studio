@@ -56,7 +56,7 @@ export default function ImageUploaderPage() {
         setIsLoading(false);
     }, (error) => {
         console.error(error);
-        toast({ title: "Error", description: "Failed to fetch images.", variant: "destructive" });
+        toast({ title: "Error", description: "Failed to fetch images. You may need to create a Firestore index.", variant: "destructive" });
         setIsLoading(false);
     });
 
@@ -80,8 +80,8 @@ export default function ImageUploaderPage() {
     setIsUploading(true);
     setUploadProgress(0);
 
-    const uniqueFileName = `${user.id}/${uuidv4()}-${selectedFile.name}`;
-    const storageRef = ref(storage, `images/${uniqueFileName}`);
+    const storagePath = `images/${user.id}/${uuidv4()}-${selectedFile.name}`;
+    const storageRef = ref(storage, storagePath);
     const uploadTask = uploadBytesResumable(storageRef, selectedFile);
 
     uploadTask.on('state_changed', 
@@ -99,7 +99,7 @@ export default function ImageUploaderPage() {
           const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
           await addDoc(collection(db, "images"), {
             imageUrl: downloadURL,
-            storagePath: storageRef.fullPath,
+            storagePath: storagePath, // Use the defined path
             uploaderId: user.id,
             uploaderName: user.name,
             createdAt: serverTimestamp(),
