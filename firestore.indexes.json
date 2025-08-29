@@ -14,20 +14,6 @@
           "order": "DESCENDING"
         }
       ]
-    },
-    {
-      "collectionGroup": "images",
-      "queryScope": "COLLECTION",
-      "fields": [
-        {
-          "fieldPath": "uploaderId",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "createdAt",
-          "order": "DESCENDING"
-        }
-      ]
     }
   ]
 }

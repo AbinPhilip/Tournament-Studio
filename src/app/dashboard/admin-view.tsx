@@ -5,7 +5,7 @@ import { useAuth } from '@/hooks/use-auth';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { useRouter } from 'next/navigation';
-import { ListOrdered, Cog, Shield, Settings, Users, Building, Trophy, GitBranch, HeartHandshake, UploadCloud } from 'lucide-react';
+import { ListOrdered, Cog, Shield, Settings, Users, Building, Trophy, GitBranch, HeartHandshake } from 'lucide-react';
 
 export default function AdminView() {
   const { user } = useAuth();
@@ -20,7 +20,6 @@ export default function AdminView() {
     { label: "Umpire View", href: "/dashboard/umpire", icon: Shield },
     { label: "Tournament Draw", href: "/dashboard/draw", icon: GitBranch },
     { label: "Match History", href: "/dashboard/match-history", icon: Trophy },
-    { label: "Image Uploader", href: "/dashboard/image-uploader", icon: UploadCloud },
   ];
 
   return (

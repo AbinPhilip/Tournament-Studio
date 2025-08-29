@@ -99,15 +99,3 @@ export interface Match {
     team2LastPlayed?: number | null;
     restingPlayers?: string[];
 }
-
-export interface ImageMetadata {
-    id: string;
-    imageUrl: string;
-    storagePath: string;
-    uploaderId: string;
-    uploaderName?: string;
-    createdAt: Timestamp;
-    originalFilename: string;
-    fileSize: number;
-    mimeType: string;
-}
