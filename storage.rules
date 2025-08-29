@@ -1,17 +1,20 @@
-rules_version = '2';
 
+rules_version = '2';
 service firebase.storage {
   match /b/{bucket}/o {
-    // Allow public read access for all files so images can be displayed
-    // in the app by anyone.
+    // Allow public read access to all files
     match /{allPaths=**} {
       allow read;
+      // Allow write access only for authenticated users.
+      // You might want to lock this down further, e.g., by user ID path.
+      allow write: if request.auth != null;
     }
 
-    // Allow write access (uploads, updates, deletes) only for
-    // authenticated users.
-    match /{allPaths=**} {
-      allow write: if request.auth != null;
+    // More specific rule for the 'images' folder
+    match /images/{userId}/{allPaths=**} {
+      allow read;
+      // Only allow authenticated users to write to a folder matching their UID
+      allow write: if request.auth != null && request.auth.uid == userId;
     }
   }
 }

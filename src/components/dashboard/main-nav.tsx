@@ -4,7 +4,7 @@
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { cn } from "@/lib/utils"
-import { LayoutDashboard, ListOrdered, Shield, Cog, Settings, Trophy, Users, Building, GitBranch, MonitorPlay, HeartHandshake } from "lucide-react"
+import { LayoutDashboard, ListOrdered, Shield, Cog, Settings, Trophy, Users, Building, GitBranch, MonitorPlay, HeartHandshake, UploadCloud } from "lucide-react"
 import type { User, UserRole } from "@/types"
 import { useState, useEffect } from "react"
 import { db } from "@/lib/firebase"
@@ -30,6 +30,7 @@ const allNavItems: NavItem[] = [
     { id: "draw", href: "/dashboard/draw", label: "Tournament Draw", icon: GitBranch },
     { id: "match-history", href: "/dashboard/match-history", label: "Match History", icon: Trophy },
     { id: "presenter", href: "/presenter", label: "Presenter View", icon: MonitorPlay, target: "_blank" },
+    { id: "image-uploader", href: "/dashboard/image-uploader", label: "Image Uploader", icon: UploadCloud },
     { id: "settings", href: "/dashboard/settings", label: "System Settings", icon: Settings },
 ];
 
@@ -62,6 +63,9 @@ export function MainNav({ user, isMobile = false, isCollapsed = false }: { user:
             const modules = doc.data().modules || [];
             if (!modules.includes('presenter')) {
                 modules.push('presenter');
+            }
+            if (!modules.includes('image-uploader')) {
+                modules.push('image-uploader');
             }
             acc[doc.id as UserRole] = modules;
             return acc;

@@ -53,7 +53,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
 import { db } from '@/lib/firebase';
-import { collection, addDoc, deleteDoc, doc, query, where, updateDoc, onSnapshot } from 'firebase/firestore';
+import { collection, addDoc, deleteDoc, doc, query, where, getDocs, updateDoc, onSnapshot } from 'firebase/firestore';
 import type { Organization, Team } from '@/types';
 
 
@@ -146,9 +146,11 @@ export default function OrganizationPage() {
   const handleDeleteOrg = async () => {
     if (!orgToDelete) return;
 
-    const isOrgInUse = teams.some(t => t.organizationId === orgToDelete.id);
-    if (isOrgInUse) {
-        toast({ title: 'Error', description: 'Cannot delete organization with active teams.', variant: 'destructive' });
+    const teamsInOrgQuery = query(collection(db, 'teams'), where('organizationId', '==', orgToDelete.id));
+    const teamsInOrgSnap = await getDocs(teamsInOrgQuery);
+
+    if (!teamsInOrgSnap.empty) {
+        toast({ title: 'Error', description: 'Cannot delete organization with active teams. Please delete or reassign teams first.', variant: 'destructive' });
         setOrgToDelete(null);
         return;
     }

@@ -1,62 +1,60 @@
-rules_version = '2';
 
+rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    
-    // Default deny all
     match /{document=**} {
       allow read, write: if false;
     }
 
-    // Allow public read access for presenter view data
-    match /tournaments/{docId} {
-      allow get, list: if true;
+    // Public read for Presenter View and other general data
+    match /tournaments/{tournamentId} {
+      allow read: if true;
+      allow write: if request.auth != null && (request.auth.token.role == 'admin' || request.auth.token.role == 'super');
     }
-    match /matches/{docId} {
-      allow get, list: if true;
+    match /matches/{matchId} {
+      allow read: if true;
+      allow write: if request.auth != null; // More specific rules below
     }
-    match /teams/{docId} {
-      allow get, list: if true;
+    match /teams/{teamId} {
+      allow read: if true;
+      allow write: if request.auth != null && (request.auth.token.role == 'admin' || request.auth.token.role == 'super');
     }
-    match /organizations/{docId} {
-      allow get, list: if true;
+    match /organizations/{orgId} {
+      allow read: if true;
+      allow write: if request.auth != null && (request.auth.token.role == 'admin' || request.auth.token.role == 'super');
     }
-    match /sponsors/{docId} {
-      allow get, list: if true;
+     match /sponsors/{sponsorId} {
+      allow read: if true;
+      allow write: if request.auth != null && (request.auth.token.role == 'admin' || request.auth.token.role == 'super');
     }
 
-    // Allow authenticated users to read their own data
+    // User management
     match /users/{userId} {
-      allow get: if request.auth != null && request.auth.uid == userId;
-      allow list: if request.auth != null && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['admin', 'super'];
+      allow read: if request.auth != null;
+      allow create: if request.auth != null && (request.auth.token.role == 'admin' || request.auth.token.role == 'super');
+      allow update: if request.auth != null && (request.auth.uid == userId || request.auth.token.role == 'admin' || request.auth.token.role == 'super');
+      allow delete: if request.auth != null && (request.auth.token.role == 'admin' || request.auth.token.role == 'super');
     }
     
-    // Allow admins/super to manage users, permissions, and all tournament data
-    match /users/{userId} {
-        allow write: if request.auth != null && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['admin', 'super'];
-    }
-
+    // Role permissions
     match /rolePermissions/{role} {
-        allow read, write: if request.auth != null && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'super';
+       allow read: if true; // All authenticated users can read permissions to render UI
+       allow write: if request.auth != null && request.auth.token.role == 'super'; // Only super can change permissions
     }
 
-    // Collections managed by admin/super roles
-    match /tournaments/{docId} {
-      allow write: if request.auth != null && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['admin', 'super'];
-    }
-     match /organizations/{docId} {
-      allow write: if request.auth != null && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['admin', 'super'];
-    }
-     match /sponsors/{docId} {
-      allow write: if request.auth != null && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['admin', 'super'];
-    }
-     match /teams/{docId} {
-      allow write: if request.auth != null && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['admin', 'super'];
+    // Image metadata
+    match /images/{imageId} {
+      allow read: if true; // Public read access
+      allow create: if request.auth != null; // Any authenticated user can upload
+      allow delete: if request.auth != null && request.auth.uid == resource.data.uploaderId; // Only the uploader can delete
     }
 
-    // Allow match updates by admin, super, and update roles
-    match /matches/{docId} {
-       allow write: if request.auth != null && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['admin', 'super', 'update', 'court'];
+    // Match scoring can be done by update, admin, super, or specific court umpires
+    match /matches/{matchId} {
+        // More specific write rule for matches
+        allow write: if request.auth != null && 
+                      (request.auth.token.role in ['update', 'admin', 'super'] || 
+                      (request.auth.token.role == 'court' && request.auth.token.courtName == resource.data.courtName));
     }
   }
 }

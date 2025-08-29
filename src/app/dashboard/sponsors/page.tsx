@@ -97,16 +97,12 @@ export default function SponsorsPage() {
   const handleFormSubmit = async (values: z.infer<typeof sponsorFormSchema>) => {
     setIsSubmitting(true);
     try {
-      const dataToSave: Omit<Sponsor, 'id'> = {
-        name: values.name,
-      };
-
       if (sponsorToEdit) {
         const sponsorRef = doc(db, 'sponsors', sponsorToEdit.id);
-        await updateDoc(sponsorRef, dataToSave);
+        await updateDoc(sponsorRef, values);
         toast({ title: 'Sponsor Updated', description: `Details for "${values.name}" have been updated.` });
       } else {
-        await addDoc(collection(db, 'sponsors'), dataToSave);
+        await addDoc(collection(db, 'sponsors'), values);
         toast({ title: 'Sponsor Added', description: `Sponsor "${values.name}" has been added.` });
       }
 
