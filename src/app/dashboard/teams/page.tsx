@@ -25,7 +25,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { MoreHorizontal, Trash2, Edit, CheckCircle, Users, ArrowUpDown, Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { db, storage } from '@/lib/firebase';
+import { db } from '@/lib/firebase';
 import { collection, doc, getDocs, updateDoc, addDoc, deleteDoc, query, where, onSnapshot } from 'firebase/firestore';
 import type { Team, Organization, TeamType } from '@/types';
 import {
@@ -48,12 +48,9 @@ import {
   DialogTitle,
   DialogTrigger
 } from '@/components/ui/dialog';
-import Image from 'next/image';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { EventBadge } from '@/components/ui/event-badge';
-import { ref, uploadString, getDownloadURL, deleteObject } from 'firebase/storage';
-import { v4 as uuidv4 } from 'uuid';
 
 
 const teamFormSchema = z.object({
@@ -63,7 +60,6 @@ const teamFormSchema = z.object({
   genderP1: z.enum(['male', 'female']).optional(),
   genderP2: z.enum(['male', 'female']).optional(),
   organizationId: z.string({ required_error: "Organization is required." }),
-  photoUrl: z.string().url().optional().or(z.literal('')),
   lotNumber: z.coerce.number().int().positive({ message: "Lot number must be a positive number." }).optional(),
 }).refine(data => {
     if (data.type === 'mens_doubles' || data.type === 'womens_doubles' || data.type === 'mixed_doubles') {
@@ -98,18 +94,12 @@ const TeamForm = ({
     isSubmitting,
     organizations,
     playersByOrg,
-    photoPreview,
-    handlePhotoChange,
-    fileInputRef,
 }: {
     form: any;
     onSubmit: (values: z.infer<typeof teamFormSchema>) => void;
     isSubmitting: boolean;
     organizations: Organization[];
     playersByOrg: Record<string, string[]>;
-    photoPreview: string | null;
-    handlePhotoChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
-    fileInputRef: React.RefObject<HTMLInputElement>;
 }) => {
     const teamType = form.watch('type');
     const orgId = form.watch('organizationId');
@@ -200,19 +190,6 @@ const TeamForm = ({
                     </FormItem>
                 )} />
 
-                <FormItem>
-                    <FormLabel>Team Photo</FormLabel>
-                    <div className="flex items-center gap-4">
-                        <div className="h-20 w-20 bg-muted rounded-md flex items-center justify-center overflow-hidden">
-                            <Image data-ai-hint="badminton duo" src={photoPreview || "https://placehold.co/80x80.png"} width={80} height={80} alt="Team photo" className="object-cover h-full w-full" />
-                        </div>
-                        <Button type="button" variant="outline" onClick={() => fileInputRef.current?.click()}>
-                            Upload
-                        </Button>
-                        <Input type="file" ref={fileInputRef} onChange={handlePhotoChange} className="hidden" accept="image/*" />
-                    </div>
-                    <FormMessage />
-                </FormItem>
                 <DialogFooter>
                     <DialogClose asChild><Button type="button" variant="secondary">Cancel</Button></DialogClose>
                     <Button type="submit" disabled={isSubmitting}>
@@ -235,9 +212,6 @@ export default function TeamsPage() {
   const [teamToEdit, setTeamToEdit] = useState<Team | null>(null);
   const [isAddTeamOpen, setIsAddTeamOpen] = useState(false);
   const [isEditTeamOpen, setIsEditTeamOpen] = useState(false);
-  const [photoPreview, setPhotoPreview] = useState<string | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const inlineFileInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
   const [isSuccessModalOpen, setIsSuccessModalOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [sortConfig, setSortConfig] = useState<{ key: keyof Team | 'organizationName'; direction: 'ascending' | 'descending' } | null>(null);
@@ -245,7 +219,7 @@ export default function TeamsPage() {
 
   const teamForm = useForm<z.infer<typeof teamFormSchema>>({
     resolver: zodResolver(teamFormSchema),
-    defaultValues: { type: 'singles', player1Name: '', player2Name: '', photoUrl: '', lotNumber: undefined },
+    defaultValues: { type: 'singles', player1Name: '', player2Name: '', lotNumber: undefined },
   });
 
   const fetchData = useCallback(async () => {
@@ -276,43 +250,14 @@ export default function TeamsPage() {
   const handleOpenEditDialog = useCallback((team: Team) => {
     setTeamToEdit(team);
     teamForm.reset(team);
-    setPhotoPreview(team.photoUrl || null);
     setIsEditTeamOpen(true);
   }, [teamForm]);
   
   const resetFormAndClose = useCallback(() => {
-    setPhotoPreview(null);
-    teamForm.reset({ type: 'singles', player1Name: '', player2Name: '', photoUrl: '', lotNumber: undefined });
-    if (fileInputRef.current) {
-        fileInputRef.current.value = '';
-    }
+    teamForm.reset({ type: 'singles', player1Name: '', player2Name: '', lotNumber: undefined });
     setIsAddTeamOpen(false);
     setIsEditTeamOpen(false);
   }, [teamForm]);
-  
-  const handlePhotoUpload = async (file: File): Promise<string | null> => {
-    const MAX_FILE_SIZE = 1048576; // 1MB
-    if (file.size > MAX_FILE_SIZE) {
-        toast({ title: "File Too Large", description: `"${file.name}" is larger than 1MB.`, variant: "destructive" });
-        return null;
-    }
-    const storageRef = ref(storage, `team-photos/${uuidv4()}-${file.name}`);
-    
-    return new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.readAsDataURL(file);
-        reader.onload = async (e) => {
-            try {
-                const dataUrl = e.target?.result as string;
-                await uploadString(storageRef, dataUrl, 'data_url');
-                const downloadUrl = await getDownloadURL(storageRef);
-                resolve(downloadUrl);
-            } catch (error) {
-                reject(error);
-            }
-        };
-    });
-  };
 
   const handleTeamSubmit = async (values: z.infer<typeof teamFormSchema>) => {
     setIsSubmitting(true);
@@ -345,22 +290,8 @@ export default function TeamsPage() {
             }
         }
         
-        let finalPhotoUrl = teamToEdit?.photoUrl || '';
-        const file = fileInputRef.current?.files?.[0];
-        if (file && photoPreview && photoPreview.startsWith('blob:')) { // New file was selected
-             if (teamToEdit?.photoUrl) {
-                try {
-                    await deleteObject(ref(storage, teamToEdit.photoUrl));
-                } catch (e) {
-                    console.warn("Old photo deletion failed, might not exist:", e);
-                }
-            }
-            finalPhotoUrl = (await handlePhotoUpload(file)) || '';
-        }
-
         let teamData: Omit<Team, 'id'> = {
             ...values,
-            photoUrl: finalPhotoUrl,
             player2Name: values.player2Name || '',
         };
 
@@ -396,13 +327,6 @@ export default function TeamsPage() {
   const handleDeleteTeam = async () => {
     if (!teamToDelete) return;
     try {
-        if (teamToDelete.photoUrl) {
-            try {
-                await deleteObject(ref(storage, teamToDelete.photoUrl));
-            } catch(e) {
-                console.warn("Could not delete photo from storage, it might not exist:", e);
-            }
-        }
         await deleteDoc(doc(db, 'teams', teamToDelete.id));
         setTeams(prev => prev.filter(t => t.id !== teamToDelete.id));
         toast({ title: 'Success', description: 'Team has been deleted.' });
@@ -417,47 +341,6 @@ export default function TeamsPage() {
   }, [organizations]);
 
   const getOrgName = useCallback((orgId: string) => orgNameMap.get(orgId) || '', [orgNameMap]);
-  
-  const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-        const MAX_FILE_SIZE = 1048576; // 1MB
-        if (file.size > MAX_FILE_SIZE) {
-            toast({ title: "File Too Large", description: `The image must be under 1MB.`, variant: "destructive"});
-            if (fileInputRef.current) fileInputRef.current.value = "";
-            return;
-        }
-        setPhotoPreview(URL.createObjectURL(file));
-    }
-  };
-  
-  const handleInlinePhotoChange = async (e: React.ChangeEvent<HTMLInputElement>, teamId: string) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    setIsSubmitting(true);
-    try {
-        const team = teams.find(t => t.id === teamId);
-        if (team?.photoUrl) {
-             try {
-                await deleteObject(ref(storage, team.photoUrl));
-            } catch (e) {
-                console.warn("Old photo deletion failed, might not exist:", e);
-            }
-        }
-
-        const newPhotoUrl = await handlePhotoUpload(file);
-        if (newPhotoUrl) {
-            await updateDoc(doc(db, 'teams', teamId), { photoUrl: newPhotoUrl });
-            setTeams(prevTeams => prevTeams.map(t => t.id === teamId ? { ...t, photoUrl: newPhotoUrl } : t));
-            toast({ title: 'Photo Updated', description: 'The team photo has been changed.' });
-        }
-    } catch (error) {
-        toast({ title: 'Error', description: 'Failed to update photo.', variant: 'destructive' });
-    } finally {
-        setIsSubmitting(false);
-    }
-  };
   
    const handleLotNumberChange = async (teamId: string, newLotNumberStr: string) => {
     const newLotNumber = newLotNumberStr === '' ? undefined : parseInt(newLotNumberStr, 10);
@@ -598,9 +481,6 @@ export default function TeamsPage() {
                         isSubmitting={isSubmitting}
                         organizations={organizations}
                         playersByOrg={playersByOrg}
-                        photoPreview={photoPreview}
-                        handlePhotoChange={handlePhotoChange}
-                        fileInputRef={fileInputRef}
                     />
                   </DialogContent>
                 </Dialog>
@@ -616,7 +496,6 @@ export default function TeamsPage() {
                   <TableHeader>
                     <TableRow>
                       <TableHead><SortableHeader sortKey="lotNumber">Lot #</SortableHeader></TableHead>
-                      <TableHead>Photo</TableHead>
                       <TableHead><SortableHeader sortKey="type">Event</SortableHeader></TableHead>
                       <TableHead>Players</TableHead>
                       <TableHead><SortableHeader sortKey="organizationName">Organization</SortableHeader></TableHead>
@@ -630,15 +509,6 @@ export default function TeamsPage() {
                           <Input type="number" className="w-20" defaultValue={t.lotNumber ?? ''}
                             onBlur={(e) => handleLotNumberChange(t.id, e.target.value)} placeholder=""
                           />
-                        </TableCell>
-                        <TableCell>
-                            <div className="relative group cursor-pointer" onClick={() => inlineFileInputRefs.current[t.id]?.click()}>
-                               <Image data-ai-hint="badminton players" src={t.photoUrl || 'https://placehold.co/80x80.png'} alt="Team photo" width={80} height={80} className="rounded-md object-cover group-hover:opacity-50 transition-opacity" />
-                               <div className="absolute inset-0 flex items-center justify-center bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity rounded-md">
-                                    <Edit className="h-6 w-6 text-white" />
-                               </div>
-                               <Input type="file" className="hidden" ref={el => (inlineFileInputRefs.current[t.id] = el)} onChange={(e) => handleInlinePhotoChange(e, t.id)} accept="image/*" />
-                            </div>
                         </TableCell>
                         <TableCell><EventBadge eventType={t.type} /></TableCell>
                         <TableCell>{t.player1Name}{t.player2Name ? ` & ${t.player2Name}`: ''}</TableCell>
@@ -687,9 +557,6 @@ export default function TeamsPage() {
                 isSubmitting={isSubmitting}
                 organizations={organizations}
                 playersByOrg={playersByOrg}
-                photoPreview={photoPreview}
-                handlePhotoChange={handlePhotoChange}
-                fileInputRef={fileInputRef}
             />
           </DialogContent>
       </Dialog>

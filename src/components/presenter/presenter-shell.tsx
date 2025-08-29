@@ -380,72 +380,34 @@ const LotteryDrawSlide = ({ teamsWithLots, onComplete }: { teamsWithLots: Team[]
 };
 
 const SponsorsSlide = ({ sponsors }: { sponsors: Sponsor[] }) => {
-    const sponsorsWithImages = sponsors.filter(s => s.photoUrl);
-    const sponsorsWithoutImages = sponsors.filter(s => !s.photoUrl);
+    if (sponsors.length === 0) return null;
 
-    if (sponsorsWithImages.length > 0) {
-        return (
-            <m.div
-                className="h-full flex flex-col justify-center p-4 sm:p-6 md:p-8 bg-black/30 rounded-2xl border border-white/20"
-                initial={{ opacity: 0, scale: 0.95 }}
-                animate={{ opacity: 1, scale: 1 }}
-                transition={{ duration: 0.5 }}
-            >
-                <header className="text-center mb-6" style={{ textShadow: '2px 2px 8px rgba(0,0,0,0.7)' }}>
-                    <h2 className="text-3xl sm:text-4xl md:text-5xl font-bold text-white font-headline flex items-center justify-center gap-4">
-                        <HeartHandshake className="text-pink-400" />
-                        Our Sponsors
-                    </h2>
-                </header>
-                <main className="flex-grow grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-8 items-center justify-items-center">
-                    {sponsorsWithImages.map(sponsor => (
-                        <div key={sponsor.id} className="flex flex-col items-center gap-2 sm:gap-4">
-                            <div className="w-48 h-24 sm:w-64 sm:h-32 relative bg-white/90 rounded-lg p-2 flex items-center justify-center">
-                                <Image
-                                    data-ai-hint="company logo"
-                                    src={sponsor.photoUrl!}
-                                    alt={`${sponsor.name} logo`}
-                                    layout="fill"
-                                    className="object-contain"
-                                />
-                            </div>
-                            <p className="text-lg sm:text-2xl font-bold text-white font-headline" style={{ textShadow: '1px 1px 4px rgba(0,0,0,0.5)' }}>{sponsor.name}</p>
-                        </div>
+    return (
+        <m.div
+            className="h-full flex flex-col justify-center p-4 sm:p-6 md:p-8 bg-black/30 rounded-2xl border border-white/20"
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ duration: 0.5 }}
+        >
+            <header className="text-center mb-6" style={{ textShadow: '2px 2px 8px rgba(0,0,0,0.7)' }}>
+                <h2 className="text-3xl sm:text-4xl md:text-5xl font-bold text-white font-headline flex items-center justify-center gap-4">
+                    <HeartHandshake className="text-pink-400" />
+                    Our Sponsors
+                </h2>
+            </header>
+            <main className="flex-grow flex items-center justify-center">
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-x-8 sm:gap-x-12 gap-y-4 sm:gap-y-6">
+                    {sponsors.map(sponsor => (
+                        <p key={sponsor.id} className="text-xl sm:text-2xl font-bold text-white text-center font-headline" style={{ textShadow: '1px 1px 4px rgba(0,0,0,0.5)' }}>
+                            {sponsor.name}
+                        </p>
                     ))}
-                </main>
-            </m.div>
-        );
-    }
-
-    if (sponsorsWithoutImages.length > 0) {
-        return (
-             <m.div
-                className="h-full flex flex-col justify-center p-4 sm:p-6 md:p-8 bg-black/30 rounded-2xl border border-white/20"
-                initial={{ opacity: 0, scale: 0.95 }}
-                animate={{ opacity: 1, scale: 1 }}
-                transition={{ duration: 0.5 }}
-            >
-                <header className="text-center mb-6" style={{ textShadow: '2px 2px 8px rgba(0,0,0,0.7)' }}>
-                    <h2 className="text-3xl sm:text-4xl md:text-5xl font-bold text-white font-headline flex items-center justify-center gap-4">
-                        <HeartHandshake className="text-pink-400" />
-                        Our Sponsors
-                    </h2>
-                </header>
-                 <main className="flex-grow flex items-center justify-center">
-                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-x-8 sm:gap-x-12 gap-y-4 sm:gap-y-6">
-                        {sponsorsWithoutImages.map(sponsor => (
-                            <p key={sponsor.id} className="text-xl sm:text-2xl font-bold text-white text-center font-headline" style={{ textShadow: '1px 1px 4px rgba(0,0,0,0.5)' }}>
-                                {sponsor.name}
-                            </p>
-                        ))}
-                    </div>
-                </main>
-            </m.div>
-        )
-    }
-
-    return null;
+                </div>
+            </main>
+        </m.div>
+    );
 };
+
 
 const CountdownSlide = ({ tournament }: { tournament: Tournament }) => {
     const [timeLeft, setTimeLeft] = useState(tournament.date.getTime() - Date.now());
@@ -628,27 +590,13 @@ export function PresenterShell() {
 
     // Sponsors are shown anytime after tournament is created
     if (sponsors && sponsors.length > 0) {
-        const sponsorsWithImages = sponsors.filter(s => s.photoUrl);
-        const SPONSOR_CHUNK_SIZE_IMG = 3;
-        if (sponsorsWithImages.length > 0) {
-            for (let i = 0; i < sponsorsWithImages.length; i += SPONSOR_CHUNK_SIZE_IMG) {
-                const chunk = sponsorsWithImages.slice(i, i + SPONSOR_CHUNK_SIZE_IMG);
-                slideComponents.push({
-                    key: `sponsor-chunk-img-${i}`, 
-                    component: <SponsorsSlide sponsors={chunk} />
-                });
-            }
-        }
-        const sponsorsWithoutImages = sponsors.filter(s => !s.photoUrl);
-        const SPONSOR_CHUNK_SIZE_TEXT = 9;
-         if (sponsorsWithoutImages.length > 0) {
-            for (let i = 0; i < sponsorsWithoutImages.length; i += SPONSOR_CHUNK_SIZE_TEXT) {
-                const chunk = sponsorsWithoutImages.slice(i, i + SPONSOR_CHUNK_SIZE_TEXT);
-                slideComponents.push({
-                    key: `sponsor-chunk-text-${i}`,
-                    component: <SponsorsSlide sponsors={chunk} />
-                });
-            }
+        const SPONSOR_CHUNK_SIZE = 9;
+        for (let i = 0; i < sponsors.length; i += SPONSOR_CHUNK_SIZE) {
+            const chunk = sponsors.slice(i, i + SPONSOR_CHUNK_SIZE);
+            slideComponents.push({
+                key: `sponsor-chunk-${i}`,
+                component: <SponsorsSlide sponsors={chunk} />
+            });
         }
     }
 

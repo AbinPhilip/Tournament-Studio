@@ -19,7 +19,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { MoreHorizontal, Trash2, Edit, CheckCircle, Loader2, HeartHandshake } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { db, storage } from '@/lib/firebase';
-import { collection, addDoc, deleteDoc, doc, updateDoc, onSnapshot, query, where, getDocs } from 'firebase/firestore';
+import { collection, addDoc, deleteDoc, doc, updateDoc, onSnapshot } from 'firebase/firestore';
 import type { Sponsor } from '@/types';
 import {
   AlertDialog,
@@ -35,22 +35,15 @@ import {
   Dialog,
   DialogClose,
   DialogContent,
-  DialogDescription,
-  DialogFooter,
   DialogHeader,
   DialogTitle,
   DialogTrigger
 } from '@/components/ui/dialog';
-import Image from 'next/image';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { ref, uploadString, getDownloadURL, deleteObject } from 'firebase/storage';
-import { v4 as uuidv4 } from 'uuid';
 
 const sponsorFormSchema = z.object({
     name: z.string().min(2, { message: "Sponsor name must be at least 2 characters." }),
-    photoUrl: z.string().url().optional().or(z.literal('')),
-    photoPath: z.string().optional(),
 });
 
 export default function SponsorsPage() {
@@ -63,12 +56,10 @@ export default function SponsorsPage() {
   const [sponsorToDelete, setSponsorToDelete] = useState<Sponsor | null>(null);
   
   const [isFormOpen, setIsFormOpen] = useState(false);
-  const [photoPreview, setPhotoPreview] = useState<string | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const form = useForm<z.infer<typeof sponsorFormSchema>>({
     resolver: zodResolver(sponsorFormSchema),
-    defaultValues: { name: '', photoUrl: '', photoPath: '' },
+    defaultValues: { name: '' },
   });
   
   useEffect(() => {
@@ -89,11 +80,9 @@ export default function SponsorsPage() {
     if (sponsor) {
       setSponsorToEdit(sponsor);
       form.reset(sponsor);
-      setPhotoPreview(sponsor.photoUrl || null);
     } else {
       setSponsorToEdit(null);
-      form.reset({ name: '', photoUrl: '', photoPath: '' });
-      setPhotoPreview(null);
+      form.reset({ name: '' });
     }
     setIsFormOpen(true);
   }, [form]);
@@ -101,80 +90,22 @@ export default function SponsorsPage() {
   const handleCloseForm = useCallback(() => {
     setIsFormOpen(false);
     setSponsorToEdit(null);
-    form.reset({ name: '', photoUrl: '', photoPath: '' });
-    setPhotoPreview(null);
-     if (fileInputRef.current) {
-      fileInputRef.current.value = "";
-    }
+    form.reset({ name: '' });
   }, [form]);
 
-  const handlePhotoUpload = async (file: File): Promise<{ photoUrl: string, photoPath: string } | null> => {
-    const MAX_FILE_SIZE = 2 * 1024 * 1024; // 2MB
-    if (file.size > MAX_FILE_SIZE) {
-        toast({ title: "File Too Large", description: `"${file.name}" is larger than 2MB.`, variant: "destructive" });
-        return null;
-    }
-    const photoPath = `sponsor-logos/${uuidv4()}-${file.name}`;
-    const storageRef = ref(storage, photoPath);
-
-    return new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.readAsDataURL(file);
-        reader.onload = async (e) => {
-            try {
-                const dataUrl = e.target?.result as string;
-                await uploadString(storageRef, dataUrl, 'data_url');
-                const downloadUrl = await getDownloadURL(storageRef);
-                resolve({ photoUrl: downloadUrl, photoPath });
-            } catch (error) {
-                reject(error);
-            }
-        };
-        reader.onerror = (error) => reject(error);
-    });
-  };
 
   const handleFormSubmit = async (values: z.infer<typeof sponsorFormSchema>) => {
     setIsSubmitting(true);
     try {
-      const file = fileInputRef.current?.files?.[0];
-      let newImageInfo: { photoUrl: string; photoPath: string } | null = null;
-
-      // 1. If a new file is selected, upload it
-      if (file) {
-        newImageInfo = await handlePhotoUpload(file);
-        if (!newImageInfo) {
-          setIsSubmitting(false);
-          return; // Stop if upload fails (e.g., file too large)
-        }
-      }
-
-      // 2. Determine data to save
       const dataToSave: Omit<Sponsor, 'id'> = {
         name: values.name,
-        photoUrl: newImageInfo?.photoUrl ?? sponsorToEdit?.photoUrl ?? '',
-        photoPath: newImageInfo?.photoPath ?? sponsorToEdit?.photoPath ?? '',
       };
 
       if (sponsorToEdit) {
-        // --- UPDATE LOGIC ---
-        // 3a. If a new image was uploaded, delete the old one
-        if (newImageInfo && sponsorToEdit.photoPath) {
-          try {
-            await deleteObject(ref(storage, sponsorToEdit.photoPath));
-          } catch (error: any) {
-            // Log error but don't block the update if old file deletion fails
-            if (error.code !== 'storage/object-not-found') {
-              console.warn("Could not delete old logo during update:", error);
-            }
-          }
-        }
-        // 4a. Update Firestore document
         const sponsorRef = doc(db, 'sponsors', sponsorToEdit.id);
         await updateDoc(sponsorRef, dataToSave);
         toast({ title: 'Sponsor Updated', description: `Details for "${values.name}" have been updated.` });
       } else {
-        // --- CREATE LOGIC ---
         await addDoc(collection(db, 'sponsors'), dataToSave);
         toast({ title: 'Sponsor Added', description: `Sponsor "${values.name}" has been added.` });
       }
@@ -193,35 +124,13 @@ export default function SponsorsPage() {
     if (!sponsorToDelete) return;
     setIsSubmitting(true);
     try {
-        // Delete Firestore document first
         await deleteDoc(doc(db, 'sponsors', sponsorToDelete.id));
-        
-        // Then delete the image from storage if it exists
-        if (sponsorToDelete.photoPath) {
-            try {
-                const logoRef = ref(storage, sponsorToDelete.photoPath);
-                await deleteObject(logoRef);
-            } catch (e: any) {
-                 if (e.code !== 'storage/object-not-found') {
-                    console.warn("Could not delete logo from storage:", e);
-                 }
-            }
-        }
         toast({ title: 'Sponsor Deleted', description: `"${sponsorToDelete.name}" has been removed.` });
         setSponsorToDelete(null);
     } catch (error) {
         toast({ title: 'Error', description: 'Failed to delete sponsor.', variant: 'destructive' });
     } finally {
         setIsSubmitting(false);
-    }
-  };
-
-  const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-        setPhotoPreview(URL.createObjectURL(file));
-    } else {
-        setPhotoPreview(sponsorToEdit?.photoUrl ?? null);
     }
   };
 
@@ -246,7 +155,6 @@ export default function SponsorsPage() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Logo</TableHead>
                   <TableHead>Sponsor Name</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
@@ -254,16 +162,6 @@ export default function SponsorsPage() {
               <TableBody>
                 {sponsors.map((sponsor) => (
                   <TableRow key={sponsor.id}>
-                    <TableCell>
-                      <Image 
-                        data-ai-hint="company logo"
-                        src={sponsor.photoUrl || "https://placehold.co/80x80.png"} 
-                        alt={`${sponsor.name} logo`} 
-                        width={80} 
-                        height={80} 
-                        className="rounded-md object-contain bg-muted" 
-                      />
-                    </TableCell>
                     <TableCell className="font-medium">{sponsor.name}</TableCell>
                     <TableCell className="text-right">
                       <DropdownMenu>
@@ -304,18 +202,6 @@ export default function SponsorsPage() {
                   <FormMessage />
                 </FormItem>
               )} />
-              <FormItem>
-                <FormLabel>Sponsor Logo</FormLabel>
-                <div className="flex items-center gap-4">
-                  <div className="h-20 w-20 bg-muted rounded-md flex items-center justify-center overflow-hidden">
-                    <Image data-ai-hint="company logo" src={photoPreview || "https://placehold.co/80x80.png"} width={80} height={80} alt="Sponsor logo" className="object-contain h-full w-full" />
-                  </div>
-                  <Button type="button" variant="outline" onClick={() => fileInputRef.current?.click()}>
-                    Upload Logo
-                  </Button>
-                  <Input type="file" ref={fileInputRef} onChange={handlePhotoChange} className="hidden" accept="image/*" />
-                </div>
-              </FormItem>
               <DialogFooter>
                 <DialogClose asChild><Button type="button" variant="secondary">Cancel</Button></DialogClose>
                 <Button type="submit" disabled={isSubmitting}>
@@ -347,5 +233,3 @@ export default function SponsorsPage() {
     </div>
   );
 }
-
-    

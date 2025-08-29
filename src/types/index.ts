@@ -39,15 +39,12 @@ export interface Team {
     genderP1?: Gender;
     genderP2?: Gender;
     organizationId: string;
-    photoUrl?: string;
     lotNumber?: number;
 }
 
 export interface Sponsor {
   id: string;
   name: string;
-  photoUrl?: string;
-  photoPath?: string;
 }
 
 export type TournamentType = 'round-robin' | 'knockout';
