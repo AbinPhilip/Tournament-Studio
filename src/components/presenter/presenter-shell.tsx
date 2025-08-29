@@ -426,9 +426,9 @@ const CountdownSlide = ({ tournament }: { tournament: Tournament }) => {
     }, [tournament.date]);
     
     const TimeBox = ({ value, label }: { value: number, label: string }) => (
-        <div className="flex flex-col items-center justify-center bg-white/10 p-4 sm:p-6 rounded-2xl w-24 h-24 sm:w-32 sm:h-32 md:w-40 md:h-40">
-            <span className="text-4xl sm:text-5xl md:text-6xl font-black text-white font-headline" style={{ textShadow: '2px 2px 8px rgba(0,0,0,0.7)' }}>{value.toString().padStart(2, '0')}</span>
-            <span className="text-sm sm:text-base md:text-lg text-slate-300 font-headline mt-1">{label}</span>
+        <div className="flex flex-col items-center justify-center bg-white/10 p-2 rounded-lg w-20 h-20 sm:w-32 sm:h-32 md:w-40 md:h-40 sm:p-4 md:rounded-2xl">
+            <span className="text-3xl sm:text-5xl md:text-6xl font-black text-white font-headline" style={{ textShadow: '2px 2px 8px rgba(0,0,0,0.7)' }}>{value.toString().padStart(2, '0')}</span>
+            <span className="text-xs sm:text-base md:text-lg text-slate-300 font-headline mt-1">{label}</span>
         </div>
     );
 
@@ -447,8 +447,8 @@ const CountdownSlide = ({ tournament }: { tournament: Tournament }) => {
             transition={{duration: 0.5}}
         >
             <header className="text-center mb-6 sm:mb-10" style={{ textShadow: '2px 2px 8px rgba(0,0,0,0.7)' }}>
-                <h2 className="text-3xl sm:text-4xl md:text-5xl font-bold text-white font-headline flex items-center justify-center gap-4">
-                    <Clock className="text-yellow-400" />
+                <h2 className="text-3xl sm:text-4xl md:text-5xl font-bold text-white font-headline flex items-center justify-center gap-2 sm:gap-4">
+                    <Clock className="h-8 w-8 sm:h-10 sm:w-10 text-yellow-400" />
                     Tournament Countdown
                 </h2>
             </header>
