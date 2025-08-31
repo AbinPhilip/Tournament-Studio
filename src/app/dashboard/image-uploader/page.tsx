@@ -197,10 +197,10 @@ export default function ImageUploaderPage() {
                 {isUploading && (
                     <div className="space-y-2">
                         {/* Since backend upload doesn't provide progress, we show a generic loader */}
-                        <p className="text-sm text-muted-foreground text-center flex items-center justify-center gap-2">
+                        <div className="text-sm text-muted-foreground text-center flex items-center justify-center gap-2">
                             <LoadingShuttlecock className="w-6 h-6" />
                             Uploading...
-                        </p>
+                        </div>
                     </div>
                 )}
             </div>
