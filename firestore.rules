@@ -1,38 +1,40 @@
+
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Allow public read access to most collections for presenter views, etc.
-    match /tournaments/{docId} {
-      allow read;
-      allow write: if request.auth != null;
-    }
-    match /organizations/{docId} {
-      allow read;
-      allow write: if request.auth != null;
-    }
-    match /teams/{docId} {
-      allow read;
-      allow write: if request.auth != null;
-    }
-     match /sponsors/{docId} {
-      allow read;
-      allow write: if request.auth != null;
-    }
-    match /matches/{docId} {
-      allow read;
-      allow write: if request.auth != null;
+    match /{document=**} {
+      allow read, write: if false;
     }
     match /users/{userId} {
-      allow read;
-      allow create; // Allow user creation
-      allow update, delete: if request.auth.uid == userId;
+      allow read: if true;
+      allow write: if request.auth != null;
     }
-    match /rolePermissions/{roleId} {
-      allow read;
-      allow write: if request.auth != null; // Should be restricted to 'super' role in app logic
+    match /tournaments/{tournamentId} {
+      allow read: if true;
+      allow write: if request.auth != null;
     }
-     match /images/{imageId} {
-      allow read;
+     match /organizations/{organizationId} {
+      allow read: if true;
+      allow write: if request.auth != null;
+    }
+    match /teams/{teamId} {
+      allow read: if true;
+      allow write: if request.auth != null;
+    }
+    match /matches/{matchId} {
+      allow read: if true;
+      allow write: if request.auth != null;
+    }
+    match /sponsors/{sponsorId} {
+      allow read: if true;
+      allow write: if request.auth != null;
+    }
+     match /rolePermissions/{roleId} {
+      allow read: if true;
+      allow write: if request.auth != null;
+    }
+    match /images/{imageId} {
+      allow read: if true;
       allow create: if request.auth != null;
       allow delete: if request.auth != null && resource.data.uploaderId == request.auth.uid;
     }
