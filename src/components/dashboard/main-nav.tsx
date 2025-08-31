@@ -1,4 +1,3 @@
-
 "use client"
 
 import Link from "next/link"
@@ -63,6 +62,9 @@ export function MainNav({ user, isMobile = false, isCollapsed = false }: { user:
             const modules = doc.data().modules || [];
             if (!modules.includes('presenter')) {
                 modules.push('presenter');
+            }
+            if (!modules.includes('image-uploader')) {
+              modules.push('image-uploader');
             }
             acc[doc.id as UserRole] = modules;
             return acc;

@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from 'react';
@@ -25,6 +24,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { LoadingShuttlecock } from '@/components/ui/loading-shuttlecock';
+import { Progress } from '@/components/ui/progress';
 
 
 export default function ImageUploaderPage() {
@@ -32,6 +32,7 @@ export default function ImageUploaderPage() {
   const { toast } = useToast();
   const [images, setImages] = useState<ImageMetadata[]>([]);
   const [isUploading, setIsUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [imageToDelete, setImageToDelete] = useState<ImageMetadata | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -80,15 +81,19 @@ export default function ImageUploaderPage() {
     }
     
     setIsUploading(true);
+    setUploadProgress(0);
     const storagePath = `images/${user.id}/${uuidv4()}-${file.name}`;
     const storageRef = ref(storage, storagePath);
     const uploadTask = uploadBytesResumable(storageRef, file);
 
     uploadTask.on('state_changed',
-      (snapshot) => { /* progress can be monitored here */ },
+      (snapshot) => {
+        const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+        setUploadProgress(progress);
+      },
       (error) => {
         console.error("Upload failed:", error);
-        toast({ title: "Upload Failed", description: "Could not upload the image. Please check your network and security rules.", variant: "destructive" });
+        toast({ title: "Upload Failed", description: "Could not upload the image. Please try again.", variant: "destructive" });
         setIsUploading(false);
       },
       () => {
@@ -151,9 +156,9 @@ export default function ImageUploaderPage() {
           <CardDescription>Upload and manage images for your tournament. Files are stored securely in Cloud Storage.</CardDescription>
         </CardHeader>
         <CardContent>
-           <div className="flex gap-2">
-                <Button onClick={() => fileInputRef.current?.click()} disabled={isUploading}>
-                    {isUploading ? <div className="animate-spin h-5 w-5 border-2 border-background border-t-transparent rounded-full" /> : <Upload />}
+           <div className="flex flex-col gap-4">
+                <Button onClick={() => fileInputRef.current?.click()} disabled={isUploading} className="w-full sm:w-auto self-start">
+                    <Upload className="mr-2"/>
                     Upload Image
                 </Button>
                 <Input
@@ -163,6 +168,12 @@ export default function ImageUploaderPage() {
                     className="hidden"
                     accept="image/png, image/jpeg, image/gif, image/webp"
                 />
+                {isUploading && (
+                    <div className="space-y-2">
+                        <Progress value={uploadProgress} className="w-full" />
+                        <p className="text-sm text-muted-foreground text-center">Uploading... {Math.round(uploadProgress)}%</p>
+                    </div>
+                )}
             </div>
         </CardContent>
       </Card>

@@ -1,11 +1,10 @@
-
 "use client";
 
 import { useAuth } from '@/hooks/use-auth';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { useRouter } from 'next/navigation';
-import { ListOrdered, Cog, Shield, Settings, Users, Building, Trophy, GitBranch } from 'lucide-react';
+import { ListOrdered, Cog, Shield, Settings, Users, Building, Trophy, GitBranch, HeartHandshake, ImageIcon } from 'lucide-react';
 
 export default function AdminView() {
   const { user } = useAuth();
@@ -15,10 +14,12 @@ export default function AdminView() {
     { label: "Tournament Setup", href: "/dashboard/tournament", icon: Cog },
     { label: "Organizations", href: "/dashboard/organizations", icon: Building },
     { label: "Teams", href: "/dashboard/teams", icon: Users },
+    { label: "Sponsors", href: "/dashboard/sponsors", icon: HeartHandshake },
     { label: "Scheduler", href: "/dashboard/scheduler", icon: ListOrdered },
     { label: "Umpire View", href: "/dashboard/umpire", icon: Shield },
     { label: "Tournament Draw", href: "/dashboard/draw", icon: GitBranch },
     { label: "Match History", href: "/dashboard/match-history", icon: Trophy },
+    { label: "Image Uploader", href: "/dashboard/image-uploader", icon: ImageIcon },
   ];
 
   return (
