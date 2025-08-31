@@ -12,7 +12,7 @@ import type { ImageMetadata } from '@/types';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Loader2, Upload, X, ImageIcon, Trash2, Download } from 'lucide-react';
+import { Loader2, Upload, Trash2, Download, ImageIcon } from 'lucide-react';
 import Image from 'next/image';
 import {
   AlertDialog,
