@@ -5,8 +5,8 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from '@/hooks/use-auth';
 import { useToast } from '@/hooks/use-toast';
 import { db, storage } from '@/lib/firebase';
-import { collection, addDoc, deleteDoc, doc, query, where, onSnapshot, orderBy, serverTimestamp } from 'firebase/firestore';
-import { ref, uploadBytesResumable, getDownloadURL, deleteObject } from 'firebase/storage';
+import { collection, addDoc, query, where, onSnapshot, orderBy, serverTimestamp } from 'firebase/firestore';
+import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 import { v4 as uuidv4 } from 'uuid';
 import type { ImageMetadata } from '@/types';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -26,6 +26,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { LoadingShuttlecock } from '@/components/ui/loading-shuttlecock';
 import { Progress } from '@/components/ui/progress';
+import { deleteImage } from '@/ai/flows/delete-image-flow';
 
 
 export default function ImageUploaderPage() {
@@ -33,6 +34,7 @@ export default function ImageUploaderPage() {
   const { toast } = useToast();
   const [images, setImages] = useState<ImageMetadata[]>([]);
   const [isUploading, setIsUploading] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [imageToDelete, setImageToDelete] = useState<ImageMetadata | null>(null);
@@ -140,27 +142,23 @@ export default function ImageUploaderPage() {
   };
   
   const handleConfirmDelete = async () => {
-    if (!imageToDelete) return;
+    if (!imageToDelete || !user) return;
     
     console.log("ImageUploader: Confirming delete for image:", imageToDelete.id);
-    const { storagePath, id } = imageToDelete;
+    setIsDeleting(true);
     
     try {
-        // Delete from Storage
-        console.log(`ImageUploader: Deleting from Storage path: ${storagePath}`);
-        const imageRef = ref(storage, storagePath);
-        await deleteObject(imageRef);
-
-        // Delete from Firestore
-        console.log(`ImageUploader: Deleting from Firestore doc: ${id}`);
-        await deleteDoc(doc(db, "images", id));
-
+        await deleteImage({
+            imageId: imageToDelete.id,
+            requestingUserId: user.id
+        });
         toast({ title: "Image Deleted", description: "The image has been successfully removed." });
     } catch(error) {
         console.error("ImageUploader: Deletion error:", error);
-        toast({ title: "Deletion Failed", description: "Could not delete the image. It may have already been removed.", variant: "destructive" });
+        toast({ title: "Deletion Failed", description: "Could not delete the image. You may not have permission.", variant: "destructive" });
     } finally {
         setImageToDelete(null);
+        setIsDeleting(false);
     }
   };
 
@@ -237,7 +235,8 @@ export default function ImageUploaderPage() {
             </AlertDialogHeader>
             <AlertDialogFooter>
                 <AlertDialogCancel>Cancel</AlertDialogCancel>
-                <AlertDialogAction onClick={handleConfirmDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                <AlertDialogAction onClick={handleConfirmDelete} disabled={isDeleting} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                  {isDeleting && <div className="animate-spin h-5 w-5 border-2 border-background border-t-transparent rounded-full mr-2" />}
                   Delete
                 </AlertDialogAction>
             </AlertDialogFooter>
