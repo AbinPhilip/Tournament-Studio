@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from 'react';
@@ -5,7 +6,7 @@ import { useAuth } from '@/hooks/use-auth';
 import { useToast } from '@/hooks/use-toast';
 import { db, storage } from '@/lib/firebase';
 import { collection, addDoc, onSnapshot, query, where, orderBy, serverTimestamp, deleteDoc, doc } from 'firebase/firestore';
-import { ref, deleteObject } from 'firebase/storage';
+import { ref, uploadBytesResumable, getDownloadURL, deleteObject } from 'firebase/storage';
 import { v4 as uuidv4 } from 'uuid';
 import type { ImageMetadata } from '@/types';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -25,15 +26,13 @@ import {
 } from "@/components/ui/alert-dialog";
 import { LoadingShuttlecock } from '@/components/ui/loading-shuttlecock';
 import { Progress } from '@/components/ui/progress';
-import { uploadImage } from '@/ai/flows/upload-image-flow';
-
 
 export default function ImageUploaderPage() {
   const { user } = useAuth();
   const { toast } = useToast();
   const [images, setImages] = useState<ImageMetadata[]>([]);
   const [isUploading, setIsUploading] = useState(false);
-  const [uploadProgress, setUploadProgress] = useState(0); // For optimistic UI, might not be used with backend uploads
+  const [uploadProgress, setUploadProgress] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [imageToDelete, setImageToDelete] = useState<ImageMetadata | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -78,50 +77,47 @@ export default function ImageUploaderPage() {
     }
     
     setIsUploading(true);
-    setUploadProgress(0); // Reset progress
+    setUploadProgress(0);
 
-    try {
-        // Convert file to Base64 Data URI
-        const reader = new FileReader();
-        reader.readAsDataURL(file);
-        reader.onload = async () => {
-            const dataUrl = reader.result as string;
+    const storagePath = `images/${user.id}/${uuidv4()}-${file.name}`;
+    const storageRef = ref(storage, storagePath);
+    const uploadTask = uploadBytesResumable(storageRef, file);
 
-            const { imageUrl, storagePath } = await uploadImage({
-                fileDataUrl: dataUrl,
-                fileName: file.name,
-                userId: user.id
-            });
-
-            const imageMetadata = {
-                imageUrl: imageUrl,
-                storagePath: storagePath,
-                uploaderId: user.id,
-                createdAt: serverTimestamp(),
-                originalFilename: file.name,
-                fileSize: file.size,
-                mimeType: file.type,
-            };
-
-            await addDoc(collection(db, "images"), imageMetadata);
-            toast({ title: "Upload Successful", description: `"${file.name}" has been uploaded.` });
+    uploadTask.on('state_changed',
+        (snapshot) => {
+            const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+            setUploadProgress(progress);
+        },
+        (error) => {
+            console.error("Upload failed:", error);
+            let description = "Could not upload the image. Please try again.";
+            if (error.code === 'storage/unauthorized') {
+                description = "Permission denied. Please check storage rules.";
+            }
+            toast({ title: "Upload Failed", description, variant: "destructive" });
             setIsUploading(false);
-        };
-        reader.onerror = (error) => {
-             console.error("FileReader error:", error);
-             toast({ title: "File Read Error", description: "Could not read the selected file.", variant: "destructive" });
-             setIsUploading(false);
+        },
+        async () => {
+            try {
+                const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
+                const imageMetadata = {
+                    imageUrl: downloadURL,
+                    storagePath: storagePath,
+                    uploaderId: user.id,
+                    createdAt: serverTimestamp(),
+                    originalFilename: file.name,
+                    fileSize: file.size,
+                    mimeType: file.type,
+                };
+                await addDoc(collection(db, "images"), imageMetadata);
+                toast({ title: "Upload Successful", description: `"${file.name}" has been uploaded.` });
+            } catch (error) {
+                 toast({ title: "Metadata Error", description: "Image uploaded, but failed to save metadata.", variant: "destructive" });
+            } finally {
+                setIsUploading(false);
+            }
         }
-    } catch (error) {
-        console.error("Upload failed:", error);
-        let description = "Could not upload the image. Please try again.";
-        toast({ 
-            title: "Upload Failed", 
-            description: description,
-            variant: "destructive" 
-        });
-        setIsUploading(false);
-    }
+    );
   }, [user, toast]);
 
   const handleDeleteClick = (image: ImageMetadata) => {
@@ -196,11 +192,8 @@ export default function ImageUploaderPage() {
                 />
                 {isUploading && (
                     <div className="space-y-2">
-                        {/* Since backend upload doesn't provide progress, we show a generic loader */}
-                        <div className="text-sm text-muted-foreground text-center flex items-center justify-center gap-2">
-                            <LoadingShuttlecock className="w-6 h-6" />
-                            Uploading...
-                        </div>
+                        <Progress value={uploadProgress} className="w-full" />
+                        <p className="text-sm text-muted-foreground text-center">Uploading... {Math.round(uploadProgress)}%</p>
                     </div>
                 )}
             </div>
