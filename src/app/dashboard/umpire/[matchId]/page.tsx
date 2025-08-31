@@ -152,7 +152,7 @@ export default function LiveScorerPage() {
                 status: 'COMPLETED',
             });
              toast({ title: "Match Finalized!", description: "The final result has been recorded." });
-             router.push('/dashboard');
+             router.push('/dashboard/umpire');
          } catch(e) {
              console.error("Finalization error:", e);
              toast({ title: "Error", description: "Could not finalize match.", variant: "destructive" });

@@ -702,7 +702,7 @@ export function PresenterShell() {
   }
   
   return (
-    <div className="h-screen w-screen bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-blue-950 via-blue-950 to-black font-sans flex flex-col p-4 relative">
+    <div className="h-screen w-screen animated-gradient-background font-sans flex flex-col p-4 relative">
        {slides.length <= 1 && slides[0]?.key === 'welcome' ? (
             <WelcomeSlide tournament={tournament} />
         ) : (
