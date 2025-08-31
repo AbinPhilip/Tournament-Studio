@@ -7,7 +7,7 @@ import { db } from '@/lib/firebase';
 import { doc, onSnapshot, Unsubscribe, Timestamp, updateDoc } from 'firebase/firestore';
 import type { Match } from '@/types';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, ArrowLeft, Send, Repeat, CheckCircle, Smartphone, AlertTriangle } from 'lucide-react';
+import { ArrowLeft, Send, Repeat, CheckCircle, Smartphone, AlertTriangle } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { updateLiveScore } from '@/ai/flows/update-live-score-flow';
@@ -24,6 +24,7 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { Separator } from '@/components/ui/separator';
+import { LoadingShuttlecock } from '@/components/ui/loading-shuttlecock';
 
 export default function LiveScorerPage() {
     const params = useParams();
@@ -206,7 +207,7 @@ export default function LiveScorerPage() {
     }, [match]);
 
     if (isLoading || !match) {
-        return <div className="flex h-screen w-full items-center justify-center"><Loader2 className="h-16 w-16 animate-spin" /></div>;
+        return <div className="flex h-screen w-full items-center justify-center"><LoadingShuttlecock /></div>;
     }
     
     const { team1Points = 0, team2Points = 0, servingTeamId, currentSet = 1 } = match.live || {};
@@ -309,7 +310,7 @@ export default function LiveScorerPage() {
                           className="w-full bg-green-600 hover:bg-green-700"
                           disabled={isSubmitting}
                         >
-                           {isSubmitting ? <Loader2 className="animate-spin" /> : <CheckCircle className="mr-2"/>}
+                           {isSubmitting ? <div className="animate-spin h-5 w-5 border-2 border-background border-t-transparent rounded-full" /> : <CheckCircle className="mr-2"/>}
                             Confirm and Finalize Match
                       </Button>
                       
@@ -354,5 +355,3 @@ function TeamScorePanel({ teamName, points, setsWon, isServing, onPointChange }:
         </div>
     );
 }
-
-    

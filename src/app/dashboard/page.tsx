@@ -2,14 +2,14 @@
 "use client";
 
 import { useAuth } from '@/hooks/use-auth';
-import { Loader2 } from 'lucide-react';
 import dynamic from 'next/dynamic';
+import { LoadingShuttlecock } from '@/components/ui/loading-shuttlecock';
 
-const AdminView = dynamic(() => import('@/components/dashboard/admin-view'), { loading: () => <Loader2 className="h-12 w-12 animate-spin" /> });
-const IndividualView = dynamic(() => import('@/components/dashboard/individual-view'), { loading: () => <Loader2 className="h-12 w-12 animate-spin" /> });
-const InquiryView = dynamic(() => import('@/components/dashboard/inquiry-view'), { loading: () => <Loader2 className="h-12 w-12 animate-spin" /> });
-const UpdateUserView = dynamic(() => import('@/components/dashboard/update-user-view'), { loading: () => <Loader2 className="h-12 w-12 animate-spin" /> });
-const CourtUmpireView = dynamic(() => import('@/app/dashboard/court-umpire-view'), { loading: () => <Loader2 className="h-12 w-12 animate-spin" /> });
+const AdminView = dynamic(() => import('@/app/dashboard/admin-view'), { loading: () => <LoadingShuttlecock /> });
+const IndividualView = dynamic(() => import('@/components/dashboard/individual-view'), { loading: () => <LoadingShuttlecock /> });
+const InquiryView = dynamic(() => import('@/components/dashboard/inquiry-view'), { loading: () => <LoadingShuttlecock /> });
+const UpdateUserView = dynamic(() => import('@/components/dashboard/update-user-view'), { loading: () => <LoadingShuttlecock /> });
+const CourtUmpireView = dynamic(() => import('@/app/dashboard/court-umpire-view'), { loading: () => <LoadingShuttlecock /> });
 
 
 export default function DashboardPage() {
@@ -17,7 +17,7 @@ export default function DashboardPage() {
 
   const renderDashboardByRole = () => {
     if (!user) {
-        return <div className="flex h-full w-full items-center justify-center"><Loader2 className="h-12 w-12 animate-spin text-primary" /></div>;
+        return <div className="flex h-full w-full items-center justify-center"><LoadingShuttlecock /></div>;
     }
     
     switch (user?.role) {

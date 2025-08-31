@@ -15,7 +15,7 @@ import {
 } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { MoreHorizontal, Trash2, Building, Edit, CheckCircle, Loader2 } from 'lucide-react';
+import { MoreHorizontal, Trash2, Building, Edit, CheckCircle } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -55,6 +55,7 @@ import { useToast } from '@/hooks/use-toast';
 import { db } from '@/lib/firebase';
 import { collection, addDoc, deleteDoc, doc, query, where, getDocs, updateDoc, onSnapshot } from 'firebase/firestore';
 import type { Organization, Team } from '@/types';
+import { LoadingShuttlecock } from '@/components/ui/loading-shuttlecock';
 
 
 const organizationFormSchema = z.object({
@@ -204,7 +205,7 @@ export default function OrganizationPage() {
                     <DialogFooter>
                       <DialogClose asChild><Button type="button" variant="secondary">Cancel</Button></DialogClose>
                       <Button type="submit" disabled={isSubmitting}>
-                        {isSubmitting && <Loader2 className="animate-spin" />}
+                        {isSubmitting && <div className="animate-spin h-5 w-5 border-2 border-background border-t-transparent rounded-full" />}
                         Create Organization
                       </Button>
                     </DialogFooter>
@@ -216,7 +217,7 @@ export default function OrganizationPage() {
           <CardContent>
             {isLoading ? (
                 <div className="flex justify-center items-center h-48">
-                    <Loader2 className="h-12 w-12 animate-spin text-primary" />
+                    <LoadingShuttlecock />
                 </div>
             ) : (
                 <Table>
@@ -273,7 +274,7 @@ export default function OrganizationPage() {
               <DialogFooter>
                   <Button type="button" variant="secondary" onClick={() => setIsEditOrgOpen(false)}>Cancel</Button>
                   <Button type="submit" disabled={isSubmitting}>
-                    {isSubmitting && <Loader2 className="animate-spin" />}
+                    {isSubmitting && <div className="animate-spin h-5 w-5 border-2 border-background border-t-transparent rounded-full" />}
                     Save Changes
                   </Button>
               </DialogFooter>

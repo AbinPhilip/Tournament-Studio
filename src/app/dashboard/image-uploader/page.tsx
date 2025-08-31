@@ -12,7 +12,7 @@ import type { ImageMetadata } from '@/types';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Loader2, Upload, Trash2, Download, ImageIcon } from 'lucide-react';
+import { Upload, Trash2, Download, ImageIcon } from 'lucide-react';
 import Image from 'next/image';
 import {
   AlertDialog,
@@ -23,7 +23,8 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-} from "@/components/ui/alert-dialog"
+} from "@/components/ui/alert-dialog";
+import { LoadingShuttlecock } from '@/components/ui/loading-shuttlecock';
 
 
 export default function ImageUploaderPage() {
@@ -152,7 +153,7 @@ export default function ImageUploaderPage() {
         <CardContent>
            <div className="flex gap-2">
                 <Button onClick={() => fileInputRef.current?.click()} disabled={isUploading}>
-                    {isUploading ? <Loader2 className="animate-spin" /> : <Upload />}
+                    {isUploading ? <div className="animate-spin h-5 w-5 border-2 border-background border-t-transparent rounded-full" /> : <Upload />}
                     Upload Image
                 </Button>
                 <Input
@@ -173,7 +174,7 @@ export default function ImageUploaderPage() {
         </CardHeader>
         <CardContent>
             {isLoading ? (
-                <div className="flex justify-center items-center h-48"><Loader2 className="h-12 w-12 animate-spin" /></div>
+                <div className="flex justify-center items-center h-48"><LoadingShuttlecock /></div>
             ) : images.length > 0 ? (
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
                     {images.map(image => (

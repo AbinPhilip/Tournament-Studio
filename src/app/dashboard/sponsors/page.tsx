@@ -16,7 +16,7 @@ import {
   FormMessage,
 } from '@/components/ui/form';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { MoreHorizontal, Trash2, Edit, CheckCircle, Loader2, HeartHandshake } from 'lucide-react';
+import { MoreHorizontal, Trash2, Edit, CheckCircle, HeartHandshake } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { db, storage } from '@/lib/firebase';
 import { collection, addDoc, deleteDoc, doc, updateDoc, onSnapshot } from 'firebase/firestore';
@@ -42,6 +42,7 @@ import {
 } from '@/components/ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { LoadingShuttlecock } from '@/components/ui/loading-shuttlecock';
 
 const sponsorFormSchema = z.object({
     name: z.string().min(2, { message: "Sponsor name must be at least 2 characters." }),
@@ -146,7 +147,7 @@ export default function SponsorsPage() {
         <CardContent>
           {isLoading ? (
             <div className="flex justify-center items-center h-64">
-              <Loader2 className="h-12 w-12 animate-spin text-primary" />
+              <LoadingShuttlecock />
             </div>
           ) : (
             <Table>
@@ -202,7 +203,7 @@ export default function SponsorsPage() {
               <DialogFooter>
                 <DialogClose asChild><Button type="button" variant="secondary">Cancel</Button></DialogClose>
                 <Button type="submit" disabled={isSubmitting}>
-                  {isSubmitting ? <Loader2 className="animate-spin" /> : <CheckCircle />}
+                  {isSubmitting ? <div className="animate-spin h-5 w-5 border-2 border-background border-t-transparent rounded-full" /> : <CheckCircle />}
                   {sponsorToEdit ? 'Save Changes' : 'Add Sponsor'}
                 </Button>
               </DialogFooter>
@@ -222,7 +223,7 @@ export default function SponsorsPage() {
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction onClick={handleDeleteSponsor} className="bg-destructive text-destructive-foreground hover:bg-destructive/90" disabled={isSubmitting}>
-              {isSubmitting ? <Loader2 className="animate-spin" /> : 'Delete'}
+              {isSubmitting ? <div className="animate-spin h-5 w-5 border-2 border-background border-t-transparent rounded-full" /> : 'Delete'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

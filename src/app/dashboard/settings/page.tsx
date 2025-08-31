@@ -18,7 +18,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import type { User, UserRole } from '@/types';
 import { useAuth } from '@/hooks/use-auth';
-import { MoreHorizontal, Trash2, UserPlus, Edit, CheckCircle, ArrowLeft, Database, Loader2, Save, GitBranch, Trophy, Users, Building, ListOrdered, Shield, Cog, LayoutDashboard, Settings, MonitorPlay, HeartHandshake, ImageIcon } from 'lucide-react';
+import { MoreHorizontal, Trash2, UserPlus, Edit, CheckCircle, ArrowLeft, Database, Save, GitBranch, Trophy, Users, Building, ListOrdered, Shield, Cog, LayoutDashboard, Settings, MonitorPlay, HeartHandshake, ImageIcon } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -344,7 +344,7 @@ export default function SettingsPage() {
                     <CardDescription>Define which modules each user role can access. Super users have access to all modules by default.</CardDescription>
                 </div>
                 <Button onClick={handleSavePermissions} disabled={isSavingPermissions}>
-                    {isSavingPermissions ? <Loader2 className="animate-spin" /> : <Save />}
+                    {isSavingPermissions ? <div className="animate-spin h-5 w-5 border-2 border-background border-t-transparent rounded-full" /> : <Save />}
                     Save Permissions
                 </Button>
             </CardHeader>
@@ -510,7 +510,7 @@ export default function SettingsPage() {
              <AlertDialog>
               <AlertDialogTrigger asChild>
                 <Button variant="destructive" disabled={isSeeding}>
-                  {isSeeding ? <Loader2 className="animate-spin" /> : <Database className="mr-2" />}
+                  {isSeeding ? <div className="animate-spin h-5 w-5 border-2 border-background border-t-transparent rounded-full" /> : <Database className="mr-2" />}
                   Clear and Reseed Database
                 </Button>
               </AlertDialogTrigger>

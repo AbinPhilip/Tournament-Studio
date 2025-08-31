@@ -16,12 +16,13 @@ import { useToast } from '@/hooks/use-toast';
 import { db } from '@/lib/firebase';
 import { collection, onSnapshot, query, where, Timestamp } from 'firebase/firestore';
 import type { Match, Team, TeamType } from '@/types';
-import { Loader2, Gamepad2, ShieldCheck } from 'lucide-react';
+import { Gamepad2, ShieldCheck } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/use-auth';
 import { Badge } from '@/components/ui/badge';
 import { getRoundName } from '@/lib/utils';
 import { EventBadge } from '@/components/ui/event-badge';
+import { LoadingShuttlecock } from '@/components/ui/loading-shuttlecock';
 
 export default function CourtUmpireView() {
   const { user } = useAuth();
@@ -102,7 +103,7 @@ export default function CourtUmpireView() {
   };
 
   if (isLoading) {
-    return <div className="flex h-full w-full items-center justify-center"><Loader2 className="h-12 w-12 animate-spin text-primary" /></div>;
+    return <div className="flex h-full w-full items-center justify-center"><LoadingShuttlecock /></div>;
   }
 
   return (

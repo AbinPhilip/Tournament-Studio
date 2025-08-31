@@ -29,7 +29,7 @@ import {
 } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Save, ArrowLeft, CheckCircle, Calendar as CalendarIcon, Loader2, Play } from 'lucide-react';
+import { Save, ArrowLeft, CheckCircle, Calendar as CalendarIcon, Play } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import { db } from '@/lib/firebase';
@@ -409,7 +409,7 @@ export default function TournamentSettingsPage() {
                 </fieldset>
                 <div className="flex gap-4 flex-wrap items-center border-t pt-6">
                     <Button type="submit" disabled={isTournamentStarted || isSaving}>
-                        {isSaving ? <Loader2 className="animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
+                        {isSaving ? <div className="animate-spin h-5 w-5 border-2 border-background border-t-transparent rounded-full" /> : <Save className="mr-2 h-4 w-4" />}
                         {tournamentDocRef ? 'Update Tournament' : 'Create Tournament'}
                     </Button>
                      <Button type="button" variant="outline" onClick={() => router.push('/dashboard')}>
@@ -417,7 +417,7 @@ export default function TournamentSettingsPage() {
                         Back to Dashboard
                     </Button>
                      <Button type="button" variant="default" onClick={handleGenerateSchedule} disabled={isGenerating || isTournamentStarted || !tournament}>
-                        {isGenerating ? <Loader2 className="animate-spin" /> : <Play />}
+                        {isGenerating ? <div className="animate-spin h-5 w-5 border-2 border-background border-t-transparent rounded-full" /> : <Play />}
                         Start Tournament & Generate Pairings
                     </Button>
                 </div>

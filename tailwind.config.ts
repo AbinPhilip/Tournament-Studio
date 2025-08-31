@@ -90,10 +90,15 @@ export default {
             height: '0',
           },
         },
+        'wobble': {
+            '0%, 100%': { transform: 'rotate(-3deg) translateX(-2px)' },
+            '50%': { transform: 'rotate(3deg) translateX(2px)' },
+        }
       },
       animation: {
         'accordion-down': 'accordion-down 0.2s ease-out',
         'accordion-up': 'accordion-up 0.2s ease-out',
+        'wobble': 'wobble 1s ease-in-out infinite',
       },
     },
   },

@@ -23,7 +23,7 @@ import {
     SelectValue,
 } from '@/components/ui/select';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { MoreHorizontal, Trash2, Edit, CheckCircle, Users, ArrowUpDown, Loader2 } from 'lucide-react';
+import { MoreHorizontal, Trash2, Edit, CheckCircle, Users, ArrowUpDown } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { db } from '@/lib/firebase';
 import { collection, doc, getDocs, updateDoc, addDoc, deleteDoc, query, where, onSnapshot } from 'firebase/firestore';
@@ -51,6 +51,7 @@ import {
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { EventBadge } from '@/components/ui/event-badge';
+import { LoadingShuttlecock } from '@/components/ui/loading-shuttlecock';
 
 
 const teamFormSchema = z.object({
@@ -193,7 +194,7 @@ const TeamForm = ({
                 <DialogFooter>
                     <DialogClose asChild><Button type="button" variant="secondary">Cancel</Button></DialogClose>
                     <Button type="submit" disabled={isSubmitting}>
-                        {isSubmitting && <Loader2 className="animate-spin" />}
+                        {isSubmitting && <div className="animate-spin h-5 w-5 border-2 border-background border-t-transparent rounded-full" />}
                         {form.formState.isDirty ? 'Save Changes' : 'Register Team'}
                     </Button>
                 </DialogFooter>
@@ -489,7 +490,7 @@ export default function TeamsPage() {
           <CardContent>
              {isLoading ? (
                 <div className="flex justify-center items-center h-64">
-                    <Loader2 className="h-12 w-12 animate-spin text-primary" />
+                    <LoadingShuttlecock />
                 </div>
              ) : (
                 <Table>

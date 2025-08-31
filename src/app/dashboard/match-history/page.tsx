@@ -16,7 +16,7 @@ import { useToast } from '@/hooks/use-toast';
 import { db } from '@/lib/firebase';
 import { collection, getDocs, query, where, orderBy, limit, startAfter, DocumentData } from 'firebase/firestore';
 import type { Match, TeamType } from '@/types';
-import { Loader2, ArrowRight } from 'lucide-react';
+import { ArrowRight } from 'lucide-react';
 import { getRoundName } from '@/lib/utils';
 import { EventBadge } from '@/components/ui/event-badge';
 import { Button } from '@/components/ui/button';
@@ -31,6 +31,7 @@ import {
 } from '@/components/ui/dialog';
 import { Separator } from '@/components/ui/separator';
 import { cn } from '@/lib/utils';
+import { LoadingShuttlecock } from '@/components/ui/loading-shuttlecock';
 
 
 const PAGE_SIZE = 10;
@@ -137,7 +138,7 @@ export default function MatchHistoryPage() {
     if (isLoading && matches.length === 0) {
         return (
             <div className="flex h-full w-full items-center justify-center">
-                <Loader2 className="h-12 w-12 animate-spin text-primary" />
+                <LoadingShuttlecock />
             </div>
         );
     }
@@ -219,7 +220,8 @@ export default function MatchHistoryPage() {
                 })}
                  <div className="flex justify-center items-center mt-4">
                     <Button onClick={() => fetchMatches(true)} disabled={isLastPage || isLoading}>
-                        {isLoading ? <Loader2 className="mr-2 animate-spin" /> : 'Load More'}
+                        {isLoading ? <div className="animate-spin h-5 w-5 border-2 border-background border-t-transparent rounded-full mr-2" /> : null}
+                        {isLoading ? 'Loading...' : 'Load More'}
                         {!isLoading && !isLastPage && <ArrowRight className="ml-2" />}
                     </Button>
                 </div>

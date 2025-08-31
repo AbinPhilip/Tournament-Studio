@@ -6,7 +6,7 @@ import { db } from '@/lib/firebase';
 import { collection, onSnapshot, query, Timestamp, orderBy, limit } from 'firebase/firestore';
 import type { Match, Tournament, Team, TeamType, Sponsor } from '@/types';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, WifiOff, Trophy, Crown, Ticket, HeartHandshake, Clock } from 'lucide-react';
+import { WifiOff, Trophy, Crown, Ticket, HeartHandshake, Clock } from 'lucide-react';
 import { AnimatePresence, m } from 'framer-motion';
 import { Carousel, CarouselApi, CarouselContent, CarouselItem } from "@/components/ui/carousel";
 import Autoplay from "embla-carousel-autoplay";
@@ -16,6 +16,7 @@ import { Logo } from '../logo';
 import { cn } from '@/lib/utils';
 import { Table, TableBody, TableCell, TableHeader, TableRow, TableHead } from '../ui/table';
 import Image from 'next/image';
+import { LoadingShuttlecock } from '../ui/loading-shuttlecock';
 
 const LiveMatchSlide = ({ match, teamCounts }: { match: Match, teamCounts: Record<TeamType, number> }) => {
     const { team1Points = 0, team2Points = 0, servingTeamId } = match.live || {};
@@ -685,7 +686,7 @@ export function PresenterShell() {
   if (isLoading) {
     return (
       <div className="flex h-screen w-screen items-center justify-center bg-gray-900 text-white">
-        <Loader2 className="h-24 w-24 animate-spin text-blue-400" />
+        <LoadingShuttlecock />
       </div>
     );
   }

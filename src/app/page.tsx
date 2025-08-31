@@ -4,9 +4,9 @@
 import { useAuth } from '@/hooks/use-auth';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
-import { Loader2 } from 'lucide-react';
-import { db } from '@/lib/firebase';
 import { collection, getDocs, limit, query } from 'firebase/firestore';
+import { db } from '@/lib/firebase';
+import { LoadingShuttlecock } from '@/components/ui/loading-shuttlecock';
 
 export default function Home() {
   const { user, loading: authLoading } = useAuth();
@@ -30,7 +30,7 @@ export default function Home() {
 
   useEffect(() => {
     // Wait until both auth and db check are complete
-    if (authLoading || isDbSeeded === null) return;
+    if (authLoading || isDbSeeden === null) return;
     
     if (!isDbSeeded) {
       router.replace('/dashboard/settings');
@@ -47,7 +47,7 @@ export default function Home() {
   
   return (
     <div className="flex h-screen w-full flex-col items-center justify-center bg-background text-foreground">
-      <Loader2 className="h-12 w-12 animate-spin text-primary" />
+      <LoadingShuttlecock />
       <p className="mt-4 text-muted-foreground">Loading your experience...</p>
     </div>
   );

@@ -16,12 +16,13 @@ import { useToast } from '@/hooks/use-toast';
 import { db } from '@/lib/firebase';
 import { collection, query, onSnapshot, Timestamp } from 'firebase/firestore';
 import type { Match, TeamType } from '@/types';
-import { Loader2, ArrowLeft, Gamepad2 } from 'lucide-react';
+import { ArrowLeft, Gamepad2 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { Badge } from '@/components/ui/badge';
 import { getRoundName } from '@/lib/utils';
 import { EventBadge } from '@/components/ui/event-badge';
 import { useAuth } from '@/hooks/use-auth';
+import { LoadingShuttlecock } from '@/components/ui/loading-shuttlecock';
 
 
 export default function CourtViewPage() {
@@ -131,7 +132,7 @@ export default function CourtViewPage() {
     if (isLoading) {
         return (
             <div className="flex h-full w-full items-center justify-center">
-                <Loader2 className="h-12 w-12 animate-spin text-primary" />
+                <LoadingShuttlecock />
             </div>
         );
     }

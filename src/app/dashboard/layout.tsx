@@ -5,9 +5,10 @@ import { useAuth } from '@/hooks/use-auth';
 import { useRouter, usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { DashboardHeader } from '@/components/dashboard/header';
-import { Loader2, PanelLeftClose } from 'lucide-react';
+import { PanelLeftClose } from 'lucide-react';
 import { MainNav } from '@/components/dashboard/main-nav';
 import { CollapsibleButton } from '@/components/ui/collapsible-button';
+import { LoadingShuttlecock } from '@/components/ui/loading-shuttlecock';
 
 export default function DashboardLayout({
   children,
@@ -31,7 +32,7 @@ export default function DashboardLayout({
   if (loading && !isPublicPage) {
     return (
       <div className="flex h-screen w-full items-center justify-center bg-background">
-        <Loader2 className="h-12 w-12 animate-spin text-primary" />
+        <LoadingShuttlecock />
       </div>
     );
   }
@@ -39,7 +40,7 @@ export default function DashboardLayout({
   if (!user && !isPublicPage) {
      return (
       <div className="flex h-screen w-full items-center justify-center bg-background">
-        <Loader2 className="h-12 w-12 animate-spin text-primary" />
+        <LoadingShuttlecock />
       </div>
     );
   }

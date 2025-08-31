@@ -7,13 +7,13 @@ import { useToast } from '@/hooks/use-toast';
 import { db } from '@/lib/firebase';
 import { collection, getDocs, query, Timestamp } from 'firebase/firestore';
 import type { Match, Team, TeamType } from '@/types';
-import { Loader2 } from 'lucide-react';
 import { getRoundName } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { EventBadge } from '@/components/ui/event-badge';
 import { cn } from '@/lib/utils';
+import { LoadingShuttlecock } from '@/components/ui/loading-shuttlecock';
 
 
 export default function DrawPage() {
@@ -111,7 +111,7 @@ export default function DrawPage() {
     if (isLoading) {
         return (
             <div className="flex h-full w-full items-center justify-center">
-                <Loader2 className="h-16 w-16 animate-spin text-primary" />
+                <LoadingShuttlecock />
             </div>
         );
     }

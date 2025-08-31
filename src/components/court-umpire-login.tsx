@@ -23,10 +23,10 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2 } from 'lucide-react';
 import { db } from '@/lib/firebase';
 import { collection, getDocs } from 'firebase/firestore';
 import type { Tournament } from '@/types';
+import { LoadingShuttlecock } from '@/components/ui/loading-shuttlecock';
 
 export function CourtUmpireLogin() {
   const router = useRouter();
@@ -107,7 +107,7 @@ export function CourtUmpireLogin() {
         </DialogHeader>
         <div className="py-4">
             {isLoading && !courts.length ? (
-                <div className="flex justify-center"><Loader2 className="animate-spin" /></div>
+                <div className="flex justify-center"><LoadingShuttlecock /></div>
             ) : (
                  <Select onValueChange={setSelectedCourt}>
                     <SelectTrigger>
@@ -128,7 +128,7 @@ export function CourtUmpireLogin() {
             <Button type="button" variant="secondary">Cancel</Button>
           </DialogClose>
           <Button onClick={handleLogin} disabled={isLoading || !selectedCourt}>
-            {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            {isLoading && <div className="animate-spin h-5 w-5 border-2 border-background border-t-transparent rounded-full mr-2" />}
             Proceed to Scorer
           </Button>
         </DialogFooter>
