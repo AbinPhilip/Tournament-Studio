@@ -1,7 +1,7 @@
 
 "use client";
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useTransition } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -15,7 +15,7 @@ import {
 } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { MoreHorizontal, Trash2, Building, Edit, CheckCircle } from 'lucide-react';
+import { MoreHorizontal, Trash2, Building, Edit } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -35,7 +35,6 @@ import {
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
@@ -57,6 +56,9 @@ import { collection, addDoc, deleteDoc, doc, query, where, getDocs, updateDoc, o
 import type { Organization, Team } from '@/types';
 import { LoadingShuttlecock } from '@/components/ui/loading-shuttlecock';
 
+// New server action import
+import { addOrUpdateOrganization } from '@/app/actions/organizationActions';
+
 
 const organizationFormSchema = z.object({
     name: z.string().min(2, { message: "Organization name must be at least 2 characters." }),
@@ -66,13 +68,11 @@ const organizationFormSchema = z.object({
 export default function OrganizationPage() {
   const { toast } = useToast();
   const [organizations, setOrganizations] = useState<Organization[]>([]);
-  const [teams, setTeams] = useState<Team[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [orgToDelete, setOrgToDelete] = useState<Organization | null>(null);
   const [orgToEdit, setOrgToEdit] = useState<Organization | null>(null);
-  const [isAddOrgOpen, setIsAddOrgOpen] = useState(false);
-  const [isEditOrgOpen, setIsEditOrgOpen] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isFormOpen, setIsFormOpen] = useState(false);
+  const [isPending, startTransition] = useTransition();
   
   const orgForm = useForm<z.infer<typeof organizationFormSchema>>({
     resolver: zodResolver(organizationFormSchema),
@@ -90,58 +90,35 @@ export default function OrganizationPage() {
         setIsLoading(false);
     });
 
-    const teamsUnsubscribe = onSnapshot(collection(db, 'teams'), (snapshot) => {
-        setTeams(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Team)));
-    });
-
-    return () => {
-        orgsUnsubscribe();
-        teamsUnsubscribe();
-    };
+    return () => orgsUnsubscribe();
   }, [toast]);
   
   const handleOpenEditDialog = useCallback((org: Organization) => {
     setOrgToEdit(org);
     orgForm.reset(org);
-    setIsEditOrgOpen(true);
+    setIsFormOpen(true);
   }, [orgForm]);
 
-  const handleAddOrg = async (values: z.infer<typeof organizationFormSchema>) => {
-    setIsSubmitting(true);
-    if (organizations.some(org => org.name.toLowerCase() === values.name.toLowerCase())) {
-        toast({ title: 'Error', description: 'An organization with this name already exists.', variant: 'destructive' });
-        setIsSubmitting(false);
-        return;
-    }
-    
-    try {
-        await addDoc(collection(db, 'organizations'), values);
-        toast({ title: 'Organization Created', description: `Organization "${values.name}" has been added.` });
-        setIsAddOrgOpen(false);
-        orgForm.reset({ name: '', location: '' });
-    } catch(error) {
-        console.error("Error adding organization: ", error);
-        toast({ title: 'Error', description: 'Failed to create organization.', variant: 'destructive' });
-    } finally {
-        setIsSubmitting(false);
-    }
-  };
-  
-  const handleEditOrg = async (values: z.infer<typeof organizationFormSchema>) => {
-    if (!orgToEdit) return;
-    setIsSubmitting(true);
-    try {
-        const orgRef = doc(db, 'organizations', orgToEdit.id);
-        await updateDoc(orgRef, values);
-        toast({ title: 'Success', description: `"${values.name}" has been updated.`});
-        setIsEditOrgOpen(false);
-        setOrgToEdit(null);
-    } catch (error) {
-        console.error("Error updating organization: ", error);
-        toast({ title: 'Error', description: 'Failed to update organization.', variant: 'destructive' });
-    } finally {
-        setIsSubmitting(false);
-    }
+  const handleOpenAddDialog = useCallback(() => {
+    setOrgToEdit(null);
+    orgForm.reset({ name: '', location: '' });
+    setIsFormOpen(true);
+  }, [orgForm]);
+
+  const handleFormSubmit = (values: z.infer<typeof organizationFormSchema>) => {
+    startTransition(async () => {
+        const result = await addOrUpdateOrganization({
+            id: orgToEdit?.id,
+            ...values
+        });
+
+        if (result.error) {
+            toast({ title: 'Error', description: result.error, variant: 'destructive' });
+        } else {
+            toast({ title: result.id ? 'Organization Updated' : 'Organization Created', description: `"${values.name}" has been saved.` });
+            setIsFormOpen(false);
+        }
+    });
   };
 
   const handleDeleteOrg = async () => {
@@ -175,44 +152,10 @@ export default function OrganizationPage() {
                  Create and manage organizations.
               </CardDescription>
             </div>
-            <Dialog open={isAddOrgOpen} onOpenChange={setIsAddOrgOpen}>
-              <DialogTrigger asChild>
-                <Button>
-                  <Building className="mr-2 h-4 w-4" />
-                  Create Organization
-                </Button>
-              </DialogTrigger>
-              <DialogContent>
-                <DialogHeader>
-                  <DialogTitle>Create New Organization</DialogTitle>
-                </DialogHeader>
-                <Form {...orgForm}>
-                  <form onSubmit={orgForm.handleSubmit(handleAddOrg)} className="space-y-4">
-                    <FormField control={orgForm.control} name="name" render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Organization Name</FormLabel>
-                        <FormControl><Input placeholder="e.g. Premier Badminton Club" {...field} /></FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )} />
-                    <FormField control={orgForm.control} name="location" render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Location</FormLabel>
-                        <FormControl><Input placeholder="e.g. New York, USA" {...field} /></FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )} />
-                    <DialogFooter>
-                      <DialogClose asChild><Button type="button" variant="secondary">Cancel</Button></DialogClose>
-                      <Button type="submit" disabled={isSubmitting}>
-                        {isSubmitting && <div className="animate-spin h-5 w-5 border-2 border-background border-t-transparent rounded-full" />}
-                        Create Organization
-                      </Button>
-                    </DialogFooter>
-                  </form>
-                </Form>
-              </DialogContent>
-            </Dialog>
+            <Button onClick={handleOpenAddDialog}>
+              <Building className="mr-2 h-4 w-4" />
+              Create Organization
+            </Button>
           </CardHeader>
           <CardContent>
             {isLoading ? (
@@ -250,36 +193,36 @@ export default function OrganizationPage() {
           </CardContent>
         </Card>
       
-      <Dialog open={isEditOrgOpen} onOpenChange={setIsEditOrgOpen}>
+      <Dialog open={isFormOpen} onOpenChange={setIsFormOpen}>
           <DialogContent>
-          <DialogHeader>
-              <DialogTitle>Edit Organization: {orgToEdit?.name}</DialogTitle>
-          </DialogHeader>
-          <Form {...orgForm}>
-              <form onSubmit={orgForm.handleSubmit(handleEditOrg)} className="space-y-4">
-              <FormField control={orgForm.control} name="name" render={({ field }) => (
-                  <FormItem>
+            <DialogHeader>
+                <DialogTitle>{orgToEdit ? 'Edit Organization' : 'Create New Organization'}</DialogTitle>
+            </DialogHeader>
+            <Form {...orgForm}>
+                <form onSubmit={orgForm.handleSubmit(handleFormSubmit)} className="space-y-4">
+                  <FormField control={orgForm.control} name="name" render={({ field }) => (
+                    <FormItem>
                       <FormLabel>Organization Name</FormLabel>
                       <FormControl><Input placeholder="e.g. Premier Badminton Club" {...field} /></FormControl>
                       <FormMessage />
-                  </FormItem>
-              )} />
-              <FormField control={orgForm.control} name="location" render={({ field }) => (
-                  <FormItem>
+                    </FormItem>
+                  )} />
+                  <FormField control={orgForm.control} name="location" render={({ field }) => (
+                    <FormItem>
                       <FormLabel>Location</FormLabel>
                       <FormControl><Input placeholder="e.g. New York, USA" {...field} /></FormControl>
                       <FormMessage />
-                  </FormItem>
-              )} />
-              <DialogFooter>
-                  <Button type="button" variant="secondary" onClick={() => setIsEditOrgOpen(false)}>Cancel</Button>
-                  <Button type="submit" disabled={isSubmitting}>
-                    {isSubmitting && <div className="animate-spin h-5 w-5 border-2 border-background border-t-transparent rounded-full" />}
-                    Save Changes
-                  </Button>
-              </DialogFooter>
-              </form>
-          </Form>
+                    </FormItem>
+                  )} />
+                  <DialogFooter>
+                    <DialogClose asChild><Button type="button" variant="secondary">Cancel</Button></DialogClose>
+                    <Button type="submit" disabled={isPending}>
+                      {isPending && <div className="animate-spin h-5 w-5 border-2 border-background border-t-transparent rounded-full" />}
+                      {orgToEdit ? 'Save Changes' : 'Create Organization'}
+                    </Button>
+                  </DialogFooter>
+                </form>
+            </Form>
           </DialogContent>
       </Dialog>
       

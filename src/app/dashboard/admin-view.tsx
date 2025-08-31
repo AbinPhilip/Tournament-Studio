@@ -1,15 +1,10 @@
-"use client";
 
-import { useAuth } from '@/hooks/use-auth';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { useRouter } from 'next/navigation';
 import { ListOrdered, Cog, Shield, Settings, Users, Building, Trophy, GitBranch, HeartHandshake, ImageIcon } from 'lucide-react';
+import Link from 'next/link';
 
 export default function AdminView() {
-  const { user } = useAuth();
-  const router = useRouter();
-
   const navItems = [
     { label: "Tournament Setup", href: "/dashboard/tournament", icon: Cog },
     { label: "Organizations", href: "/dashboard/organizations", icon: Building },
@@ -26,7 +21,7 @@ export default function AdminView() {
     <div className="grid gap-8">
       <div>
         <h1 className="text-3xl font-bold mb-2">Administrator Dashboard</h1>
-        <p className="text-muted-foreground">Welcome, {user?.name}. Manage the tournament and system settings.</p>
+        <p className="text-muted-foreground">Welcome. Manage the tournament and system settings.</p>
       </div>
       
       <Card>
@@ -36,8 +31,10 @@ export default function AdminView() {
         </CardHeader>
         <CardContent className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {navItems.map((item) => (
-                <Button key={item.href} variant="outline" onClick={() => router.push(item.href)} className="justify-start text-left">
+                <Button key={item.href} variant="outline" asChild className="justify-start text-left">
+                  <Link href={item.href}>
                     <item.icon className="mr-2"/> {item.label}
+                  </Link>
                 </Button>
             ))}
         </CardContent>
@@ -49,14 +46,14 @@ export default function AdminView() {
             <CardDescription>Manage application-wide settings, including users, permissions, and the database.</CardDescription>
           </CardHeader>
           <CardContent>
-             <Button onClick={() => router.push('/dashboard/settings')}>
-                <Settings className="mr-2" />
-                System Settings
+             <Button asChild>
+                <Link href='/dashboard/settings'>
+                    <Settings className="mr-2" />
+                    System Settings
+                </Link>
             </Button>
           </CardContent>
         </Card>
     </div>
   );
 }
-
-    
