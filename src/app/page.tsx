@@ -30,7 +30,7 @@ export default function Home() {
 
   useEffect(() => {
     // Wait until both auth and db check are complete
-    if (authLoading || isDbSeeden === null) return;
+    if (authLoading || isDbSeeded === null) return;
     
     if (!isDbSeeded) {
       router.replace('/dashboard/settings');
