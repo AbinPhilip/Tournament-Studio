@@ -20,10 +20,6 @@
       "queryScope": "COLLECTION",
       "fields": [
         {
-          "fieldPath": "uploaderId",
-          "order": "ASCENDING"
-        },
-        {
           "fieldPath": "createdAt",
           "order": "DESCENDING"
         }

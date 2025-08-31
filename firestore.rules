@@ -1,23 +1,42 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Allow read/write access to all collections for simplicity during initial dev.
-    // Replace with more specific rules for production.
-    match /{document=**} {
-      allow read, write: if true;
+    // Allow public read access to most collections for presenter/client views
+    match /{collection}/{docId} {
+      allow read: if true;
     }
 
-    // Specific, more secure rules for the 'images' collection
-    match /images/{imageId} {
-      // Anyone can create an image metadata document (e.g., after an upload)
-      allow create: if true;
-      
-      // Only the user who uploaded the image can read or delete its metadata.
-      // This prevents users from accessing or deleting each other's image records.
-      allow read, delete: if request.auth != null && request.auth.uid == resource.data.uploaderId;
+    // Lock down writes to admins/superusers by default
+    match /{document=**} {
+      allow write: if false; 
+    }
 
-      // No one can update an image document after it's created.
-      allow update: if false;
+    // Granular write permissions per collection
+    match /users/{userId} {
+      allow write: if true; // Allow creating/updating users
+    }
+    match /organizations/{orgId} {
+      allow write: if true;
+    }
+    match /teams/{teamId} {
+      allow write: if true;
+    }
+    match /sponsors/{sponsorId} {
+      allow write: if true;
+    }
+    match /tournaments/{tourneyId} {
+      allow write: if true;
+    }
+    match /matches/{matchId} {
+      allow write: if true;
+    }
+    match /rolePermissions/{roleId} {
+      allow write: if true;
+    }
+
+    // Rules for image metadata - fully public
+    match /images/{imageId} {
+      allow read, write, delete: if true;
     }
   }
 }

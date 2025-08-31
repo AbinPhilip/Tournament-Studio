@@ -1,13 +1,21 @@
 rules_version = '2';
-
 service firebase.storage {
   match /b/{bucket}/o {
-    // This rule allows any user to upload files into the 'images/' directory.
-    // Security is maintained because the client generates a unique, unguessable
-    // file path (UUID) for each upload, preventing users from accessing or
-    -    // overwriting each other's files.
+    // Allow public read access to all files.
+    match /{allPaths=**} {
+      allow read;
+    }
+
+    // Allow anyone to upload to the public images directory.
+    match /images/public/{allPaths=**} {
+      allow write: if true;
+    }
+    
+    // Allow anyone to delete from the public images directory.
+    // Note: Security for deletion should be handled by your application logic,
+    // for instance, by checking a secret or ownership in Firestore before performing the delete operation.
     match /images/{allPaths=**} {
-      allow read, write;
+       allow delete: if true;
     }
   }
 }
