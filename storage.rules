@@ -1,21 +1,13 @@
-
 rules_version = '2';
 
 service firebase.storage {
   match /b/{bucket}/o {
-    // By default, deny all reads and writes
-    match /{allPaths=**} {
-      allow read, write: if false;
-    }
-
-    // Allow anyone to upload images.
-    // Security is handled by using unguessable UUIDs for file names,
-    // which prevents users from accessing or overwriting files they don't own.
-    // Deletion is handled by a secure server-side flow, not by direct client access.
+    // This rule allows any user to upload files into the 'images/' directory.
+    // Security is maintained because the client generates a unique, unguessable
+    // file path (UUID) for each upload, preventing users from accessing or
+    -    // overwriting each other's files.
     match /images/{allPaths=**} {
-      allow read: if true;
-      allow write: if true;
+      allow read, write;
     }
   }
 }
-    

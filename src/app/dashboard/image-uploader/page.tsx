@@ -1,18 +1,17 @@
-
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from '@/hooks/use-auth';
 import { useToast } from '@/hooks/use-toast';
 import { db, storage } from '@/lib/firebase';
-import { collection, addDoc, query, where, onSnapshot, orderBy, serverTimestamp } from 'firebase/firestore';
-import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
+import { collection, addDoc, onSnapshot, query, where, orderBy, serverTimestamp, deleteDoc, doc } from 'firebase/firestore';
+import { ref, uploadBytesResumable, getDownloadURL, deleteObject } from 'firebase/storage';
 import { v4 as uuidv4 } from 'uuid';
 import type { ImageMetadata } from '@/types';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Upload, Trash2, Download, ImageIcon } from 'lucide-react';
+import { Upload, Trash2, Download, ImageIcon, AlertTriangle } from 'lucide-react';
 import Image from 'next/image';
 import {
   AlertDialog,
@@ -26,7 +25,6 @@ import {
 } from "@/components/ui/alert-dialog";
 import { LoadingShuttlecock } from '@/components/ui/loading-shuttlecock';
 import { Progress } from '@/components/ui/progress';
-import { deleteImage } from '@/ai/flows/delete-image-flow';
 
 
 export default function ImageUploaderPage() {
@@ -34,7 +32,6 @@ export default function ImageUploaderPage() {
   const { toast } = useToast();
   const [images, setImages] = useState<ImageMetadata[]>([]);
   const [isUploading, setIsUploading] = useState(false);
-  const [isDeleting, setIsDeleting] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [imageToDelete, setImageToDelete] = useState<ImageMetadata | null>(null);
@@ -42,12 +39,10 @@ export default function ImageUploaderPage() {
 
   useEffect(() => {
     if (!user) {
-        console.log("ImageUploader: No user found, skipping image fetch.");
         setIsLoading(false);
         return;
     };
     
-    console.log(`ImageUploader: Fetching images for user: ${user.id}`);
     setIsLoading(true);
     const q = query(
         collection(db, "images"), 
@@ -56,7 +51,6 @@ export default function ImageUploaderPage() {
     );
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
-        console.log(`ImageUploader: Received ${snapshot.docs.length} image documents from Firestore.`);
         const imagesData = snapshot.docs.map(doc => ({
             id: doc.id,
             ...doc.data()
@@ -64,7 +58,7 @@ export default function ImageUploaderPage() {
         setImages(imagesData);
         setIsLoading(false);
     }, (error) => {
-        console.error("ImageUploader: Error fetching images:", error);
+        console.error("Error fetching images:", error);
         toast({ title: 'Error', description: 'Could not fetch your images.', variant: 'destructive' });
         setIsLoading(false);
     });
@@ -80,8 +74,6 @@ export default function ImageUploaderPage() {
     const file = event.target.files?.[0];
     if (!file) return;
 
-    console.log("ImageUploader: File selected", { name: file.name, size: file.size, type: file.type });
-
     const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
     if (file.size > MAX_FILE_SIZE) {
         toast({ title: "File Too Large", description: `The file must be less than 5MB.`, variant: "destructive" });
@@ -90,27 +82,31 @@ export default function ImageUploaderPage() {
     
     setIsUploading(true);
     setUploadProgress(0);
+    
     const storagePath = `images/${user.id}/${uuidv4()}-${file.name}`;
     const storageRef = ref(storage, storagePath);
-
-    console.log(`ImageUploader: Starting upload to path: ${storagePath}`);
     const uploadTask = uploadBytesResumable(storageRef, file);
 
     uploadTask.on('state_changed',
       (snapshot) => {
         const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
-        console.log('ImageUploader: Upload is ' + progress + '% done');
         setUploadProgress(progress);
       },
       (error) => {
-        console.error("ImageUploader: Upload failed:", error);
-        toast({ title: "Upload Failed", description: "Could not upload the image. Please try again.", variant: "destructive" });
+        console.error("Upload failed:", error);
+        let description = "Could not upload the image. Please try again.";
+        if (error.code === 'storage/unauthorized') {
+            description = "Permission denied. Please check storage security rules.";
+        }
+        toast({ 
+            title: "Upload Failed", 
+            description: description,
+            variant: "destructive" 
+        });
         setIsUploading(false);
       },
       () => {
-        console.log("ImageUploader: Upload complete. Getting download URL...");
         getDownloadURL(uploadTask.snapshot.ref).then(async (downloadURL) => {
-          console.log('ImageUploader: File available at', downloadURL);
           const imageMetadata = {
             imageUrl: downloadURL,
             storagePath: storagePath,
@@ -122,11 +118,10 @@ export default function ImageUploaderPage() {
           };
 
           try {
-            console.log("ImageUploader: Writing metadata to Firestore:", imageMetadata);
             await addDoc(collection(db, "images"), imageMetadata);
             toast({ title: "Upload Successful", description: `"${file.name}" has been uploaded.` });
           } catch(e) {
-            console.error("ImageUploader: Firestore error:", e);
+            console.error("Firestore error:", e);
             toast({ title: "Metadata Error", description: "Image uploaded, but failed to save metadata.", variant: "destructive" });
           } finally {
             setIsUploading(false);
@@ -137,28 +132,48 @@ export default function ImageUploaderPage() {
   }, [user, toast]);
 
   const handleDeleteClick = (image: ImageMetadata) => {
-    console.log("ImageUploader: Initiating delete for image:", image.id, image.storagePath);
     setImageToDelete(image);
   };
   
   const handleConfirmDelete = async () => {
     if (!imageToDelete || !user) return;
-    
-    console.log("ImageUploader: Confirming delete for image:", imageToDelete.id);
-    setIsDeleting(true);
+
+    // Security check on client-side before attempting deletion
+    if (imageToDelete.uploaderId !== user.id) {
+        toast({ title: "Permission Denied", description: "You can only delete your own images.", variant: "destructive"});
+        setImageToDelete(null);
+        return;
+    }
+
+    const { storagePath, id } = imageToDelete;
     
     try {
-        await deleteImage({
-            imageId: imageToDelete.id,
-            requestingUserId: user.id
-        });
+        // 1. Delete from Storage
+        const imageRef = ref(storage, storagePath);
+        await deleteObject(imageRef);
+
+        // 2. Delete from Firestore
+        await deleteDoc(doc(db, "images", id));
+
         toast({ title: "Image Deleted", description: "The image has been successfully removed." });
-    } catch(error) {
-        console.error("ImageUploader: Deletion error:", error);
-        toast({ title: "Deletion Failed", description: "Could not delete the image. You may not have permission.", variant: "destructive" });
+    } catch(error: any) {
+        console.error("Deletion error:", error);
+        let description = "Could not delete the image.";
+        if (error.code === 'storage/unauthorized') {
+            description = "Permission denied. You do not have access to delete this file.";
+        } else if (error.code === 'storage/object-not-found') {
+            description = "File not found in storage, deleting metadata record.";
+            // If file doesn't exist, still try to delete firestore record
+            try {
+                 await deleteDoc(doc(db, "images", id));
+                 toast({ title: "Image Deleted", description: "The image metadata has been successfully removed." });
+            } catch (firestoreError) {
+                 description = "File not found in storage, and failed to delete metadata record.";
+            }
+        }
+        toast({ title: "Deletion Failed", description, variant: "destructive" });
     } finally {
         setImageToDelete(null);
-        setIsDeleting(false);
     }
   };
 
@@ -228,15 +243,14 @@ export default function ImageUploaderPage() {
       <AlertDialog open={!!imageToDelete} onOpenChange={(isOpen) => !isOpen && setImageToDelete(null)}>
         <AlertDialogContent>
             <AlertDialogHeader>
-                <AlertDialogTitle>Are you sure you want to delete this image?</AlertDialogTitle>
+                <AlertDialogTitle className="flex items-center gap-2"><AlertTriangle />Are you sure?</AlertDialogTitle>
                 <AlertDialogDescription>
                   This action cannot be undone. This will permanently delete the image from storage and its associated metadata.
                 </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
                 <AlertDialogCancel>Cancel</AlertDialogCancel>
-                <AlertDialogAction onClick={handleConfirmDelete} disabled={isDeleting} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
-                  {isDeleting && <div className="animate-spin h-5 w-5 border-2 border-background border-t-transparent rounded-full mr-2" />}
+                <AlertDialogAction onClick={handleConfirmDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
                   Delete
                 </AlertDialogAction>
             </AlertDialogFooter>
@@ -246,5 +260,3 @@ export default function ImageUploaderPage() {
     </div>
   )
 }
-
-    

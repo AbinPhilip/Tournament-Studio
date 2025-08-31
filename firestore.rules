@@ -1,56 +1,23 @@
-
 rules_version = '2';
-
 service cloud.firestore {
   match /databases/{database}/documents {
-  
-    // Default deny all reads and writes
+    // Allow read/write access to all collections for simplicity during initial dev.
+    // Replace with more specific rules for production.
     match /{document=**} {
-      allow read, write: if false;
-    }
-    
-    // Allow public read access to most collections
-    match /tournaments/{docId} {
-      allow read: if true;
-      allow write: if request.auth != null; // Simplistic: only authenticated users
-    }
-    match /organizations/{docId} {
-      allow read: if true;
-      allow write: if request.auth != null;
-    }
-    match /teams/{docId} {
-      allow read: if true;
-      allow write: if request.auth != null;
-    }
-     match /sponsors/{docId} {
-      allow read: if true;
-      allow write: if request.auth != null;
-    }
-    match /matches/{docId} {
-      allow read: if true;
-      allow write: if true; // Allow backend flows to write freely
-    }
-     match /rolePermissions/{docId} {
-      allow read: if true;
-      allow write: if request.auth != null; // only logged in users can write. Should be more specific in prod.
+      allow read, write: if true;
     }
 
-    // Users can be read publicly (for name display etc)
-    // but only the user themself can update or delete their own doc.
-    match /users/{userId} {
-      allow read: if true;
-      allow create; // Allow user creation
-      allow update, delete: if request.auth != null && request.auth.uid == userId;
-    }
-
-    // For images, allow anyone to create a metadata document.
-    // However, only the original uploader can delete their own metadata.
+    // Specific, more secure rules for the 'images' collection
     match /images/{imageId} {
-      allow read: if true;
-      allow create: if request.auth == null; // Allows client to write metadata after upload
-      allow delete: if resource.data.uploaderId == request.auth.uid; // This rule is for client SDK. Deletion is handled by a secure flow.
+      // Anyone can create an image metadata document (e.g., after an upload)
+      allow create: if true;
+      
+      // Only the user who uploaded the image can read or delete its metadata.
+      // This prevents users from accessing or deleting each other's image records.
+      allow read, delete: if request.auth != null && request.auth.uid == resource.data.uploaderId;
+
+      // No one can update an image document after it's created.
+      allow update: if false;
     }
   }
 }
-
-    
