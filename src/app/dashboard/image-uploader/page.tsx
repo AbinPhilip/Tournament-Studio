@@ -1,9 +1,10 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { useAuth } from '@/hooks/use-auth';
 import { useToast } from '@/hooks/use-toast';
 import { db, storage } from '@/lib/firebase';
-import { collection, addDoc, onSnapshot, query, orderBy, serverTimestamp, deleteDoc, doc } from 'firebase/firestore';
+import { collection, addDoc, onSnapshot, query, where, orderBy, serverTimestamp, deleteDoc, doc } from 'firebase/firestore';
 import { ref, uploadBytesResumable, getDownloadURL, deleteObject } from 'firebase/storage';
 import { v4 as uuidv4 } from 'uuid';
 import type { ImageMetadata } from '@/types';
@@ -27,6 +28,7 @@ import { Progress } from '@/components/ui/progress';
 
 
 export default function ImageUploaderPage() {
+  const { user } = useAuth();
   const { toast } = useToast();
   const [images, setImages] = useState<ImageMetadata[]>([]);
   const [isUploading, setIsUploading] = useState(false);
@@ -36,9 +38,15 @@ export default function ImageUploaderPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
+    if (!user) {
+      setIsLoading(false);
+      return;
+    };
+    
     setIsLoading(true);
     const q = query(
         collection(db, "images"), 
+        where("uploaderId", "==", user.id), 
         orderBy("createdAt", "desc")
     );
 
@@ -51,16 +59,16 @@ export default function ImageUploaderPage() {
         setIsLoading(false);
     }, (error) => {
         console.error("Error fetching images:", error);
-        toast({ title: 'Error', description: 'Could not fetch images.', variant: 'destructive' });
+        toast({ title: 'Error', description: 'Could not fetch your images.', variant: 'destructive' });
         setIsLoading(false);
     });
 
     return () => unsubscribe();
-  }, [toast]);
+  }, [user, toast]);
 
   const handleFileUpload = useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
-    if (!file) return;
+    if (!file || !user) return;
 
     const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
     if (file.size > MAX_FILE_SIZE) {
@@ -71,7 +79,7 @@ export default function ImageUploaderPage() {
     setIsUploading(true);
     setUploadProgress(0);
     
-    const storagePath = `images/public/${uuidv4()}-${file.name}`;
+    const storagePath = `images/${user.id}/${uuidv4()}-${file.name}`;
     const storageRef = ref(storage, storagePath);
     const uploadTask = uploadBytesResumable(storageRef, file);
 
@@ -98,7 +106,7 @@ export default function ImageUploaderPage() {
           const imageMetadata = {
             imageUrl: downloadURL,
             storagePath: storagePath,
-            uploaderId: "public",
+            uploaderId: user.id,
             createdAt: serverTimestamp(),
             originalFilename: file.name,
             fileSize: file.size,
@@ -117,14 +125,14 @@ export default function ImageUploaderPage() {
         });
       }
     );
-  }, [toast]);
+  }, [user, toast]);
 
   const handleDeleteClick = (image: ImageMetadata) => {
     setImageToDelete(image);
   };
   
   const handleConfirmDelete = async () => {
-    if (!imageToDelete) return;
+    if (!imageToDelete || !user || imageToDelete.uploaderId !== user.id) return;
 
     const { storagePath, id } = imageToDelete;
     
@@ -156,12 +164,25 @@ export default function ImageUploaderPage() {
     }
   };
 
+  if (!user) {
+    return (
+        <Card>
+            <CardHeader>
+                <CardTitle>Image Uploader</CardTitle>
+            </CardHeader>
+            <CardContent>
+                <p className="text-muted-foreground">Please log in to use the image uploader.</p>
+            </CardContent>
+        </Card>
+    )
+  }
+
   return (
     <div className="space-y-8 p-4 md:p-8">
       <Card>
         <CardHeader>
-          <CardTitle>Public Image Uploader</CardTitle>
-          <CardDescription>Upload and manage images for your tournament. This is a public uploader.</CardDescription>
+          <CardTitle>Image Uploader</CardTitle>
+          <CardDescription>Upload and manage images for your tournament.</CardDescription>
         </CardHeader>
         <CardContent>
            <div className="flex flex-col gap-4">
@@ -188,8 +209,8 @@ export default function ImageUploaderPage() {
       
       <Card>
         <CardHeader>
-            <CardTitle>Image Gallery</CardTitle>
-            <CardDescription>View and manage uploaded images.</CardDescription>
+            <CardTitle>My Image Gallery</CardTitle>
+            <CardDescription>View and manage your uploaded images.</CardDescription>
         </CardHeader>
         <CardContent>
             {isLoading ? (
@@ -213,7 +234,7 @@ export default function ImageUploaderPage() {
             ) : (
                 <div className="text-center py-12 text-muted-foreground">
                     <ImageIcon className="mx-auto h-12 w-12" />
-                    <p className="mt-4">No images have been uploaded yet.</p>
+                    <p className="mt-4">You haven't uploaded any images yet.</p>
                 </div>
             )}
         </CardContent>

@@ -1,42 +1,47 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Allow public read access to most collections for presenter/client views
-    match /{collection}/{docId} {
-      allow read: if true;
-    }
-
-    // Lock down writes to admins/superusers by default
     match /{document=**} {
-      allow write: if false; 
+      allow read, write: if false;
     }
 
-    // Granular write permissions per collection
+    // --- Users, Teams, Organizations, Matches, Tournament, Sponsors can be managed by admins/super users ---
+    // This simplified rule assumes that all write operations for these core collections
+    // are handled through secured Genkit flows or trusted client-side admin roles.
+    // Public read access is granted for most collections so all users can see tournament data.
     match /users/{userId} {
-      allow write: if true; // Allow creating/updating users
+      allow read: if true;
+      allow create, update, delete: if request.auth != null; // Managed in Settings by logged-in users
+    }
+    match /rolePermissions/{role} {
+      allow read: if true;
+      allow write: if request.auth != null; // Only admins should do this
     }
     match /organizations/{orgId} {
-      allow write: if true;
+      allow read: if true;
+      allow create, update, delete: if request.auth != null;
     }
     match /teams/{teamId} {
-      allow write: if true;
+      allow read: if true;
+      allow create, update, delete: if request.auth != null;
     }
-    match /sponsors/{sponsorId} {
-      allow write: if true;
+     match /sponsors/{sponsorId} {
+      allow read: if true;
+      allow create, update, delete: if request.auth != null;
     }
     match /tournaments/{tourneyId} {
-      allow write: if true;
+      allow read, write: if true; // Open for simplicity, can be locked down
     }
     match /matches/{matchId} {
-      allow write: if true;
-    }
-    match /rolePermissions/{roleId} {
-      allow write: if true;
+      allow read, write: if true; // Open for simplicity, allows umpires/flows to update
     }
 
-    // Rules for image metadata - fully public
+    // --- Image Metadata Rules ---
+    // Any authenticated user can create an image record.
+    // They can only read or delete their own records.
     match /images/{imageId} {
-      allow read, write, delete: if true;
+      allow read, delete: if request.auth != null && resource.data.uploaderId == request.auth.uid;
+      allow create: if request.auth != null && request.resource.data.uploaderId == request.auth.uid;
     }
   }
 }

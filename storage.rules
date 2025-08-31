@@ -1,21 +1,17 @@
 rules_version = '2';
+
 service firebase.storage {
   match /b/{bucket}/o {
-    // Allow public read access to all files.
+    // Allow read access to all files by default
     match /{allPaths=**} {
-      allow read;
+      allow read: if true;
     }
 
-    // Allow anyone to upload to the public images directory.
-    match /images/public/{allPaths=**} {
-      allow write: if true;
-    }
-    
-    // Allow anyone to delete from the public images directory.
-    // Note: Security for deletion should be handled by your application logic,
-    // for instance, by checking a secret or ownership in Firestore before performing the delete operation.
-    match /images/{allPaths=**} {
-       allow delete: if true;
+    // Allow a logged-in user to write to a path under their own user ID.
+    // This prevents users from overwriting each other's files.
+    // The client generates a unique UUID for the filename, so the user can't guess and overwrite their own files either.
+    match /images/{userId}/{allPaths=**} {
+      allow write: if request.auth != null && request.auth.uid == userId;
     }
   }
 }
