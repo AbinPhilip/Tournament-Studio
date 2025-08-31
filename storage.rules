@@ -2,15 +2,16 @@ rules_version = '2';
 
 service firebase.storage {
   match /b/{bucket}/o {
-    // Allow read access to all files by default
+    
+    // Default deny all access
     match /{allPaths=**} {
-      allow read: if true;
+      allow read, write: if false;
     }
 
-    // Allow a logged-in user to write to a path under their own user ID.
-    // This prevents users from overwriting each other's files.
-    // The client generates a unique UUID for the filename, so the user can't guess and overwrite their own files either.
-    match /images/{userId}/{allPaths=**} {
+    // Allow logged-in users to upload to their own folder within 'images'.
+    // The client will construct a path like /images/{userId}/{uuid}-{fileName}
+    match /images/{userId}/{fileName} {
+      allow read: if true; // Images are public to read
       allow write: if request.auth != null && request.auth.uid == userId;
     }
   }

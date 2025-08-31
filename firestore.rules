@@ -1,47 +1,58 @@
 rules_version = '2';
+
 service cloud.firestore {
   match /databases/{database}/documents {
+    
+    // Default deny all
     match /{document=**} {
       allow read, write: if false;
     }
 
-    // --- Users, Teams, Organizations, Matches, Tournament, Sponsors can be managed by admins/super users ---
-    // This simplified rule assumes that all write operations for these core collections
-    // are handled through secured Genkit flows or trusted client-side admin roles.
-    // Public read access is granted for most collections so all users can see tournament data.
-    match /users/{userId} {
+    // Allow public read for most collections
+    match /tournaments/{docId} {
       allow read: if true;
-      allow create, update, delete: if request.auth != null; // Managed in Settings by logged-in users
+      allow write: if request.auth != null; // Only authenticated users can manage tournaments
     }
-    match /rolePermissions/{role} {
+    
+    match /organizations/{docId} {
       allow read: if true;
-      allow write: if request.auth != null; // Only admins should do this
+      allow write: if request.auth != null;
     }
-    match /organizations/{orgId} {
+    
+    match /teams/{docId} {
       allow read: if true;
-      allow create, update, delete: if request.auth != null;
-    }
-    match /teams/{teamId} {
-      allow read: if true;
-      allow create, update, delete: if request.auth != null;
-    }
-     match /sponsors/{sponsorId} {
-      allow read: if true;
-      allow create, update, delete: if request.auth != null;
-    }
-    match /tournaments/{tourneyId} {
-      allow read, write: if true; // Open for simplicity, can be locked down
-    }
-    match /matches/{matchId} {
-      allow read, write: if true; // Open for simplicity, allows umpires/flows to update
+      allow write: if request.auth != null;
     }
 
-    // --- Image Metadata Rules ---
-    // Any authenticated user can create an image record.
-    // They can only read or delete their own records.
+    match /sponsors/{docId} {
+      allow read: if true;
+      allow write: if request.auth != null;
+    }
+
+    match /matches/{docId} {
+      allow read: if true;
+      allow write: if request.auth != null; // Only authenticated users can update scores/matches
+    }
+
+    // Allow users to manage their own data
+    match /users/{userId} {
+      allow read: if true;
+      allow create: if request.resource.data.role in ['admin', 'super', 'update', 'inquiry', 'individual'];
+      allow update, delete: if request.auth != null && request.auth.uid == userId;
+    }
+
+    match /rolePermissions/{role} {
+      allow read: if true;
+      allow write: if request.auth != null; // Should be restricted to superusers only from client
+    }
+    
+    // Image metadata rules
     match /images/{imageId} {
-      allow read, delete: if request.auth != null && resource.data.uploaderId == request.auth.uid;
+      allow read: if true; // Allow public read for gallery display
+      // Allow create only if the uploaderId in the new document matches the user's ID
       allow create: if request.auth != null && request.resource.data.uploaderId == request.auth.uid;
+      // Allow delete only if the user requesting is the one who uploaded it
+      allow delete: if request.auth != null && resource.data.uploaderId == request.auth.uid;
     }
   }
 }
