@@ -686,7 +686,7 @@ export function PresenterShell() {
   if (isLoading) {
     return (
       <div className="flex h-screen w-screen items-center justify-center bg-gray-900 text-white">
-        <LoadingShuttlecock />
+        <div className="animate-spin h-16 w-16 border-4 border-primary border-t-transparent rounded-full" />
       </div>
     );
   }

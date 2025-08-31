@@ -107,7 +107,7 @@ export function CourtUmpireLogin() {
         </DialogHeader>
         <div className="py-4">
             {isLoading && !courts.length ? (
-                <div className="flex justify-center"><LoadingShuttlecock /></div>
+                <div className="flex justify-center"><div className="animate-spin h-8 w-8 border-4 border-primary border-t-transparent rounded-full" /></div>
             ) : (
                  <Select onValueChange={setSelectedCourt}>
                     <SelectTrigger>

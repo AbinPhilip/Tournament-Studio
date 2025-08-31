@@ -32,7 +32,7 @@ export default function DashboardLayout({
   if (loading && !isPublicPage) {
     return (
       <div className="flex h-screen w-full items-center justify-center bg-background">
-        <LoadingShuttlecock />
+        <div className="animate-spin h-12 w-12 border-4 border-primary border-t-transparent rounded-full" />
       </div>
     );
   }
@@ -40,7 +40,7 @@ export default function DashboardLayout({
   if (!user && !isPublicPage) {
      return (
       <div className="flex h-screen w-full items-center justify-center bg-background">
-        <LoadingShuttlecock />
+        <div className="animate-spin h-12 w-12 border-4 border-primary border-t-transparent rounded-full" />
       </div>
     );
   }

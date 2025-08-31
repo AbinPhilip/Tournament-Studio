@@ -207,7 +207,7 @@ export default function LiveScorerPage() {
     }, [match]);
 
     if (isLoading || !match) {
-        return <div className="flex h-screen w-full items-center justify-center"><LoadingShuttlecock /></div>;
+        return <div className="flex h-screen w-full items-center justify-center"><div className="animate-spin h-12 w-12 border-4 border-primary border-t-transparent rounded-full" /></div>;
     }
     
     const { team1Points = 0, team2Points = 0, servingTeamId, currentSet = 1 } = match.live || {};

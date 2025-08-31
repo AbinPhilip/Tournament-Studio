@@ -47,7 +47,7 @@ export default function Home() {
   
   return (
     <div className="flex h-screen w-full flex-col items-center justify-center bg-background text-foreground">
-      <LoadingShuttlecock />
+      <div className="animate-spin h-16 w-16 border-4 border-primary border-t-transparent rounded-full" />
       <p className="mt-4 text-muted-foreground">Loading your experience...</p>
     </div>
   );
