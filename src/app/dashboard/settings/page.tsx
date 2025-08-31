@@ -18,7 +18,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import type { User, UserRole } from '@/types';
 import { useAuth } from '@/hooks/use-auth';
-import { MoreHorizontal, Trash2, UserPlus, Edit, CheckCircle, ArrowLeft, Database, Loader2, Save, GitBranch, Trophy, Users, Building, ListOrdered, Shield, Cog, LayoutDashboard, Settings, MonitorPlay, HeartHandshake } from 'lucide-react';
+import { MoreHorizontal, Trash2, UserPlus, Edit, CheckCircle, ArrowLeft, Database, Loader2, Save, GitBranch, Trophy, Users, Building, ListOrdered, Shield, Cog, LayoutDashboard, Settings, MonitorPlay, HeartHandshake, ImageIcon } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -104,6 +104,7 @@ const appModules = [
     { id: 'umpire', label: 'Umpire View', icon: Shield },
     { id: 'draw', label: 'Tournament Draw', icon: GitBranch },
     { id: 'match-history', label: 'Match History', icon: Trophy },
+    { id: 'image-uploader', label: 'Image Uploader', icon: ImageIcon },
     { id: 'presenter', label: 'Presenter View', icon: MonitorPlay },
     { id: 'settings', label: 'System Settings', icon: Settings },
 ];
@@ -164,6 +165,7 @@ export default function SettingsPage() {
             const fetchedPerms = snapshot.docs.reduce((acc, doc) => {
                 const modules = doc.data().modules || [];
                 if (!modules.includes('presenter')) modules.push('presenter');
+                if (!modules.includes('image-uploader')) modules.push('image-uploader');
                 acc[doc.id as UserRole] = modules;
                 return acc;
             }, {} as RolePermissions);
@@ -255,7 +257,7 @@ export default function SettingsPage() {
     try {
       const batch = writeBatch(db);
       
-      const collectionsToDelete = ['users', 'organizations', 'teams', 'matches', 'tournaments', 'sponsors'];
+      const collectionsToDelete = ['users', 'organizations', 'teams', 'matches', 'tournaments', 'sponsors', 'images'];
       for (const collectionName of collectionsToDelete) {
           const snapshot = await getDocs(collection(db, collectionName));
           snapshot.forEach(doc => batch.delete(doc.ref));
