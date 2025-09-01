@@ -8,8 +8,7 @@
  */
 import { ai } from '@/ai/genkit';
 import { z } from 'zod';
-import { doc, updateDoc, getDoc } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
+import { adminDb } from '@/lib/firebase-admin';
 import type { Match } from '@/types';
 
 const UpdateLiveScoreInputSchema = z.object({
@@ -28,11 +27,11 @@ const updateLiveScoreFlow = ai.defineFlow(
     outputSchema: z.void(),
   },
   async (input) => {
-    const matchRef = doc(db, 'matches', input.matchId);
+    const matchRef = adminDb.collection('matches').doc(input.matchId);
     
     // Check if match status needs to be updated to IN_PROGRESS
-    const matchSnap = await getDoc(matchRef);
-    if (!matchSnap.exists()) {
+    const matchSnap = await matchRef.get();
+    if (!matchSnap.exists) {
         throw new Error("Match not found");
     }
     const matchData = matchSnap.data() as Match;
@@ -48,7 +47,7 @@ const updateLiveScoreFlow = ai.defineFlow(
         updates.status = 'IN_PROGRESS';
     }
 
-    await updateDoc(matchRef, updates);
+    await matchRef.update(updates);
   }
 );
 

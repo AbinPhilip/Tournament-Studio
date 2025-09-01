@@ -9,8 +9,7 @@
 
 import { ai } from '@/ai/genkit';
 import { z } from 'zod';
-import { db } from '@/lib/firebase';
-import { collection, doc, getDoc, getDocs, writeBatch, query, where, Timestamp, updateDoc } from 'firebase/firestore';
+import { adminDb, Timestamp } from '@/lib/firebase-admin';
 import type { Match, Tournament, Organization, Team, TeamType } from '@/types';
 
 
@@ -39,11 +38,11 @@ const recordMatchResultFlow = ai.defineFlow(
     outputSchema: z.void(),
   },
   async (input) => {
-    const batch = writeBatch(db);
-    const matchRef = doc(db, 'matches', input.matchId);
-    const matchSnap = await getDoc(matchRef);
+    const batch = adminDb.batch();
+    const matchRef = adminDb.collection('matches').doc(input.matchId);
+    const matchSnap = await matchRef.get();
 
-    if (!matchSnap.exists()) {
+    if (!matchSnap.exists) {
         throw new Error('Match not found');
     }
     const completedMatch = matchSnap.data() as Match;
@@ -118,7 +117,7 @@ const recordMatchResultFlow = ai.defineFlow(
       finalUpdates['live.team2Points'] = 0;
     } else if (updates.status === 'COMPLETED') {
         // Use a non-batched update here to ensure live is cleared before batch commit
-        await updateDoc(matchRef, { live: null, lastUpdateTime: Timestamp.now() });
+        await matchRef.update({ live: null, lastUpdateTime: Timestamp.now() });
         delete finalUpdates.live;
     }
 
@@ -132,7 +131,7 @@ const recordMatchResultFlow = ai.defineFlow(
     }
 
 
-    const tournamentSnap = await getDocs(collection(db, 'tournaments'));
+    const tournamentSnap = await adminDb.collection('tournaments').get();
     if (tournamentSnap.empty) {
         await batch.commit();
         return;
@@ -140,15 +139,13 @@ const recordMatchResultFlow = ai.defineFlow(
     const tournament = tournamentSnap.docs[0].data() as Tournament;
 
     if (tournament.tournamentType === 'knockout' && completedMatch.round) {
-        const matchesRef = collection(db, 'matches');
+        const matchesRef = adminDb.collection('matches');
         
         // Query for all matches in the same round and event
-        const currentRoundQuery = query(
-            matchesRef,
-            where('eventType', '==', completedMatch.eventType),
-            where('round', '==', completedMatch.round)
-        );
-        const currentRoundSnap = await getDocs(currentRoundQuery);
+        const currentRoundQuery = matchesRef
+            .where('eventType', '==', completedMatch.eventType)
+            .where('round', '==', completedMatch.round);
+        const currentRoundSnap = await currentRoundQuery.get();
         
         const roundMatchesMap = new Map(currentRoundSnap.docs.map(doc => [doc.id, doc.data() as Match]));
         roundMatchesMap.set(input.matchId, { ...completedMatch, ...updates, lastUpdateTime: Timestamp.now() } as Match);
@@ -164,7 +161,7 @@ const recordMatchResultFlow = ai.defineFlow(
 
         // All matches in the round are complete, proceed to schedule next round.
         
-        const allTeamsSnap = await getDocs(collection(db, "teams"));
+        const allTeamsSnap = await adminDb.collection("teams").get();
         const allTeams = allTeamsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Team));
         const teamMap = new Map(allTeams.map(team => [team.id, team]));
         const teamCounts = allTeams.reduce((acc, team) => {
@@ -184,7 +181,7 @@ const recordMatchResultFlow = ai.defineFlow(
 
         // Hold scheduling for semi-finals and finals
         if (isSemiFinalRound || isFinalRound) {
-            const allMatchesSnap = await getDocs(matchesRef);
+            const allMatchesSnap = await matchesRef.get();
             const allMatches = allMatchesSnap.docs.map(d => d.data() as Match);
 
             // Check if all non-final/semi-final rounds in all event types are complete
@@ -233,8 +230,8 @@ const recordMatchResultFlow = ai.defineFlow(
         if (winnersToSchedule.length % 2 !== 0 && winnersToSchedule.length > 1) {
             
             // Find teams that have already had a BYE in this event
-            const byeHistoryQuery = query(matchesRef, where('eventType', '==', completedMatch.eventType), where('team2Id', '==', 'BYE'));
-            const byeHistorySnap = await getDocs(byeHistoryQuery);
+            const byeHistoryQuery = matchesRef.where('eventType', '==', completedMatch.eventType).where('team2Id', '==', 'BYE');
+            const byeHistorySnap = await byeHistoryQuery.get();
             const teamsWithPastByes = new Set(byeHistorySnap.docs.map(doc => doc.data().team1Id));
 
             // Find the highest-ranked winner who hasn't had a BYE yet
@@ -246,10 +243,10 @@ const recordMatchResultFlow = ai.defineFlow(
 
                 const byeWinnerTeam = teamMap.get(byeWinnerId);
                 if (byeWinnerTeam) {
-                    const orgsCollection = await getDocs(collection(db, 'organizations'));
+                    const orgsCollection = await adminDb.collection('organizations').get();
                     const orgNameMap = new Map(orgsCollection.docs.map(doc => [doc.id, doc.data().name]));
 
-                    const byeMatchRef = doc(collection(db, 'matches'));
+                    const byeMatchRef = adminDb.collection('matches').doc();
                     const byeMatchData: Omit<Match, 'id'> = {
                         team1Id: byeWinnerId,
                         team2Id: 'BYE',
@@ -259,8 +256,8 @@ const recordMatchResultFlow = ai.defineFlow(
                         team2OrgName: 'BYE',
                         eventType: completedMatch.eventType,
                         courtName: '', 
-                        startTime: Timestamp.now(),
-                        lastUpdateTime: Timestamp.now(),
+                        startTime: Timestamp.now() as any, // Cast needed for type mismatch
+                        lastUpdateTime: Timestamp.now() as any,
                         status: 'COMPLETED',
                         winnerId: byeWinnerId,
                         round: completedMatch.round + 1,
@@ -271,8 +268,8 @@ const recordMatchResultFlow = ai.defineFlow(
             }
         }
 
-        const nextRoundQuery = query(matchesRef, where('round', '==', completedMatch.round + 1), where('eventType', '==', completedMatch.eventType));
-        const nextRoundSnap = await getDocs(nextRoundQuery);
+        const nextRoundQuery = matchesRef.where('round', '==', completedMatch.round + 1).where('eventType', '==', completedMatch.eventType);
+        const nextRoundSnap = await nextRoundQuery.get();
         const scheduledIds = new Set(nextRoundSnap.docs.flatMap(d => [d.data().team1Id, d.data().team2Id]));
 
         const finalWinnersToSchedule = winnersToSchedule.filter(w => !scheduledIds.has(w.winnerId));
@@ -295,11 +292,11 @@ const recordMatchResultFlow = ai.defineFlow(
                  continue;
             }
            
-            const orgsCollection = await getDocs(collection(db, 'organizations'));
+            const orgsCollection = await adminDb.collection('organizations').get();
             const orgNameMap = new Map(orgsCollection.docs.map(doc => [doc.id, doc.data().name]));
             
             // Create the new match fixture without assigning court or time.
-            const newMatchRef = doc(collection(db, 'matches'));
+            const newMatchRef = adminDb.collection('matches').doc();
             const newMatchData: Omit<Match, 'id'> = {
                 team1Id: team1Id,
                 team2Id: team2Id,
@@ -309,7 +306,7 @@ const recordMatchResultFlow = ai.defineFlow(
                 team2OrgName: orgNameMap.get(team2.organizationId) || '',
                 eventType: completedMatch.eventType,
                 courtName: '', // Left blank for manual assignment
-                startTime: Timestamp.now(), // Placeholder time
+                startTime: Timestamp.now() as any, // Placeholder time
                 status: 'PENDING', // Set to PENDING for manual scheduling
                 round: completedMatch.round + 1,
             };
