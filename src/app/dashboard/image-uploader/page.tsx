@@ -5,7 +5,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from '@/hooks/use-auth';
 import { useToast } from '@/hooks/use-toast';
 import { db, storage } from '@/lib/firebase';
-import { collection, addDoc, onSnapshot, query, where, orderBy, serverTimestamp, deleteDoc, doc } from 'firebase/firestore';
+import { collection, addDoc, onSnapshot, query, orderBy, serverTimestamp, deleteDoc, doc } from 'firebase/firestore';
 import { ref, uploadBytesResumable, getDownloadURL, deleteObject } from 'firebase/storage';
 import { v4 as uuidv4 } from 'uuid';
 import type { ImageMetadata } from '@/types';
@@ -24,7 +24,6 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { LoadingShuttlecock } from '@/components/ui/loading-shuttlecock';
 import { Progress } from '@/components/ui/progress';
 
 export default function ImageUploaderPage() {
@@ -46,7 +45,6 @@ export default function ImageUploaderPage() {
     setIsLoading(true);
     const q = query(
         collection(db, "images"), 
-        where("uploaderId", "==", user.id), 
         orderBy("createdAt", "desc")
     );
 
@@ -125,7 +123,14 @@ export default function ImageUploaderPage() {
   };
   
   const handleConfirmDelete = async () => {
-    if (!imageToDelete || !user || imageToDelete.uploaderId !== user.id) return;
+    if (!imageToDelete) return;
+
+    const isOwner = user && imageToDelete.uploaderId === user.id;
+    if (!isOwner) {
+         toast({ title: "Permission Denied", description: "You can only delete your own images.", variant: "destructive" });
+         setImageToDelete(null);
+         return;
+    }
 
     const { storagePath, id } = imageToDelete;
     
@@ -193,7 +198,11 @@ export default function ImageUploaderPage() {
                 {isUploading && (
                     <div className="space-y-2">
                         <Progress value={uploadProgress} className="w-full" />
-                        <p className="text-sm text-muted-foreground text-center">Uploading... {Math.round(uploadProgress)}%</p>
+                        <div
+                            className="text-sm text-muted-foreground text-center flex items-center justify-center gap-2"
+                            >
+                               Uploading... {Math.round(uploadProgress)}%
+                        </div>
                     </div>
                 )}
             </div>
@@ -202,8 +211,8 @@ export default function ImageUploaderPage() {
       
       <Card>
         <CardHeader>
-            <CardTitle>My Image Gallery</CardTitle>
-            <CardDescription>View and manage your uploaded images.</CardDescription>
+            <CardTitle>Image Gallery</CardTitle>
+            <CardDescription>View and manage all uploaded images.</CardDescription>
         </CardHeader>
         <CardContent>
             {isLoading ? (
@@ -217,9 +226,11 @@ export default function ImageUploaderPage() {
                                <a href={image.imageUrl} download={image.originalFilename} target="_blank" rel="noopener noreferrer">
                                 <Button size="sm"><Download className="mr-2"/>Download</Button>
                                </a>
-                               <Button size="sm" variant="destructive" onClick={() => handleDeleteClick(image)}>
-                                <Trash2 className="mr-2"/>Delete
-                               </Button>
+                               {user?.id === image.uploaderId && (
+                                   <Button size="sm" variant="destructive" onClick={() => handleDeleteClick(image)}>
+                                    <Trash2 className="mr-2"/>Delete
+                                   </Button>
+                               )}
                            </div>
                         </div>
                     ))}
@@ -227,7 +238,7 @@ export default function ImageUploaderPage() {
             ) : (
                 <div className="text-center py-12 text-muted-foreground">
                     <ImageIcon className="mx-auto h-12 w-12" />
-                    <p className="mt-4">You haven't uploaded any images yet.</p>
+                    <p className="mt-4">No images have been uploaded yet.</p>
                 </div>
             )}
         </CardContent>
