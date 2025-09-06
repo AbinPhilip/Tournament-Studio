@@ -534,8 +534,22 @@ export function PresenterShell() {
     const now = Date.now();
     const slideComponents = [];
 
+    // 1. Welcome Slide (Always first)
     slideComponents.push({ key: "welcome", component: <WelcomeSlide tournament={tournament} /> });
 
+    // 2. Sponsors Slide (Always second, if sponsors exist)
+    if (sponsors && sponsors.length > 0) {
+        const SPONSOR_CHUNK_SIZE = 10;
+        for (let i = 0; i < sponsors.length; i += SPONSOR_CHUNK_SIZE) {
+            const chunk = sponsors.slice(i, i + SPONSOR_CHUNK_SIZE);
+            slideComponents.push({
+                key: `sponsor-chunk-${i}`,
+                component: <SponsorsSlide sponsors={chunk} />
+            });
+        }
+    }
+    
+    // 3. Slides for PENDING tournament state
     if (tournament?.status === 'PENDING') {
         if (tournament.date && tournament.date.getTime() > now) {
             slideComponents.push({ key: "countdown", component: <CountdownSlide tournament={tournament} /> });
@@ -568,19 +582,9 @@ export function PresenterShell() {
             }
         }
     }
-    
-    if (sponsors && sponsors.length > 0) {
-        const SPONSOR_CHUNK_SIZE = 10;
-        for (let i = 0; i < sponsors.length; i += SPONSOR_CHUNK_SIZE) {
-            const chunk = sponsors.slice(i, i + SPONSOR_CHUNK_SIZE);
-            slideComponents.push({
-                key: `sponsor-chunk-${i}`,
-                component: <SponsorsSlide sponsors={chunk} />
-            });
-        }
-    }
 
 
+    // 4. Slides for IN_PROGRESS or COMPLETED tournament state
     if (tournament?.status === 'IN_PROGRESS' || tournament?.status === 'COMPLETED') {
         const liveMatches = matches.filter(m => m.status === 'IN_PROGRESS' && m.courtName).sort((a,b) => (a.courtName || '').localeCompare(b.courtName || ''));
         const scheduledFixtures = matches.filter(m => m.status === 'SCHEDULED' && m.courtName).sort((a, b) => (a.startTime as any) - (b.startTime as any));
@@ -684,3 +688,4 @@ export function PresenterShell() {
     </div>
   );
 }
+
