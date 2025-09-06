@@ -74,7 +74,7 @@ export default function ImageUploaderPage() {
     const file = event.target.files?.[0];
 
     // Debug log for the user object
-    console.log('[ImageUploader] User object:', user);
+    console.log('[ImageUploader] User object:', JSON.stringify(user, null, 2));
     
     if (!file || !user) {
         if (!user) {
@@ -282,5 +282,3 @@ export default function ImageUploaderPage() {
     </div>
   )
 }
-
-    
