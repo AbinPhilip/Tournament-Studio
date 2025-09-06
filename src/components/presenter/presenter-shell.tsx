@@ -1,4 +1,5 @@
 
+
 "use client";
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
@@ -6,7 +7,7 @@ import { db } from '@/lib/firebase';
 import { collection, onSnapshot, query, Timestamp, orderBy, limit } from 'firebase/firestore';
 import type { Match, Tournament, Team, TeamType, Sponsor } from '@/types';
 import { useToast } from '@/hooks/use-toast';
-import { WifiOff, Trophy, Crown, Ticket, HeartHandshake, Clock } from 'lucide-react';
+import { WifiOff, Trophy, Crown, Ticket, HeartHandshake, Clock, Calendar, MapPin } from 'lucide-react';
 import { AnimatePresence, m } from 'framer-motion';
 import { Carousel, CarouselApi, CarouselContent, CarouselItem } from "@/components/ui/carousel";
 import Autoplay from "embla-carousel-autoplay";
@@ -17,6 +18,7 @@ import { cn } from '@/lib/utils';
 import { Table, TableBody, TableCell, TableHeader, TableRow, TableHead } from '../ui/table';
 import Image from 'next/image';
 import { LoadingShuttlecock } from '../ui/loading-shuttlecock';
+import { format } from 'date-fns';
 
 const LiveMatchSlide = ({ match, teamCounts }: { match: Match, teamCounts: Record<TeamType, number> }) => {
     const { team1Points = 0, team2Points = 0, servingTeamId } = match.live || {};
@@ -186,6 +188,22 @@ const WelcomeSlide = ({ tournament }: { tournament: Tournament | null }) => (
         >
             Hosted by: {tournament?.hostName}
         </m.p>
+        {tournament && (
+             <m.div 
+                className="mt-8 flex flex-col md:flex-row gap-4 md:gap-8 text-lg md:text-2xl text-slate-300"
+                initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.8, duration: 0.5 }}
+                style={{ textShadow: '2px 2px 8px rgba(0,0,0,0.7)' }}
+            >
+                <div className="flex items-center gap-2">
+                    <MapPin />
+                    <span>{tournament.location}</span>
+                </div>
+                <div className="flex items-center gap-2">
+                    <Calendar />
+                    <span>{format(tournament.date, "PPP")}</span>
+                </div>
+            </m.div>
+        )}
     </m.div>
 );
 
@@ -737,3 +755,5 @@ export function PresenterShell() {
     </div>
   );
 }
+
+    
