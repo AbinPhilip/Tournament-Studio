@@ -1,12 +1,9 @@
-
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from '@/hooks/use-auth';
 import { useToast } from '@/hooks/use-toast';
 import { db, storage } from '@/lib/firebase';
-// Import Firebase auth methods for debugging
-import { getAuth, onAuthStateChanged } from 'firebase/auth';
 import { collection, addDoc, onSnapshot, query, orderBy, serverTimestamp, deleteDoc, doc, where } from 'firebase/firestore';
 import { ref, uploadBytesResumable, getDownloadURL, deleteObject } from 'firebase/storage';
 import { v4 as uuidv4 } from 'uuid';
@@ -28,11 +25,6 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Progress } from '@/components/ui/progress';
 
-// --- Debugging Checklist ---
-// 1. Firebase Project Setup: Ensure services (Auth, Firestore, Storage) are enabled in the Firebase Console.
-// 2. Environment Variables: Verify all NEXT_PUBLIC_FIREBASE_* variables are correct in your .env file. Check for auth/invalid-api-key errors in the browser console.
-// 3. Authentication: Ensure you are logged in before using the uploader. The `user` object should not be null.
-// 4. Security Rules: If you see permission errors, check both `storage.rules` and `firestore.rules` in your project and deploy them to the Firebase Console.
 
 export default function ImageUploaderPage() {
   const { user } = useAuth();
@@ -45,26 +37,10 @@ export default function ImageUploaderPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    // The user must be logged in to access this page's functionality.
     if (!user) {
       setIsLoading(false);
       return;
     };
-    
-    // ** START: Firebase Auth Debugging **
-    // This check helps diagnose permission issues. The application uses a custom
-    // auth provider, which might not create a session that Firebase's backend
-    // security rules (`request.auth != null`) can recognize. This listener will
-    // show the actual authentication state from Firebase's perspective.
-    const auth = getAuth();
-    const unsubscribeAuth = onAuthStateChanged(auth, (firebaseUser) => {
-      if (firebaseUser) {
-        console.log("Firebase Auth Check: User is authenticated with UID:", firebaseUser.uid);
-      } else {
-        console.error("Firebase Auth Check: No user is authenticated from Firebase's perspective. This is likely the cause of 'storage/unauthorized' errors.");
-      }
-    });
-    // ** END: Firebase Auth Debugging **
     
     setIsLoading(true);
     const q = query(
@@ -85,17 +61,11 @@ export default function ImageUploaderPage() {
         setIsLoading(false);
     });
 
-    return () => {
-        unsubscribe();
-        unsubscribeAuth(); // Clean up the auth listener
-    };
+    return () => unsubscribe();
   }, [user, toast]);
 
   const handleFileUpload = useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
-
-    // Debug log for the user object from the custom AuthProvider
-    console.log('[ImageUploader] Custom Auth Provider User object:', JSON.stringify(user, null, 2));
     
     if (!file || !user) {
         if (!user) {
@@ -113,6 +83,7 @@ export default function ImageUploaderPage() {
     setIsUploading(true);
     setUploadProgress(0);
 
+    // Use the logged-in user's ID for the storage path
     const storagePath = `images/${user.id}/${uuidv4()}-${file.name}`;
     const storageRef = ref(storage, storagePath);
     const uploadTask = uploadBytesResumable(storageRef, file);
@@ -126,8 +97,7 @@ export default function ImageUploaderPage() {
             console.error("Upload failed:", error);
             let description = "Could not upload the image. Please try again.";
             if (error.code === 'storage/unauthorized') {
-                description = "Permission denied. Please check your Firebase Storage rules.";
-                console.error("DEBUGGING TIP: Check the Firebase Console for Storage rules and verify that they match your project's `storage.rules` file. This error indicates a mismatch or incorrect rule logic.");
+                description = "Permission denied. Please check your Firebase Storage and Firestore security rules and ensure you are properly authenticated.";
             }
             toast({ title: "Upload Failed", description, variant: "destructive" });
             setIsUploading(false);
@@ -149,7 +119,6 @@ export default function ImageUploaderPage() {
             } catch (error) {
                  console.error("Error saving metadata:", error);
                  toast({ title: "Metadata Error", description: "Image uploaded, but failed to save metadata.", variant: "destructive" });
-                 console.error("DEBUGGING TIP: Verify your Firestore security rules in the Firebase Console. The error above indicates the `addDoc` call was rejected. Check the browser's network tab or Firebase debug logs for 'permission-denied' errors.");
             } finally {
                 setIsUploading(false);
             }
@@ -303,5 +272,3 @@ export default function ImageUploaderPage() {
     </div>
   )
 }
-
-    
