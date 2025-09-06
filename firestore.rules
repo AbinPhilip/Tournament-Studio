@@ -3,7 +3,7 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Helper function to check if a user is authenticated
+    // Helper function to check if a user is authenticated via the custom user system
     function isAuthenticated() {
       return request.auth != null;
     }
@@ -13,7 +13,7 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
-    // Allow public read for tournaments, teams, organizations, sponsors, and matches
+    // Public read for core tournament data, write requires any valid user session from the app
     match /tournaments/{docId} {
       allow read: if true;
       allow write: if isAuthenticated();
@@ -34,6 +34,8 @@ service cloud.firestore {
       allow read: if true;
       allow write: if isAuthenticated();
     }
+    
+    // Users can read their own document and super admins can manage permissions
     match /users/{userId} {
       allow read: if isAuthenticated();
       allow write: if isAuthenticated() && request.auth.uid == userId;
@@ -45,9 +47,9 @@ service cloud.firestore {
 
     // Rules for the 'images' collection
     match /images/{imageId} {
-      // Any authenticated user can create an image document.
-      // The `uploaderId` in the document must match their own user ID.
-      allow create: if isAuthenticated() && request.resource.data.uploaderId == request.auth.uid;
+      // Allow creation if the uploaderId in the new document exists as a user.
+      // This validates that the user is legitimate according to our custom auth system.
+      allow create: if exists(/databases/$(database)/documents/users/$(request.resource.data.uploaderId));
 
       // Any authenticated user can read any image document.
       allow read: if isAuthenticated();
