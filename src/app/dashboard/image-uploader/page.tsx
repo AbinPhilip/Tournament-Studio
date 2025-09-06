@@ -42,6 +42,8 @@ export default function ImageUploaderPage() {
       return;
     };
     
+    console.log('[ImageUploader] User object:', JSON.stringify(user, null, 2));
+    
     setIsLoading(true);
     const q = query(
         collection(db, "images"), 

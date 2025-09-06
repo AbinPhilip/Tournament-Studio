@@ -71,6 +71,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const userDoc = querySnapshot.docs[0];
         const foundUser = { id: userDoc.id, ...userDoc.data() } as User;
         
+        console.log('[AuthProvider] User logged in:', JSON.stringify(foundUser, null, 2));
+        
         sessionStorage.setItem('battledore_user', JSON.stringify(foundUser));
         setUser(foundUser);
         return foundUser;
@@ -97,6 +99,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         email: '',
         phoneNumber: '',
       };
+      
+      console.log('[AuthProvider] Court Umpire logged in:', JSON.stringify(courtUser, null, 2));
 
       sessionStorage.setItem('battledore_user', JSON.stringify(courtUser));
       setUser(courtUser);
