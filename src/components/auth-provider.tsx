@@ -1,10 +1,11 @@
+
 "use client";
 
 import React, { createContext, useState, useEffect, useCallback } from 'react';
 import type { User } from '@/types';
 import { db } from '@/lib/firebase';
 import { collection, query, where, getDocs } from 'firebase/firestore';
-import { getAuth, onAuthStateChanged, signOut } from 'firebase/auth';
+import { getAuth, onAuthStateChanged, signOut, signInAnonymously } from 'firebase/auth';
 
 
 interface AuthContextType {
@@ -29,14 +30,31 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (storedUser) {
         setUser(JSON.parse(storedUser));
       }
-      setLoading(false);
-
     } catch (error) {
       console.error('Failed to parse user from sessionStorage', error);
       sessionStorage.removeItem('battledore_user');
-      setLoading(false);
+    } finally {
+        setLoading(false);
     }
   }, []);
+
+  // Add this effect to validate the Firebase connection on startup.
+  useEffect(() => {
+    try {
+        const auth = getAuth();
+        onAuthStateChanged(auth, (firebaseUser) => {
+            console.log("Firebase connection validated successfully.");
+            // We don't need to do anything with the user here, this just confirms the connection.
+        });
+    } catch (error: any) {
+        console.error("CRITICAL: Firebase configuration is invalid or a required API is not enabled.");
+        if (error.message && error.message.includes("auth/configuration-not-found")) {
+            console.error("ACTION REQUIRED: Please enable the 'Identity Toolkit API' for your project in the Google Cloud Console.");
+            console.error("You can enable it here: https://console.cloud.google.com/apis/library/identitytoolkit.googleapis.com");
+        }
+    }
+  }, []);
+
 
   const login = useCallback(async (username: string, phoneNumber: string): Promise<User | null> => {
     setLoading(true);
