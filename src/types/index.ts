@@ -44,6 +44,7 @@ export interface Team {
 export interface Sponsor {
   id: string;
   name: string;
+  logoUrl?: string;
 }
 
 export type TournamentType = 'round-robin' | 'knockout';

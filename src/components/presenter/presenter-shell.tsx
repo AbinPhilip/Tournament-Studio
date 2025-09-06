@@ -390,18 +390,31 @@ const SponsorsSlide = ({ sponsors }: { sponsors: Sponsor[] }) => {
             animate={{ opacity: 1, scale: 1 }}
             transition={{ duration: 0.5 }}
         >
-            <header className="text-center mb-6" style={{ textShadow: '2px 2px 8px rgba(0,0,0,0.7)' }}>
+            <header className="text-center mb-6 sm:mb-10" style={{ textShadow: '2px 2px 8px rgba(0,0,0,0.7)' }}>
                 <h2 className="text-3xl sm:text-4xl md:text-5xl font-bold text-white font-headline flex items-center justify-center gap-4">
                     <HeartHandshake className="text-pink-400" />
-                    Our Sponsors
+                    Our Valued Sponsors
                 </h2>
             </header>
             <main className="flex-grow flex items-center justify-center">
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-x-8 sm:gap-x-12 gap-y-4 sm:gap-y-6">
+                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-x-8 sm:gap-x-12 gap-y-6 sm:gap-y-8">
                     {sponsors.map(sponsor => (
-                        <p key={sponsor.id} className="text-xl sm:text-2xl font-bold text-white text-center font-headline" style={{ textShadow: '1px 1px 4px rgba(0,0,0,0.5)' }}>
-                            {sponsor.name}
-                        </p>
+                        <div key={sponsor.id} className="flex flex-col items-center justify-center gap-2">
+                            {sponsor.logoUrl ? (
+                                <Image 
+                                    src={sponsor.logoUrl} 
+                                    alt={sponsor.name} 
+                                    width={150} 
+                                    height={80} 
+                                    className="object-contain h-20 w-36" 
+                                    style={{ filter: 'drop-shadow(0 0 5px rgba(255,255,255,0.7))' }}
+                                />
+                            ) : (
+                                <p className="text-lg sm:text-xl font-bold text-white text-center font-headline h-20 flex items-center" style={{ textShadow: '1px 1px 4px rgba(0,0,0,0.5)' }}>
+                                    {sponsor.name}
+                                </p>
+                            )}
+                        </div>
                     ))}
                 </div>
             </main>
@@ -484,7 +497,7 @@ export function PresenterShell() {
     const tournamentQuery = query(collection(db, 'tournaments'));
     const teamsQuery = query(collection(db, 'teams'));
     const orgsQuery = query(collection(db, 'organizations'));
-    const sponsorsQuery = query(collection(db, 'sponsors'));
+    const sponsorsQuery = query(collection(db, 'sponsors'), orderBy('name'));
 
     const unsubscribeMatches = onSnapshot(matchesQuery, (snapshot) => {
       const matchesData = snapshot.docs.map(doc => {
@@ -591,7 +604,7 @@ export function PresenterShell() {
 
     // Sponsors are shown anytime after tournament is created
     if (sponsors && sponsors.length > 0) {
-        const SPONSOR_CHUNK_SIZE = 9;
+        const SPONSOR_CHUNK_SIZE = 10;
         for (let i = 0; i < sponsors.length; i += SPONSOR_CHUNK_SIZE) {
             const chunk = sponsors.slice(i, i + SPONSOR_CHUNK_SIZE);
             slideComponents.push({

@@ -113,7 +113,7 @@ export function ImageUploader({
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
                 {currentImages.map((url) => (
                     <div key={url} className="relative group aspect-square">
-                        <Image src={url} alt="Uploaded image" layout="fill" className="object-cover rounded-md border" />
+                        <Image src={url} alt="Uploaded image" layout="fill" className="object-contain rounded-md border p-2" />
                          {!disabled && (
                              <Button
                                 variant="destructive"
@@ -138,5 +138,3 @@ export function ImageUploader({
     </div>
   );
 }
-
-    

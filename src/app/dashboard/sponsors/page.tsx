@@ -1,4 +1,3 @@
-
 "use client";
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
@@ -42,10 +41,13 @@ import {
 } from '@/components/ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { LoadingShuttlecock } from '@/components/ui/loading-shuttlecock';
+import { ImageUploader } from '@/components/ui/multi-image-uploader';
+import { ref, deleteObject } from 'firebase/storage';
+import Image from 'next/image';
 
 const sponsorFormSchema = z.object({
     name: z.string().min(2, { message: "Sponsor name must be at least 2 characters." }),
+    logoUrl: z.string().optional(),
 });
 
 export default function SponsorsPage() {
@@ -61,7 +63,7 @@ export default function SponsorsPage() {
 
   const form = useForm<z.infer<typeof sponsorFormSchema>>({
     resolver: zodResolver(sponsorFormSchema),
-    defaultValues: { name: '' },
+    defaultValues: { name: '', logoUrl: '' },
   });
   
   useEffect(() => {
@@ -81,10 +83,10 @@ export default function SponsorsPage() {
   const handleOpenForm = useCallback((sponsor: Sponsor | null = null) => {
     if (sponsor) {
       setSponsorToEdit(sponsor);
-      form.reset(sponsor);
+      form.reset({ name: sponsor.name, logoUrl: sponsor.logoUrl || '' });
     } else {
       setSponsorToEdit(null);
-      form.reset({ name: '' });
+      form.reset({ name: '', logoUrl: '' });
     }
     setIsFormOpen(true);
   }, [form]);
@@ -92,7 +94,7 @@ export default function SponsorsPage() {
   const handleCloseForm = useCallback(() => {
     setIsFormOpen(false);
     setSponsorToEdit(null);
-    form.reset({ name: '' });
+    form.reset({ name: '', logoUrl: '' });
   }, [form]);
 
 
@@ -100,6 +102,11 @@ export default function SponsorsPage() {
     setIsSubmitting(true);
     try {
       if (sponsorToEdit) {
+        // If logo is removed, delete old one from storage
+        if (sponsorToEdit.logoUrl && !values.logoUrl) {
+            const oldLogoRef = ref(storage, sponsorToEdit.logoUrl);
+            await deleteObject(oldLogoRef).catch(err => console.warn("Old logo not found, skipping deletion:", err));
+        }
         const sponsorRef = doc(db, 'sponsors', sponsorToEdit.id);
         await updateDoc(sponsorRef, values);
         toast({ title: 'Sponsor Updated', description: `Details for "${values.name}" have been updated.` });
@@ -122,6 +129,10 @@ export default function SponsorsPage() {
     if (!sponsorToDelete) return;
     setIsSubmitting(true);
     try {
+        if (sponsorToDelete.logoUrl) {
+            const logoRef = ref(storage, sponsorToDelete.logoUrl);
+            await deleteObject(logoRef).catch(err => console.warn("Logo not found, skipping deletion:", err));
+        }
         await deleteDoc(doc(db, 'sponsors', sponsorToDelete.id));
         toast({ title: 'Sponsor Deleted', description: `"${sponsorToDelete.name}" has been removed.` });
         setSponsorToDelete(null);
@@ -138,7 +149,7 @@ export default function SponsorsPage() {
         <CardHeader className="flex flex-row items-center justify-between">
           <div>
             <CardTitle>Sponsor Management</CardTitle>
-            <CardDescription>Add, edit, or remove tournament sponsors.</CardDescription>
+            <CardDescription>Add, edit, or remove tournament sponsors and their logos.</CardDescription>
           </div>
           <Button onClick={() => handleOpenForm()}>
             <HeartHandshake className="mr-2 h-4 w-4" /> Add Sponsor
@@ -153,6 +164,7 @@ export default function SponsorsPage() {
             <Table>
               <TableHeader>
                 <TableRow>
+                  <TableHead>Logo</TableHead>
                   <TableHead>Sponsor Name</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
@@ -160,6 +172,13 @@ export default function SponsorsPage() {
               <TableBody>
                 {sponsors.map((sponsor) => (
                   <TableRow key={sponsor.id}>
+                    <TableCell>
+                      {sponsor.logoUrl ? (
+                         <Image src={sponsor.logoUrl} alt={sponsor.name} width={64} height={64} className="rounded-md object-contain h-16 w-16" />
+                      ) : (
+                        <div className="h-16 w-16 bg-muted rounded-md flex items-center justify-center text-xs text-muted-foreground">No Logo</div>
+                      )}
+                    </TableCell>
                     <TableCell className="font-medium">{sponsor.name}</TableCell>
                     <TableCell className="text-right">
                       <DropdownMenu>
@@ -200,6 +219,22 @@ export default function SponsorsPage() {
                   <FormMessage />
                 </FormItem>
               )} />
+              <FormField control={form.control} name="logoUrl" render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Sponsor Logo</FormLabel>
+                  <FormControl>
+                    <ImageUploader
+                        folder="sponsor-logos"
+                        currentImages={field.value ? [field.value] : []}
+                        onUpload={(urls) => field.onChange(urls[0])}
+                        onRemove={() => field.onChange('')}
+                        multiple={false}
+                        disabled={isSubmitting}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )} />
               <DialogFooter>
                 <DialogClose asChild><Button type="button" variant="secondary">Cancel</Button></DialogClose>
                 <Button type="submit" disabled={isSubmitting}>
@@ -217,7 +252,7 @@ export default function SponsorsPage() {
           <AlertDialogHeader>
             <AlertDialogTitle>Are you sure?</AlertDialogTitle>
             <AlertDialogDescription>
-              This action cannot be undone. This will permanently delete the sponsor "{sponsorToDelete?.name}".
+              This action cannot be undone. This will permanently delete the sponsor "{sponsorToDelete?.name}" and its logo.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
