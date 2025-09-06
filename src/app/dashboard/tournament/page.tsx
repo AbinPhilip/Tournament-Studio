@@ -48,6 +48,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { scheduleMatches } from '@/ai/flows/schedule-matches-flow';
+import { ImageUploader } from '@/components/ui/multi-image-uploader';
 
 
 const tournamentFormSchema = z.object({
@@ -59,6 +60,7 @@ const tournamentFormSchema = z.object({
   numberOfCourts: z.coerce.number().min(1, { message: 'There must be at least 1 court.' }).max(50, { message: "Cannot exceed 50 courts."}),
   courtNames: z.array(z.object({ name: z.string().min(1, {message: 'Court name cannot be empty.'}) })),
   restTime: z.coerce.number().min(0, { message: 'Rest time cannot be negative.'}).optional(),
+  logoUrl: z.string().optional(),
 });
 
 
@@ -85,6 +87,7 @@ export default function TournamentSettingsPage() {
       numberOfCourts: 4,
       courtNames: Array.from({ length: 4 }, (_, i) => ({ name: `Court ${i+1}` })),
       restTime: 10,
+      logoUrl: '',
     },
   });
   
@@ -125,6 +128,7 @@ export default function TournamentSettingsPage() {
             ...data, 
             date: data.date.toDate(), 
             restTime: data.restTime ?? 10,
+            logoUrl: data.logoUrl || '',
           });
         } else {
             setTournamentDocRef(null);
@@ -334,6 +338,25 @@ export default function TournamentSettingsPage() {
                                 </FormItem>
                             )}
                         />
+                    </div>
+
+                    <div className="pt-8">
+                        <FormField control={form.control} name="logoUrl" render={({ field }) => (
+                            <FormItem>
+                                <FormLabel>Tournament Logo</FormLabel>
+                                <FormControl>
+                                    <ImageUploader
+                                        folder="tournament-logos"
+                                        currentImages={field.value ? [field.value] : []}
+                                        onUpload={(urls) => field.onChange(urls[0])}
+                                        onRemove={() => field.onChange('')}
+                                        multiple={false}
+                                        disabled={isSaving || isTournamentStarted}
+                                    />
+                                </FormControl>
+                                <FormMessage />
+                            </FormItem>
+                        )} />
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 pt-8">

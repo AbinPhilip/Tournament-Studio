@@ -172,7 +172,18 @@ const WelcomeSlide = ({ tournament }: { tournament: Tournament | null }) => (
         transition={{duration: 0.5}}
     >
         <m.div initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ delay: 0.2, duration: 0.5 }}>
-            <Logo />
+            {tournament?.logoUrl ? (
+                <Image 
+                    src={tournament.logoUrl} 
+                    alt={tournament.name} 
+                    width={200}
+                    height={200}
+                    className="object-contain h-32 sm:h-48 w-auto mb-4"
+                    style={{ filter: 'drop-shadow(0 0 10px rgba(255,255,255,0.3))' }}
+                />
+            ) : (
+                 <Logo />
+            )}
         </m.div>
         <m.h1 
             className="text-4xl sm:text-5xl md:text-7xl lg:text-8xl font-bold mt-8 tracking-tight font-headline"
@@ -663,7 +674,7 @@ export function PresenterShell() {
              >
                 <CarouselContent className="h-full">
                     {slides.map(slide => (
-                        <CarouselItem key={slide.key} data-slide-type={slide.type}>
+                        <CarouselItem key={slide.key}>
                             {slide.component}
                         </CarouselItem>
                     ))}

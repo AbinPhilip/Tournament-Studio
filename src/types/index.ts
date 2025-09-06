@@ -55,6 +55,7 @@ export interface Tournament {
     name: string;
     hostName?: string;
     location: string;
+    logoUrl?: string;
     numberOfCourts: number;
     courtNames: { name: string }[];
     tournamentType: TournamentType;
