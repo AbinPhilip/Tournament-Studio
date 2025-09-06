@@ -1,9 +1,12 @@
+
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from '@/hooks/use-auth';
 import { useToast } from '@/hooks/use-toast';
 import { db, storage } from '@/lib/firebase';
+// Import Firebase auth methods for debugging
+import { getAuth, onAuthStateChanged } from 'firebase/auth';
 import { collection, addDoc, onSnapshot, query, orderBy, serverTimestamp, deleteDoc, doc, where } from 'firebase/firestore';
 import { ref, uploadBytesResumable, getDownloadURL, deleteObject } from 'firebase/storage';
 import { v4 as uuidv4 } from 'uuid';
@@ -48,6 +51,21 @@ export default function ImageUploaderPage() {
       return;
     };
     
+    // ** START: Firebase Auth Debugging **
+    // This check helps diagnose permission issues. The application uses a custom
+    // auth provider, which might not create a session that Firebase's backend
+    // security rules (`request.auth != null`) can recognize. This listener will
+    // show the actual authentication state from Firebase's perspective.
+    const auth = getAuth();
+    const unsubscribeAuth = onAuthStateChanged(auth, (firebaseUser) => {
+      if (firebaseUser) {
+        console.log("Firebase Auth Check: User is authenticated with UID:", firebaseUser.uid);
+      } else {
+        console.error("Firebase Auth Check: No user is authenticated from Firebase's perspective. This is likely the cause of 'storage/unauthorized' errors.");
+      }
+    });
+    // ** END: Firebase Auth Debugging **
+    
     setIsLoading(true);
     const q = query(
         collection(db, "images"), 
@@ -67,14 +85,17 @@ export default function ImageUploaderPage() {
         setIsLoading(false);
     });
 
-    return () => unsubscribe();
+    return () => {
+        unsubscribe();
+        unsubscribeAuth(); // Clean up the auth listener
+    };
   }, [user, toast]);
 
   const handleFileUpload = useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
 
-    // Debug log for the user object
-    console.log('[ImageUploader] User object:', JSON.stringify(user, null, 2));
+    // Debug log for the user object from the custom AuthProvider
+    console.log('[ImageUploader] Custom Auth Provider User object:', JSON.stringify(user, null, 2));
     
     if (!file || !user) {
         if (!user) {
@@ -282,3 +303,5 @@ export default function ImageUploaderPage() {
     </div>
   )
 }
+
+    
