@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from 'react';
@@ -41,8 +42,6 @@ export default function ImageUploaderPage() {
       setIsLoading(false);
       return;
     };
-    
-    console.log('[ImageUploader] User object:', JSON.stringify(user, null, 2));
     
     setIsLoading(true);
     const q = query(
