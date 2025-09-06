@@ -2,21 +2,20 @@ rules_version = '2';
 
 service firebase.storage {
   match /b/{bucket}/o {
-    // Allow public read on all files
-    match /{allPaths=**} {
+    // Match any file in the images folder
+    match /images/{userId}/{allPaths=**} {
+      // Allow read access to everyone
       allow read;
+      // Allow write access only if the user is authenticated and their UID matches the userId in the path
+      allow write: if request.auth != null && request.auth.uid == userId;
     }
 
-    // Rules for image uploads
-    match /images/{userId}/{allPaths=**} {
-      // 1. User must be authenticated.
-      // 2. The userId in the path must match the user's own uid.
-      // 3. The uploaded file must be an image.
-      // 4. The file size must be less than 5MB.
-      allow write: if request.auth != null && 
-                      request.auth.uid == userId &&
-                      request.resource.contentType.matches('image/.*') &&
-                      request.resource.size < 5 * 1024 * 1024;
+    // Allow public read access to all other paths that are not in the 'images' folder.
+    // This is useful for other potential files in your bucket.
+    match /{path=**} {
+      // The condition ensures this rule does not apply to the /images path,
+      // which is handled by the more specific rule above.
+      allow read: if path[0] != 'images';
     }
   }
 }
