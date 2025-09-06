@@ -1,53 +1,62 @@
-
 rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Shared collections (e.g., tournament, organizations, teams) are generally readable by anyone
-    // but writable only by admins.
+
+    // Helper function to check if a user is authenticated
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    // Default deny all reads and writes
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Allow public read for tournaments, teams, organizations, sponsors, and matches
     match /tournaments/{docId} {
       allow read: if true;
-      allow write: if request.auth.uid != null && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['admin', 'super'];
-    }
-    match /organizations/{docId} {
-      allow read: if true;
-      allow create, update, delete: if request.auth.uid != null && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['admin', 'super'];
-    }
-    match /sponsors/{docId} {
-        allow read: if true;
-        allow write: if request.auth.uid != null && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['admin', 'super'];
+      allow write: if isAuthenticated();
     }
     match /teams/{docId} {
       allow read: if true;
-      allow create, update, delete: if request.auth.uid != null && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['admin', 'super'];
+      allow write: if isAuthenticated();
     }
-    
-    // User data can only be read/written by the user themselves or by an admin.
+     match /organizations/{docId} {
+      allow read: if true;
+      allow write: if isAuthenticated();
+    }
+     match /sponsors/{docId} {
+      allow read: if true;
+      allow write: if isAuthenticated();
+    }
+    match /matches/{docId} {
+      allow read: if true;
+      allow write: if isAuthenticated();
+    }
     match /users/{userId} {
-      allow read: if request.auth.uid != null && (request.auth.uid == userId || get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['admin', 'super']);
-      allow write: if request.auth.uid != null && (request.auth.uid == userId || get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['admin', 'super']);
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated() && request.auth.uid == userId;
+    }
+     match /rolePermissions/{role} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'super';
     }
 
-    // Matches are readable by anyone, but writable by admins and update users.
-    match /matches/{matchId} {
-      allow read: if true;
-      allow write: if request.auth.uid != null && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['admin', 'super', 'update', 'court'];
-    }
-
-    // Role permissions can only be managed by super users.
-    match /rolePermissions/{roleId} {
-      allow read: if request.auth.uid != null;
-      allow write: if request.auth.uid != null && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'super';
-    }
-
-    // Images collection rules
+    // Rules for the 'images' collection
     match /images/{imageId} {
-      // Anyone can see any image
-      allow read: if true;
-      // Anyone can create an image record
-      allow create: if request.auth.uid != null && request.resource.data.uploaderId == request.auth.uid;
-      // Only the uploader can delete their own image record
-      allow delete: if request.auth.uid != null && resource.data.uploaderId == request.auth.uid;
+      // Any authenticated user can create an image document.
+      // The `uploaderId` in the document must match their own user ID.
+      allow create: if isAuthenticated() && request.resource.data.uploaderId == request.auth.uid;
+
+      // Any authenticated user can read any image document.
+      allow read: if isAuthenticated();
+      
+      // Only the user who uploaded the image can delete the document.
+      allow delete: if isAuthenticated() && resource.data.uploaderId == request.auth.uid;
+      
+      // No one can update an image document after it's created.
+      allow update: if false;
     }
   }
 }
