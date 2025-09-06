@@ -1,18 +1,54 @@
 
 "use client";
 
+import { useState, useEffect, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { Logo } from '@/components/logo';
 import { LoginForm } from '@/components/login-form';
 import { CourtUmpireLogin } from '@/components/court-umpire-login';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { MonitorPlay, ShieldCheck, UserCog } from 'lucide-react';
+import { MonitorPlay, ShieldCheck, UserCog, Database } from 'lucide-react';
 import Link from 'next/link';
-
+import { collection, getDocs, limit, query } from 'firebase/firestore';
+import { db } from '@/lib/firebase';
+import { seedDatabase } from '@/app/actions/seedDatabase';
+import { useToast } from '@/hooks/use-toast';
 
 export default function LoginPage() {
   const router = useRouter();
+  const { toast } = useToast();
+  const [isDbEmpty, setIsDbEmpty] = useState(false);
+  const [isCheckingDb, setIsCheckingDb] = useState(true);
+  const [isPending, startTransition] = useTransition();
+
+  useEffect(() => {
+    async function checkDb() {
+      try {
+        const usersQuery = query(collection(db, 'users'), limit(1));
+        const usersSnap = await getDocs(usersQuery);
+        setIsDbEmpty(usersSnap.empty);
+      } catch (error) {
+        console.error("Error checking database:", error);
+        setIsDbEmpty(true); 
+      } finally {
+        setIsCheckingDb(false);
+      }
+    }
+    checkDb();
+  }, []);
+
+  const handleSeed = () => {
+    startTransition(async () => {
+      const result = await seedDatabase();
+      if (result.success) {
+        toast({ title: "Database Seeded", description: "The database has been populated with mock data. You can now log in." });
+        setIsDbEmpty(false);
+      } else {
+        toast({ title: "Seeding Failed", description: result.message, variant: "destructive" });
+      }
+    });
+  }
 
   return (
     <div className="flex min-h-screen flex-col items-center justify-center bg-muted/40 p-4">
@@ -21,6 +57,21 @@ export default function LoginPage() {
         <h1 className="text-3xl font-bold">Tournament Manager</h1>
         <p className="text-muted-foreground">Please select your access point.</p>
       </div>
+
+       {isDbEmpty && !isCheckingDb && (
+          <Card className="mb-8 w-full max-w-5xl bg-yellow-50 border-yellow-200 dark:bg-yellow-900/20">
+            <CardHeader>
+              <CardTitle>Welcome!</CardTitle>
+              <CardDescription>Your database appears to be empty. Seed it with mock data to get started.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Button onClick={handleSeed} disabled={isPending}>
+                <Database className="mr-2" />
+                {isPending ? "Seeding..." : "Seed Database for Demo"}
+              </Button>
+            </CardContent>
+          </Card>
+      )}
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-8 w-full max-w-5xl">
 
@@ -46,8 +97,8 @@ export default function LoginPage() {
         <Card className="flex flex-col">
           <CardHeader>
              <div className="flex justify-center mb-4">
-                <div className="p-4 bg-secondary/10 rounded-full">
-                    <ShieldCheck className="h-8 w-8 text-secondary"/>
+                <div className="p-4 bg-primary/10 rounded-full">
+                    <ShieldCheck className="h-8 w-8 text-primary"/>
                 </div>
             </div>
             <CardTitle className="text-center">Court Umpire</CardTitle>
