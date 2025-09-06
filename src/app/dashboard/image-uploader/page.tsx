@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from 'react';
@@ -37,7 +36,9 @@ export default function ImageUploaderPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
+    // Ensure users are logged in before accessing the uploader page
     if (!user) {
+      console.log("ImageUploaderPage: User is not authenticated. Redirect or show login message.");
       setIsLoading(false);
       return;
     };
@@ -65,8 +66,17 @@ export default function ImageUploaderPage() {
   }, [user, toast]);
 
   const handleFileUpload = useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
+    // 4. Add a console log to debug the user object
+    console.log('handleFileUpload triggered. User object:', user);
+    
+    if (!user) {
+        console.error("Upload blocked: User object is null. Ensure user is logged in.");
+        toast({ title: "Authentication Error", description: "You must be logged in to upload images.", variant: "destructive" });
+        return;
+    }
+
     const file = event.target.files?.[0];
-    if (!file || !user) return;
+    if (!file) return;
 
     const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
     if (file.size > MAX_FILE_SIZE) {
@@ -88,11 +98,16 @@ export default function ImageUploaderPage() {
         },
         (error) => {
             console.error("Upload failed:", error);
-            let description = "Could not upload the image. Please try again.";
+            // 1. Check for storage/unauthorized error
             if (error.code === 'storage/unauthorized') {
-                description = "Permission denied. Please check storage rules.";
+                console.error("DEBUG: Firebase Storage Permission Denied. Check the following:");
+                console.error("1. Check the Firebase Console for Storage rules and verify that they match the required rules.");
+                console.error("2. Ensure the `storagePath` variable matches the rules. Current path:", storagePath);
+                console.error("3. Verify the user is authenticated and their UID is correct:", user?.id);
+                toast({ title: "Upload Failed", description: "Permission denied. Check storage rules.", variant: "destructive" });
+            } else {
+                 toast({ title: "Upload Failed", description: "Could not upload the image. Please try again.", variant: "destructive" });
             }
-            toast({ title: "Upload Failed", description, variant: "destructive" });
             setIsUploading(false);
         },
         async () => {
@@ -110,6 +125,11 @@ export default function ImageUploaderPage() {
                 await addDoc(collection(db, "images"), imageMetadata);
                 toast({ title: "Upload Successful", description: `"${file.name}" has been uploaded.` });
             } catch (error) {
+                 console.error("Failed to save metadata to Firestore:", error);
+                 // 2. Verify Firestore security rules
+                 console.error("DEBUG: Failed to save metadata. Check the following:");
+                 console.error("1. Verify your Firestore security rules in the Firebase Console.");
+                 console.error("2. Check for permission-denied errors in the browser's network tab or Firebase debug logs.");
                  toast({ title: "Metadata Error", description: "Image uploaded, but failed to save metadata.", variant: "destructive" });
             } finally {
                 setIsUploading(false);
@@ -148,7 +168,6 @@ export default function ImageUploaderPage() {
         let description = "Could not delete the image.";
         if (error.code === 'storage/object-not-found') {
             description = "File not found in storage, deleting metadata record.";
-            // If file doesn't exist, still try to delete firestore record
             try {
                  await deleteDoc(doc(db, "images", id));
                  toast({ title: "Image Deleted", description: "The image metadata has been successfully removed." });
@@ -161,6 +180,22 @@ export default function ImageUploaderPage() {
         setImageToDelete(null);
     }
   };
+
+  useEffect(() => {
+    // 3. Check for Firebase config issues on component mount
+    if (typeof window !== 'undefined') {
+        try {
+            // A simple check to see if firebase app is initialized
+            db.app; 
+        } catch (e: any) {
+            console.error("DEBUG: Firebase initialization error. Check the following:");
+            console.error("1. Verify that all environment variables (NEXT_PUBLIC_FIREBASE_*) are correctly set in your .env.local or .env file.");
+            console.error("2. Check the browser's console for errors like 'Firebase: Error (auth/invalid-api-key)'.");
+            console.error("3. Ensure the Firebase project is correctly set up in the Firebase Console, and the Storage and Firestore services are enabled.");
+            toast({ title: "Firebase Config Error", description: "Could not connect to Firebase services.", variant: "destructive" });
+        }
+    }
+  }, []);
 
   if (!user) {
     return (
