@@ -2,14 +2,18 @@ rules_version = '2';
 
 service firebase.storage {
   match /b/{bucket}/o {
-    // Allow public read on all files
+  
+    // Default deny all
     match /{allPaths=**} {
-      allow read;
+      allow read, write: if false;
     }
 
-    // Allow users to write to their own folder if their user document exists in Firestore.
-    // This aligns with the custom auth system instead of relying on request.auth,
-    // which is null because the app doesn't use Firebase Auth for sign-in sessions.
+    // Allow public read access to all files
+    match /{allPaths=**} {
+        allow read: if true;
+    }
+    
+    // Allow authorized users to write to their own folder in 'images'
     match /images/{userId}/{allPaths=**} {
       allow write: if exists(/databases/$(database)/documents/users/$(userId));
     }

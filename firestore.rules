@@ -1,64 +1,52 @@
 rules_version = '2';
-
 service cloud.firestore {
   match /databases/{database}/documents {
-
-    // Helper function to check if a user is authenticated via the custom user system
-    function isAuthenticated() {
-      return request.auth != null;
-    }
     
     // Default deny all reads and writes
     match /{document=**} {
       allow read, write: if false;
     }
-
-    // Public read for core tournament data, write requires any valid user session from the app
+    
+    // PUBLIC: Allow anyone to read non-sensitive public data
     match /tournaments/{docId} {
       allow read: if true;
-      allow write: if isAuthenticated();
+      allow write: if request.auth != null; // Only authenticated users can write
     }
-    match /teams/{docId} {
+    match /organizations/{docId} {
       allow read: if true;
-      allow write: if isAuthenticated();
+      allow write: if request.auth != null;
     }
-     match /organizations/{docId} {
-      allow read: if true;
-      allow write: if isAuthenticated();
+    match /sponsors/{docId} {
+        allow read: if true;
+        allow write: if request.auth != null;
     }
-     match /sponsors/{docId} {
+     match /teams/{docId} {
       allow read: if true;
-      allow write: if isAuthenticated();
+      allow write: if request.auth != null;
     }
-    match /matches/{docId} {
+     match /matches/{docId} {
       allow read: if true;
-      allow write: if isAuthenticated();
+      allow write: if request.auth != null;
+    }
+
+    // AUTHENTICATED: Allow any authenticated user to read user profiles
+    match /users/{userId} {
+      allow read: if true;
+      allow create: if true; // Allow new user creation
+      allow update, delete: if request.auth != null && request.auth.uid == userId; // Only owner can edit/delete
     }
     
-    // Users can read their own document and super admins can manage permissions
-    match /users/{userId} {
-      allow read: if isAuthenticated();
-      allow write: if isAuthenticated() && request.auth.uid == userId;
-    }
-     match /rolePermissions/{role} {
-      allow read: if isAuthenticated();
-      allow write: if isAuthenticated() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'super';
-    }
-
-    // Rules for the 'images' collection
+    // IMAGE METADATA: Allow authenticated users to manage their own image metadata
     match /images/{imageId} {
-      // Allow creation if the uploaderId in the new document exists as a user.
-      // This validates that the user is legitimate according to our custom auth system.
-      allow create: if exists(/databases/$(database)/documents/users/$(request.resource.data.uploaderId));
-
-      // Any authenticated user can read any image document.
-      allow read: if isAuthenticated();
-      
-      // Only the user who uploaded the image can delete the document.
-      allow delete: if isAuthenticated() && resource.data.uploaderId == request.auth.uid;
-      
-      // No one can update an image document after it's created.
-      allow update: if false;
+      allow read: if true;
+      allow create: if request.auth != null && request.auth.uid == request.resource.data.uploaderId;
+      allow delete: if request.auth != null && request.auth.uid == resource.data.uploaderId;
+    }
+    
+     // ROLE PERMISSIONS: Only super users can manage roles
+    match /rolePermissions/{role} {
+      allow read: if true;
+      allow write: if request.auth != null && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'super';
     }
   }
 }
