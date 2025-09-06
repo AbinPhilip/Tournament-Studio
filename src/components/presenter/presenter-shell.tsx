@@ -294,105 +294,40 @@ const WinnerSlide = ({ match }: { match: Match }) => {
     );
 };
 
-const LotteryDrawSlide = ({ teamsWithLots, onComplete }: { teamsWithLots: Team[], onComplete: () => void }) => {
-    const [revealedCount, setRevealedCount] = useState(0);
-    const [eventIndex, setEventIndex] = useState(0);
-
-    const teamsByEvent = useMemo(() => {
-        if (!teamsWithLots || teamsWithLots.length === 0) return [];
-        const grouped = teamsWithLots.reduce((acc, team) => {
-            if (!acc[team.type]) acc[team.type] = [];
-            acc[team.type].push(team);
-            return acc;
-        }, {} as Record<TeamType, Team[]>);
-
-        for (const eventType in grouped) {
-            grouped[eventType as TeamType].sort((a,b) => (a.lotNumber || 0) - (b.lotNumber || 0));
-        }
-
-        const eventOrder: TeamType[] = ['mens_doubles', 'womens_doubles', 'mixed_doubles', 'singles'];
-        return eventOrder.filter(key => grouped[key]).map(key => ({
-            eventType: key,
-            teams: grouped[key]
-        }));
-    }, [teamsWithLots]);
-
-    const currentEvent = teamsByEvent.length > 0 ? teamsByEvent[eventIndex] : null;
-
-    useEffect(() => {
-        if (!currentEvent) return;
-
-        setRevealedCount(0); // Reset for new event
-        
-        const interval = setInterval(() => {
-            setRevealedCount(prev => {
-                if (prev < currentEvent.teams.length) {
-                    return prev + 1;
-                }
-                
-                // All teams for the current event are revealed
-                clearInterval(interval);
-                
-                // If there are more events, move to the next one
-                if (eventIndex < teamsByEvent.length - 1) {
-                    setTimeout(() => {
-                        setEventIndex(i => i + 1);
-                    }, 3000); // Pause before switching event
-                } else {
-                    // This was the last event
-                    onComplete();
-                }
-                
-                return prev;
-            });
-        }, 1500); // Reveal one team every 1.5 seconds
-
-        return () => clearInterval(interval);
-    }, [eventIndex, currentEvent, teamsByEvent.length, onComplete]);
-
-    if (!currentEvent) {
-        return null;
-    }
-
-    const itemVariants = {
-        hidden: { opacity: 0, x: -50 },
-        visible: { opacity: 1, x: 0, transition: { type: 'spring', stiffness: 100 } },
-    };
-
+const LotteryDrawSlide = ({ teams, eventType }: { teams: Team[], eventType: TeamType }) => {
     return (
         <m.div
-            className="h-full flex flex-col justify-center p-4 sm:p-6 md:p-8 bg-black/30 rounded-2xl border border-white/20"
+            className="h-full flex flex-col p-4 sm:p-6 md:p-8 bg-black/30 rounded-2xl border border-white/20"
             initial={{opacity: 0, scale: 0.95}}
             animate={{opacity: 1, scale: 1}}
             transition={{duration: 0.5}}
         >
-            <header className="text-center mb-6" style={{ textShadow: '2px 2px 8px rgba(0,0,0,0.7)' }}>
+            <header className="text-center mb-4 sm:mb-6" style={{ textShadow: '2px 2px 8px rgba(0,0,0,0.7)' }}>
                 <h2 className="text-3xl sm:text-4xl md:text-5xl font-bold text-white font-headline flex items-center justify-center gap-4">
                     <Ticket className="text-yellow-400" />
-                    Picking of Lots
+                    Lottery Draw Results
                 </h2>
-                 <EventBadge eventType={currentEvent.eventType} className="mt-4 text-xl sm:text-2xl px-4 sm:px-6 py-2" />
+                <EventBadge eventType={eventType} className="mt-4 text-xl sm:text-2xl px-4 sm:px-6 py-2" />
             </header>
             <main className="text-white flex-grow overflow-y-auto">
-                <AnimatePresence>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-8 gap-y-4">
-                        {currentEvent.teams.slice(0, revealedCount).map((team) => (
-                             <m.div 
-                                key={team.id}
-                                className="flex items-center gap-4 bg-white/5 p-3 rounded-lg border-l-4 border-yellow-400"
-                                variants={itemVariants}
-                                initial="hidden"
-                                animate="visible"
-                             >
-                                <div className="text-3xl sm:text-4xl font-black text-yellow-300 font-headline w-12 sm:w-16 text-center">{team.lotNumber}</div>
-                                <div className="border-l border-white/20 pl-4">
-                                    <p className="font-bold text-lg sm:text-xl">{team.player1Name}{team.player2Name && ` & ${team.player2Name}`}</p>
-                                    <p className="text-xs sm:text-sm text-slate-300">{team.organizationId}</p>
-                                </div>
-                            </m.div>
+                <Table>
+                    <TableHeader>
+                        <TableRow className="border-white/20 hover:bg-transparent">
+                            <TableHead className="text-white/80 font-headline text-base sm:text-xl w-1/6">Lot #</TableHead>
+                            <TableHead className="text-white/80 font-headline text-base sm:text-xl w-3/6">Team</TableHead>
+                            <TableHead className="text-white/80 font-headline text-base sm:text-xl w-2/6">Organization</TableHead>
+                        </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                        {teams.map(team => (
+                            <TableRow key={team.id} className="border-white/20 hover:bg-white/5">
+                                <TableCell className="font-black text-2xl sm:text-3xl text-yellow-300 font-headline">{team.lotNumber}</TableCell>
+                                <TableCell className="font-bold text-lg sm:text-xl">{team.player1Name}{team.player2Name && ` & ${team.player2Name}`}</TableCell>
+                                <TableCell className="text-sm sm:text-base text-slate-300">{team.organizationId}</TableCell>
+                            </TableRow>
                         ))}
-                    </div>
-                </AnimatePresence>
+                    </TableBody>
+                </Table>
             </main>
         </m.div>
     );
@@ -415,23 +350,28 @@ const SponsorsSlide = ({ sponsors }: { sponsors: Sponsor[] }) => {
                 </h2>
             </header>
             <main className="flex-grow flex items-center justify-center">
-                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-x-8 sm:gap-x-12 gap-y-6 sm:gap-y-8">
+                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-x-8 sm:gap-x-16 gap-y-6 sm:gap-y-10">
                     {sponsors.map(sponsor => (
-                        <div key={sponsor.id} className="flex flex-col items-center justify-center gap-2">
+                        <div key={sponsor.id} className="flex flex-col items-center justify-center gap-4">
                             {sponsor.logoUrl ? (
                                 <Image 
                                     src={sponsor.logoUrl} 
                                     alt={sponsor.name} 
-                                    width={150} 
-                                    height={80} 
-                                    className="object-contain h-20 w-36" 
-                                    style={{ filter: 'drop-shadow(0 0 5px rgba(255,255,255,0.7))' }}
+                                    width={200} 
+                                    height={120} 
+                                    className="object-contain h-24 sm:h-32 w-auto" 
+                                    style={{ filter: 'drop-shadow(0 0 8px rgba(255,255,255,0.7))' }}
                                 />
                             ) : (
-                                <p className="text-lg sm:text-xl font-bold text-white text-center font-headline h-20 flex items-center" style={{ textShadow: '1px 1px 4px rgba(0,0,0,0.5)' }}>
-                                    {sponsor.name}
-                                </p>
+                                <div className="h-24 sm:h-32 flex items-center justify-center">
+                                    <p className="text-2xl sm:text-3xl font-bold text-white text-center font-headline" style={{ textShadow: '1px 1px 4px rgba(0,0,0,0.5)' }}>
+                                        {sponsor.name}
+                                    </p>
+                                </div>
                             )}
+                             <p className="text-lg sm:text-xl font-bold text-white text-center font-headline" style={{ textShadow: '1px 1px 4px rgba(0,0,0,0.5)' }}>
+                                {sponsor.name}
+                            </p>
                         </div>
                     ))}
                 </div>
@@ -578,30 +518,13 @@ export function PresenterShell() {
     };
   }, [toast]);
   
-  const handleLotteryComplete = useCallback(() => {
-    if (api) {
-        // Find the next slide that is NOT a lottery slide to jump to
-        const nextSlideIndex = api.scrollSnapList().findIndex((_, index) => {
-            const slideNode = api.slideNodes()[index];
-            return !slideNode.querySelector('[data-slide-type="lottery-draw"]');
-        });
-
-        if (nextSlideIndex !== -1) {
-            api.scrollTo(nextSlideIndex);
-        }
-        
-        autoplayPlugin.play();
-    }
-  }, [api, autoplayPlugin]);
 
   const slides = useMemo(() => {
     const now = Date.now();
     const slideComponents = [];
 
-    // Always show the welcome slide first.
     slideComponents.push({ key: "welcome", component: <WelcomeSlide tournament={tournament} /> });
 
-    // Pre-tournament slides
     if (tournament?.status === 'PENDING') {
         if (tournament.date && tournament.date.getTime() > now) {
             slideComponents.push({ key: "countdown", component: <CountdownSlide tournament={tournament} /> });
@@ -611,16 +534,30 @@ export function PresenterShell() {
         const teamsWithLots = teams
             .filter(t => t.lotNumber)
             .map(t => ({...t, organizationId: orgMap.get(t.organizationId) || t.organizationId }));
-        if (teamsWithLots.length > 0) {
-             slideComponents.push({ 
-                key: "lottery-draw", 
-                component: <LotteryDrawSlide teamsWithLots={teamsWithLots} onComplete={handleLotteryComplete} />,
-                type: "lottery-draw"
-            });
+        
+        const teamsByEvent = teamsWithLots.reduce((acc, team) => {
+            if (!acc[team.type]) acc[team.type] = [];
+            acc[team.type].push(team);
+            return acc;
+        }, {} as Record<TeamType, Team[]>);
+
+        const LOTTERY_CHUNK_SIZE = 8;
+        const eventOrder: TeamType[] = ['mens_doubles', 'womens_doubles', 'mixed_doubles', 'singles'];
+
+        for (const eventType of eventOrder) {
+            if (teamsByEvent[eventType]) {
+                const eventTeams = teamsByEvent[eventType].sort((a,b) => (a.lotNumber || 0) - (b.lotNumber || 0));
+                for (let i = 0; i < eventTeams.length; i += LOTTERY_CHUNK_SIZE) {
+                    const chunk = eventTeams.slice(i, i + LOTTERY_CHUNK_SIZE);
+                    slideComponents.push({
+                        key: `lottery-${eventType}-${i}`,
+                        component: <LotteryDrawSlide teams={chunk} eventType={eventType} />
+                    });
+                }
+            }
         }
     }
-
-    // Sponsors are shown anytime after tournament is created
+    
     if (sponsors && sponsors.length > 0) {
         const SPONSOR_CHUNK_SIZE = 10;
         for (let i = 0; i < sponsors.length; i += SPONSOR_CHUNK_SIZE) {
@@ -633,7 +570,6 @@ export function PresenterShell() {
     }
 
 
-    // Slides for active or completed tournaments
     if (tournament?.status === 'IN_PROGRESS' || tournament?.status === 'COMPLETED') {
         const liveMatches = matches.filter(m => m.status === 'IN_PROGRESS' && m.courtName).sort((a,b) => (a.courtName || '').localeCompare(b.courtName || ''));
         const scheduledFixtures = matches.filter(m => m.status === 'SCHEDULED' && m.courtName).sort((a, b) => (a.startTime as any) - (b.startTime as any));
@@ -683,36 +619,18 @@ export function PresenterShell() {
         });
     }
     
-    // Fallback to just the welcome slide if no other slides are generated
     if (slideComponents.length <= 1) {
         return [{ key: "welcome", component: <WelcomeSlide tournament={tournament} /> }];
     }
 
     return slideComponents;
-  }, [matches, tournament, teams, organizations, teamCounts, sponsors, handleLotteryComplete]);
+  }, [matches, tournament, teams, organizations, teamCounts, sponsors]);
 
    useEffect(() => {
     if (!api) return;
+    api.reInit();
+   }, [slides, api]);
 
-    const onSelect = () => {
-      const currentSlideData = slides[api.selectedScrollSnap()];
-      if (currentSlideData?.type === 'lottery-draw') {
-        autoplayPlugin.stop();
-      } else {
-        if(!autoplayPlugin.isPlaying()) {
-            autoplayPlugin.play();
-        }
-      }
-    };
-
-    api.on('select', onSelect);
-    // Initial check
-    onSelect();
-
-    return () => {
-      api.off('select', onSelect);
-    };
-  }, [api, slides, autoplayPlugin]);
 
   if (isLoading) {
     return (
@@ -755,5 +673,3 @@ export function PresenterShell() {
     </div>
   );
 }
-
-    
