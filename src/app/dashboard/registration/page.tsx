@@ -19,6 +19,16 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
+import {
   Dialog,
   DialogContent,
   DialogHeader,
@@ -36,10 +46,10 @@ import {
 } from '@/components/ui/form';
 import { useToast } from '@/hooks/use-toast';
 import { db } from '@/lib/firebase';
-import { collection, doc, onSnapshot, setDoc, Timestamp, getDocs } from 'firebase/firestore';
+import { collection, doc, onSnapshot, setDoc, Timestamp, writeBatch } from 'firebase/firestore';
 import type { Team, Organization, Registration, Tournament } from '@/types';
 import { EventBadge } from '@/components/ui/event-badge';
-import { DollarSign, Shirt, HandCoins } from 'lucide-react';
+import { DollarSign, Shirt, HandCoins, PackageCheck } from 'lucide-react';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 
 const paymentFormSchema = z.object({
@@ -65,10 +75,12 @@ export default function RegistrationPage() {
   const [tournament, setTournament] = useState<Tournament | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [teamToPay, setTeamToPay] = useState<MergedTeamData | null>(null);
+  const [orgToPay, setOrgToPay] = useState<GroupedData | null>(null);
+  const [orgToProvideKits, setOrgToProvideKits] = useState<GroupedData | null>(null);
+
 
   const form = useForm<z.infer<typeof paymentFormSchema>>({
     resolver: zodResolver(paymentFormSchema),
-    defaultValues: { paymentAmount: 0 }
   });
 
   useEffect(() => {
@@ -117,26 +129,90 @@ export default function RegistrationPage() {
   
   const openPaymentDialog = (team: MergedTeamData) => {
     setTeamToPay(team);
-    form.setValue('paymentAmount', tournament?.registrationFee || 0);
+    setOrgToPay(null);
+    form.reset({ paymentAmount: tournament?.registrationFee || 0 });
+  }
+  
+  const openOrgPaymentDialog = (group: GroupedData) => {
+    setOrgToPay(group);
+    setTeamToPay(null);
+    form.reset({ paymentAmount: group.dueAmount });
   }
 
   const handlePaymentSubmit = async (values: z.infer<typeof paymentFormSchema>) => {
-    if (!teamToPay) return;
-    try {
-      const regRef = doc(db, 'registrations', teamToPay.id);
-      await setDoc(regRef, {
-        paymentStatus: 'paid',
-        paymentAmount: values.paymentAmount,
-        paymentDate: Timestamp.now(),
-      }, { merge: true });
-      toast({ title: 'Payment Confirmed', description: `Payment for ${teamToPay.player1Name}'s team recorded.` });
-      setTeamToPay(null);
-      form.reset();
-    } catch (error) {
-      console.error(error);
-      toast({ title: 'Error', description: 'Failed to confirm payment.', variant: 'destructive' });
+    if (teamToPay) {
+      // Single team payment
+       try {
+        const regRef = doc(db, 'registrations', teamToPay.id);
+        await setDoc(regRef, {
+          paymentStatus: 'paid',
+          paymentAmount: values.paymentAmount,
+          paymentDate: Timestamp.now(),
+        }, { merge: true });
+        toast({ title: 'Payment Confirmed', description: `Payment for ${teamToPay.player1Name}'s team recorded.` });
+        setTeamToPay(null);
+        form.reset();
+      } catch (error) {
+        console.error(error);
+        toast({ title: 'Error', description: 'Failed to confirm payment.', variant: 'destructive' });
+      }
+    } else if (orgToPay) {
+      // Organization group payment
+      const unpaidTeams = orgToPay.teams.filter(t => t.paymentStatus !== 'paid');
+      if (unpaidTeams.length === 0) {
+        toast({ title: 'No action needed', description: 'All teams in this organization have already paid.'});
+        setOrgToPay(null);
+        return;
+      }
+      const paymentPerTeam = values.paymentAmount / unpaidTeams.length;
+
+      try {
+        const batch = writeBatch(db);
+        unpaidTeams.forEach(team => {
+            const regRef = doc(db, 'registrations', team.id);
+            batch.set(regRef, {
+                paymentStatus: 'paid',
+                paymentAmount: paymentPerTeam,
+                paymentDate: Timestamp.now()
+            }, { merge: true });
+        });
+        await batch.commit();
+        toast({ title: 'Group Payment Confirmed', description: `Payment for ${unpaidTeams.length} teams from ${orgToPay.orgName} recorded.`});
+        setOrgToPay(null);
+        form.reset();
+      } catch (error) {
+        console.error(error);
+        toast({ title: 'Error', description: 'Failed to confirm group payment.', variant: 'destructive' });
+      }
     }
   };
+  
+  const handleProvideAllKits = async () => {
+    if (!orgToProvideKits) return;
+
+    const unprovidedTeams = orgToProvideKits.teams.filter(t => !t.kitProvided);
+    if (unprovidedTeams.length === 0) {
+      toast({ title: 'No action needed', description: 'All kits for this organization have been provided.' });
+      setOrgToProvideKits(null);
+      return;
+    }
+
+    try {
+        const batch = writeBatch(db);
+        unprovidedTeams.forEach(team => {
+            const regRef = doc(db, 'registrations', team.id);
+            batch.set(regRef, { kitProvided: true }, { merge: true });
+        });
+        await batch.commit();
+        toast({ title: 'Kits Provided', description: `Marked all kits as provided for ${orgToProvideKits.orgName}.` });
+    } catch(error) {
+        console.error(error);
+        toast({ title: 'Error', description: 'Failed to update kit status for the group.', variant: 'destructive' });
+    } finally {
+        setOrgToProvideKits(null);
+    }
+  }
+
   
   const groupedData = useMemo<GroupedData[]>(() => {
     const orgMap = new Map(organizations.map(o => [o.id, o.name]));
@@ -157,8 +233,10 @@ export default function RegistrationPage() {
     });
 
     return Object.entries(teamsByOrg).map(([orgId, orgTeams]) => {
-      const totalKits = orgTeams.length;
-      const totalFee = totalKits * (tournament?.registrationFee || 0);
+      const totalKits = orgTeams.reduce((sum, team) => {
+          return sum + (team.type.includes('doubles') ? 2 : 1);
+      }, 0);
+      const totalFee = orgTeams.length * (tournament?.registrationFee || 0);
       const paidAmount = orgTeams.reduce((sum, team) => sum + (team.paymentAmount || 0), 0);
       
       return {
@@ -198,7 +276,7 @@ export default function RegistrationPage() {
                                 <Badge variant="secondary" className="text-base">
                                   <HandCoins className="mr-2"/>
                                   Total: ₹{group.totalFee.toLocaleString()}
-                                  {group.totalKits > 0 && tournament?.registrationFee && (
+                                  {group.teams.length > 0 && tournament?.registrationFee && (
                                     <span className="ml-2 text-muted-foreground">(@₹{tournament.registrationFee}/team)</span>
                                   )}
                                 </Badge>
@@ -206,47 +284,57 @@ export default function RegistrationPage() {
                            </div>
                         </div>
                     </AccordionTrigger>
-                    <AccordionContent className="p-4 pt-0">
-                        <div className="overflow-x-auto">
-                            <Table>
-                                <TableHeader>
-                                    <TableRow>
-                                    <TableHead>Team</TableHead>
-                                    <TableHead>Event</TableHead>
-                                    <TableHead className="text-center">Kit Provided</TableHead>
-                                    <TableHead>Payment</TableHead>
-                                    <TableHead className="text-right">Actions</TableHead>
-                                    </TableRow>
-                                </TableHeader>
-                                <TableBody>
-                                    {group.teams.map(team => (
-                                    <TableRow key={team.id}>
-                                        <TableCell className="font-medium">{team.player1Name}{team.player2Name && ` & ${team.player2Name}`}</TableCell>
-                                        <TableCell><EventBadge eventType={team.type} /></TableCell>
-                                        <TableCell className="text-center">
-                                            <Checkbox
-                                                checked={team.kitProvided}
-                                                onCheckedChange={() => handleKitToggle(team.id, team.kitProvided || false)}
-                                                aria-label="Kit provided status"
-                                            />
-                                        </TableCell>
-                                        <TableCell>
-                                            <Badge variant={team.paymentStatus === 'paid' ? 'default' : 'secondary'}>
-                                                {team.paymentStatus === 'paid' ? `Paid (₹${team.paymentAmount})` : 'Pending'}
-                                            </Badge>
-                                        </TableCell>
-                                        <TableCell className="text-right">
-                                        {team.paymentStatus === 'pending' && (
-                                            <Button variant="outline" size="sm" onClick={() => openPaymentDialog(team)}>
-                                                <DollarSign className="mr-2 h-4 w-4" />
-                                                Confirm Payment
-                                            </Button>
-                                        )}
-                                        </TableCell>
-                                    </TableRow>
-                                    ))}
-                                </TableBody>
-                            </Table>
+                    <AccordionContent className="px-4 pb-4 pt-0">
+                        <div className="border-t pt-4">
+                            <div className="flex flex-wrap gap-2 mb-4">
+                                <Button size="sm" onClick={() => openOrgPaymentDialog(group)} disabled={group.dueAmount <= 0}>
+                                    <DollarSign className="mr-2 h-4 w-4"/>Confirm Group Payment
+                                </Button>
+                                <Button size="sm" variant="outline" onClick={() => setOrgToProvideKits(group)}>
+                                    <PackageCheck className="mr-2 h-4 w-4"/>Provide All Kits
+                                </Button>
+                            </div>
+                            <div className="overflow-x-auto rounded-md border">
+                                <Table>
+                                    <TableHeader>
+                                        <TableRow>
+                                        <TableHead>Team</TableHead>
+                                        <TableHead>Event</TableHead>
+                                        <TableHead className="text-center">Kit Provided</TableHead>
+                                        <TableHead>Payment</TableHead>
+                                        <TableHead className="text-right">Actions</TableHead>
+                                        </TableRow>
+                                    </TableHeader>
+                                    <TableBody>
+                                        {group.teams.map(team => (
+                                        <TableRow key={team.id}>
+                                            <TableCell className="font-medium">{team.player1Name}{team.player2Name && ` & ${team.player2Name}`}</TableCell>
+                                            <TableCell><EventBadge eventType={team.type} /></TableCell>
+                                            <TableCell className="text-center">
+                                                <Checkbox
+                                                    checked={team.kitProvided}
+                                                    onCheckedChange={() => handleKitToggle(team.id, team.kitProvided || false)}
+                                                    aria-label="Kit provided status"
+                                                />
+                                            </TableCell>
+                                            <TableCell>
+                                                <Badge variant={team.paymentStatus === 'paid' ? 'default' : 'secondary'}>
+                                                    {team.paymentStatus === 'paid' ? `Paid (₹${team.paymentAmount})` : 'Pending'}
+                                                </Badge>
+                                            </TableCell>
+                                            <TableCell className="text-right">
+                                            {team.paymentStatus === 'pending' && (
+                                                <Button variant="outline" size="sm" onClick={() => openPaymentDialog(team)}>
+                                                    <DollarSign className="mr-2 h-4 w-4" />
+                                                    Confirm
+                                                </Button>
+                                            )}
+                                            </TableCell>
+                                        </TableRow>
+                                        ))}
+                                    </TableBody>
+                                </Table>
+                            </div>
                         </div>
                     </AccordionContent>
                 </Card>
@@ -255,10 +343,12 @@ export default function RegistrationPage() {
         </Accordion>
       )}
 
-      <Dialog open={!!teamToPay} onOpenChange={(isOpen) => !isOpen && setTeamToPay(null)}>
+      <Dialog open={!!teamToPay || !!orgToPay} onOpenChange={(isOpen) => { if (!isOpen) { setTeamToPay(null); setOrgToPay(null); } }}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Confirm Payment for {teamToPay?.player1Name}'s Team</DialogTitle>
+            <DialogTitle>
+                {teamToPay ? `Confirm Payment for ${teamToPay.player1Name}'s Team` : `Confirm Group Payment for ${orgToPay?.orgName}`}
+            </DialogTitle>
           </DialogHeader>
           <Form {...form}>
             <form onSubmit={form.handleSubmit(handlePaymentSubmit)} className="space-y-4 py-4">
@@ -283,6 +373,24 @@ export default function RegistrationPage() {
           </Form>
         </DialogContent>
       </Dialog>
+      
+      <AlertDialog open={!!orgToProvideKits} onOpenChange={(isOpen) => !isOpen && setOrgToProvideKits(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Provide All Kits</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to mark all remaining kits as provided for {orgToProvideKits?.orgName}? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleProvideAllKits}>Confirm</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
     </div>
   );
 }
+
+    
