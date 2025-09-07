@@ -38,18 +38,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
   
   useEffect(() => {
-    const auth = getAuth();
-    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
-        if (!firebaseUser) {
-            try {
-                // If no user, sign in anonymously to establish a session
-                await signInAnonymously(auth);
-            } catch (error) {
-                console.error("Anonymous sign-in failed:", error);
-            }
-        }
-    });
-
     // Check for critical Firebase configuration errors on startup
     const checkConfig = async () => {
         try {
@@ -66,8 +54,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
     };
     checkConfig();
-
-    return () => unsubscribe();
   }, []);
 
 
