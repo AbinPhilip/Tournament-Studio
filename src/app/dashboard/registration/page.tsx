@@ -195,7 +195,13 @@ export default function RegistrationPage() {
                            <h3 className="text-xl font-bold">{group.orgName}</h3>
                            <div className="flex flex-wrap gap-x-4 gap-y-2 text-sm">
                                 <Badge variant="secondary" className="text-base"><Shirt className="mr-2"/>{group.totalKits} Kits</Badge>
-                                <Badge variant="secondary" className="text-base"><HandCoins className="mr-2"/>₹{group.totalFee.toLocaleString()}</Badge>
+                                <Badge variant="secondary" className="text-base">
+                                  <HandCoins className="mr-2"/>
+                                  Total: ₹{group.totalFee.toLocaleString()}
+                                  {group.totalKits > 0 && tournament?.registrationFee && (
+                                    <span className="ml-2 text-muted-foreground">(@₹{tournament.registrationFee}/team)</span>
+                                  )}
+                                </Badge>
                                 <Badge variant={group.dueAmount > 0 ? 'destructive' : 'default'} className="text-base">Due: ₹{group.dueAmount.toLocaleString()}</Badge>
                            </div>
                         </div>
