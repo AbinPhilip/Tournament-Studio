@@ -688,4 +688,3 @@ export function PresenterShell() {
     </div>
   );
 }
-
