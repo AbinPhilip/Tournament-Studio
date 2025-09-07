@@ -49,7 +49,7 @@ import { db } from '@/lib/firebase';
 import { collection, doc, onSnapshot, setDoc, Timestamp, writeBatch } from 'firebase/firestore';
 import type { Team, Organization, Registration, Tournament } from '@/types';
 import { EventBadge } from '@/components/ui/event-badge';
-import { DollarSign, Shirt, HandCoins, PackageCheck } from 'lucide-react';
+import { IndianRupee, Shirt, HandCoins, PackageCheck } from 'lucide-react';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 
 const paymentFormSchema = z.object({
@@ -288,7 +288,7 @@ export default function RegistrationPage() {
                         <div className="border-t pt-4">
                             <div className="flex flex-wrap gap-2 mb-4">
                                 <Button size="sm" onClick={() => openOrgPaymentDialog(group)} disabled={group.dueAmount <= 0}>
-                                    <DollarSign className="mr-2 h-4 w-4"/>Confirm Group Payment
+                                    <IndianRupee className="mr-2 h-4 w-4"/>Confirm Group Payment
                                 </Button>
                                 <Button size="sm" variant="outline" onClick={() => setOrgToProvideKits(group)}>
                                     <PackageCheck className="mr-2 h-4 w-4"/>Provide All Kits
@@ -325,7 +325,7 @@ export default function RegistrationPage() {
                                             <TableCell className="text-right">
                                             {team.paymentStatus === 'pending' && (
                                                 <Button variant="outline" size="sm" onClick={() => openPaymentDialog(team)}>
-                                                    <DollarSign className="mr-2 h-4 w-4" />
+                                                    <IndianRupee className="mr-2 h-4 w-4" />
                                                     Confirm
                                                 </Button>
                                             )}
@@ -392,5 +392,3 @@ export default function RegistrationPage() {
     </div>
   );
 }
-
-    
