@@ -3,7 +3,7 @@
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { cn } from "@/lib/utils"
-import { LayoutDashboard, ListOrdered, Shield, Cog, Settings, Trophy, Users, Building, GitBranch, MonitorPlay, HeartHandshake, ImageIcon } from "lucide-react"
+import { LayoutDashboard, ListOrdered, Shield, Cog, Settings, Trophy, Users, Building, GitBranch, MonitorPlay, HeartHandshake, ImageIcon, ClipboardCheck } from "lucide-react"
 import type { User, UserRole } from "@/types"
 import { useState, useEffect } from "react"
 import { db } from "@/lib/firebase"
@@ -23,6 +23,7 @@ const allNavItems: NavItem[] = [
     { id: "tournament", href: "/dashboard/tournament", label: "Tournament Setup", icon: Cog },
     { id: "organizations", href: "/dashboard/organizations", label: "Organizations", icon: Building },
     { id: "teams", href: "/dashboard/teams", label: "Teams", icon: Users },
+    { id: "registration", href: "/dashboard/registration", label: "Registration Desk", icon: ClipboardCheck },
     { id: "sponsors", href: "/dashboard/sponsors", label: "Sponsors", icon: HeartHandshake },
     { id: "scheduler", href: "/dashboard/scheduler", label: "Scheduler", icon: ListOrdered },
     { id: "umpire", href: "/dashboard/umpire", label: "Umpire View", icon: Shield },
@@ -65,6 +66,9 @@ export function MainNav({ user, isMobile = false, isCollapsed = false }: { user:
             }
             if (!modules.includes('image-uploader')) {
               modules.push('image-uploader');
+            }
+            if (!modules.includes('registration')) {
+              modules.push('registration');
             }
             acc[doc.id as UserRole] = modules;
             return acc;

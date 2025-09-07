@@ -18,7 +18,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import type { User, UserRole } from '@/types';
 import { useAuth } from '@/hooks/use-auth';
-import { MoreHorizontal, Trash2, UserPlus, Edit, CheckCircle, ArrowLeft, Database, Save, GitBranch, Trophy, Users, Building, ListOrdered, Shield, Cog, LayoutDashboard, Settings, MonitorPlay, HeartHandshake, ImageIcon } from 'lucide-react';
+import { MoreHorizontal, Trash2, UserPlus, Edit, CheckCircle, ArrowLeft, Database, Save, GitBranch, Trophy, Users, Building, ListOrdered, Shield, Cog, LayoutDashboard, Settings, MonitorPlay, HeartHandshake, ImageIcon, ClipboardCheck } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -99,6 +99,7 @@ const appModules = [
     { id: 'tournament', label: 'Tournament Setup', icon: Cog },
     { id: 'organizations', label: 'Organizations', icon: Building },
     { id: 'teams', label: 'Teams', icon: Users },
+    { id: 'registration', label: 'Registration Desk', icon: ClipboardCheck },
     { id: 'sponsors', label: 'Sponsors', icon: HeartHandshake },
     { id: 'scheduler', label: 'Scheduler', icon: ListOrdered },
     { id: 'umpire', label: 'Umpire View', icon: Shield },
@@ -166,6 +167,7 @@ export default function SettingsPage() {
                 const modules = doc.data().modules || [];
                 if (!modules.includes('presenter')) modules.push('presenter');
                 if (!modules.includes('image-uploader')) modules.push('image-uploader');
+                if (!modules.includes('registration')) modules.push('registration');
                 acc[doc.id as UserRole] = modules;
                 return acc;
             }, {} as RolePermissions);

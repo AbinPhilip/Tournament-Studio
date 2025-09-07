@@ -1,7 +1,7 @@
 
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { ListOrdered, Cog, Shield, Settings, Users, Building, Trophy, GitBranch, HeartHandshake, ImageIcon } from 'lucide-react';
+import { ListOrdered, Cog, Shield, Settings, Users, Building, Trophy, GitBranch, HeartHandshake, ImageIcon, ClipboardCheck } from 'lucide-react';
 import Link from 'next/link';
 
 export default function AdminView() {
@@ -9,6 +9,7 @@ export default function AdminView() {
     { label: "Tournament Setup", href: "/dashboard/tournament", icon: Cog },
     { label: "Organizations", href: "/dashboard/organizations", icon: Building },
     { label: "Teams", href: "/dashboard/teams", icon: Users },
+    { label: "Registration Desk", href: "/dashboard/registration", icon: ClipboardCheck },
     { label: "Sponsors", href: "/dashboard/sponsors", icon: HeartHandshake },
     { label: "Scheduler", href: "/dashboard/scheduler", icon: ListOrdered },
     { label: "Umpire View", href: "/dashboard/umpire", icon: Shield },

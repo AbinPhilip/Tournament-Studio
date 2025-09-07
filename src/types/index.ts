@@ -111,3 +111,14 @@ export interface ImageMetadata {
   fileSize: number;
   mimeType: string;
 }
+
+export type PaymentStatus = 'pending' | 'paid';
+
+export interface Registration {
+    id: string; // Same as teamId
+    teamId: string;
+    paymentStatus: PaymentStatus;
+    paymentAmount?: number;
+    paymentDate?: Timestamp;
+    kitProvided: boolean;
+}
