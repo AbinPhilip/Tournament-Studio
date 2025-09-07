@@ -60,6 +60,7 @@ const tournamentFormSchema = z.object({
   numberOfCourts: z.coerce.number().min(1, { message: 'There must be at least 1 court.' }).max(50, { message: "Cannot exceed 50 courts."}),
   courtNames: z.array(z.object({ name: z.string().min(1, {message: 'Court name cannot be empty.'}) })),
   restTime: z.coerce.number().min(0, { message: 'Rest time cannot be negative.'}).optional(),
+  registrationFee: z.coerce.number().min(0, { message: 'Registration fee cannot be negative.' }).optional(),
   logoUrl: z.string().optional(),
 });
 
@@ -87,6 +88,7 @@ export default function TournamentSettingsPage() {
       numberOfCourts: 4,
       courtNames: Array.from({ length: 4 }, (_, i) => ({ name: `Court ${i+1}` })),
       restTime: 10,
+      registrationFee: 0,
       logoUrl: '',
     },
   });
@@ -128,6 +130,7 @@ export default function TournamentSettingsPage() {
             ...data, 
             date: data.date.toDate(), 
             restTime: data.restTime ?? 10,
+            registrationFee: data.registrationFee ?? 0,
             logoUrl: data.logoUrl || '',
           });
         } else {
@@ -402,6 +405,19 @@ export default function TournamentSettingsPage() {
                                 <FormLabel>Rest Time (minutes)</FormLabel>
                                 <FormControl>
                                     <Input type="number" min="0" {...field} />
+                                </FormControl>
+                                <FormMessage />
+                                </FormItem>
+                            )}
+                        />
+                        <FormField
+                            control={form.control}
+                            name="registrationFee"
+                            render={({ field }) => (
+                                <FormItem>
+                                <FormLabel>Registration Fee (INR)</FormLabel>
+                                <FormControl>
+                                    <Input type="number" min="0" placeholder="e.g. 500" {...field} />
                                 </FormControl>
                                 <FormMessage />
                                 </FormItem>
