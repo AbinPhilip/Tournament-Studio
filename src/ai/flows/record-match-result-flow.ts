@@ -123,20 +123,27 @@ const recordMatchResultFlow = ai.defineFlow(
             .where('round', '==', completedMatch.round);
         const currentRoundSnap = await currentRoundQuery.get();
         
-        const roundMatchesMap = new Map(currentRoundSnap.docs.map(doc => [doc.id, doc.data() as Match]));
-        roundMatchesMap.set(input.matchId, { ...completedMatch, ...updates, lastUpdateTime: Timestamp.now() } as Match);
-
-        const allMatchesInRoundCompleted = Array.from(roundMatchesMap.values()).every(
+        // Get all matches for this round and event, including the one just completed.
+        const roundMatches = currentRoundSnap.docs.map(doc => {
+            if (doc.id === input.matchId) {
+                // Use the new, updated data for the match that just finished
+                return { id: doc.id, ...completedMatch, ...updates } as Match;
+            }
+            return { id: doc.id, ...doc.data() } as Match;
+        });
+        
+        // Check if all matches in this round are now complete.
+        const allMatchesInRoundCompleted = roundMatches.every(
             match => match.status === 'COMPLETED'
         );
 
         if (!allMatchesInRoundCompleted) {
+            // Not all matches in the round are done, so don't schedule the next round yet.
             await batch.commit();
             return;
         }
 
         // All matches in the round are complete, proceed to schedule next round.
-        
         const allTeamsSnap = await adminDb.collection("teams").get();
         const allTeams = allTeamsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Team));
         const teamMap = new Map(allTeams.map(team => [team.id, team]));
@@ -153,8 +160,6 @@ const recordMatchResultFlow = ai.defineFlow(
             await batch.commit();
             return; // It was the final round, nothing more to schedule.
         }
-        
-        const roundMatches = Array.from(roundMatchesMap.values());
         
         // Get winners and calculate point differentials for sorting
         const winnersWithInfo = roundMatches
