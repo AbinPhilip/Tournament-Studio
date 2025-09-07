@@ -57,31 +57,13 @@ const recordMatchResultFlow = ai.defineFlow(
             if (input.winnerId) {
                  updates.forfeitedById = input.winnerId === completedMatch.team1Id ? completedMatch.team2Id : completedMatch.team1Id;
             }
-        } else {
-            // Mathematical winner determination
-            const team1Ref = adminDb.collection('teams').doc(completedMatch.team1Id);
-            const team2Ref = adminDb.collection('teams').doc(completedMatch.team2Id);
-            const [team1Snap, team2Snap] = await Promise.all([team1Ref.get(), team2Ref.get()]);
-
-            if (!team1Snap.exists || !team2Snap.exists) {
-                throw new Error('One or both teams not found for deterministic scoring.');
-            }
-            const team1 = team1Snap.data() as Team;
-            const team2 = team2Snap.data() as Team;
-
-            if ((team1.lotNumber ?? Infinity) < (team2.lotNumber ?? Infinity)) {
-                finalWinnerId = team1.id;
-            } else {
-                finalWinnerId = team2.id;
-            }
-            
-            // Generate deterministic score
-            const winnerIsTeam1 = finalWinnerId === completedMatch.team1Id;
-            updates.scores = [
-                { team1: winnerIsTeam1 ? 21 : 15, team2: winnerIsTeam1 ? 15 : 21 },
-                { team1: winnerIsTeam1 ? 21 : 17, team2: winnerIsTeam1 ? 17 : 21 }
-            ];
-            updates.score = '2-0';
+        } else if(input.scores) {
+            // Determine winner from scores if not forfeited
+            const team1SetsWon = input.scores.filter(s => s.team1 > s.team2).length;
+            const team2SetsWon = input.scores.filter(s => s.team2 > s.team1).length;
+            finalWinnerId = team1SetsWon > team2SetsWon ? completedMatch.team1Id : completedMatch.team2Id;
+            updates.scores = input.scores;
+            updates.score = `${team1SetsWon}-${team2SetsWon}`;
         }
         
         updates.winnerId = finalWinnerId;
@@ -166,73 +148,49 @@ const recordMatchResultFlow = ai.defineFlow(
 
         const totalRounds = getTotalRounds(teamCounts[completedMatch.eventType] || 0);
         const isFinalRound = completedMatch.round === totalRounds;
-        const isSemiFinalRound = completedMatch.round === totalRounds - 1;
         
-        if (completedMatch.round >= totalRounds) {
+        if (isFinalRound) {
             await batch.commit();
             return; // It was the final round, nothing more to schedule.
-        }
-
-        // Hold scheduling for semi-finals and finals
-        if (isSemiFinalRound || isFinalRound) {
-            const allMatchesSnap = await matchesRef.get();
-            const allMatches = allMatchesSnap.docs.map(d => d.data() as Match);
-
-            // Check if all non-final/semi-final rounds in all event types are complete
-            const allPrelimsDone = allMatches.every(m => {
-                const eventTeamCount = teamCounts[m.eventType] || 0;
-                const eventTotalRounds = getTotalRounds(eventTeamCount);
-                const mIsSemiOrFinal = m.round === eventTotalRounds || m.round === eventTotalRounds - 1;
-                return m.status === 'COMPLETED' || mIsSemiOrFinal;
-            });
-
-            if (!allPrelimsDone) {
-                await batch.commit(); // Not all prelims are done, so wait.
-                return;
-            }
         }
         
         const roundMatches = Array.from(roundMatchesMap.values());
         
         // Get winners and calculate point differentials for sorting
-        const winnersWithScores = roundMatches
+        const winnersWithInfo = roundMatches
             .filter(match => match.winnerId && match.winnerId !== 'BYE')
             .map(match => {
                 const winnerId = match.winnerId!;
-                let pointDiff = 0;
-
-                if (match.team2Id === 'BYE' && match.round === 1) {
-                    pointDiff = 0; 
-                } else if (match.pointDifferential !== undefined) {
-                    pointDiff = match.pointDifferential;
-                }
+                // If it's a BYE from round 1, point differential should be considered neutral (0) for sorting.
+                // Otherwise, use the calculated point differential.
+                const pointDiff = (match.team2Id === 'BYE' && match.round === 1) ? 0 : (match.pointDifferential || 0);
                 const lotNumber = teamMap.get(winnerId)?.lotNumber ?? Infinity;
                 return { winnerId, pointDiff, lotNumber };
             });
 
         // Sort by point differential (desc), then by lot number (asc) as a tie-breaker
-        winnersWithScores.sort((a, b) => {
+        winnersWithInfo.sort((a, b) => {
             if (a.pointDiff !== b.pointDiff) {
                 return b.pointDiff - a.pointDiff;
             }
             return a.lotNumber - b.lotNumber;
         });
         
-        let winnersToSchedule = winnersWithScores;
+        let winnersToSchedule = winnersWithInfo.map(w => w.winnerId);
         
-        // If there's an odd number of winners, the top scorer gets a bye
+        // If there's an odd number of winners for the next round, the top-ranked one gets a bye.
         if (winnersToSchedule.length % 2 !== 0 && winnersToSchedule.length > 1) {
-            
             // Find teams that have already had a BYE in this event
             const byeHistoryQuery = matchesRef.where('eventType', '==', completedMatch.eventType).where('team2Id', '==', 'BYE');
             const byeHistorySnap = await byeHistoryQuery.get();
             const teamsWithPastByes = new Set(byeHistorySnap.docs.map(doc => doc.data().team1Id));
 
-            // Find the highest-ranked winner who hasn't had a BYE yet
-            const byeWinnerIndex = winnersToSchedule.findIndex(w => !teamsWithPastByes.has(w.winnerId));
+            // Find the index of the highest-ranked winner who hasn't had a BYE yet
+            const byeWinnerIndex = winnersWithInfo.findIndex(w => !teamsWithPastByes.has(w.winnerId));
 
             if (byeWinnerIndex !== -1) {
-                const [byeWinner] = winnersToSchedule.splice(byeWinnerIndex, 1); // Remove the eligible winner
+                const [byeWinner] = winnersWithInfo.splice(byeWinnerIndex, 1); // Remove from info list
+                winnersToSchedule = winnersWithInfo.map(w => w.winnerId); // Re-create ID list
                 const byeWinnerId = byeWinner.winnerId;
 
                 const byeWinnerTeam = teamMap.get(byeWinnerId);
@@ -266,15 +224,15 @@ const recordMatchResultFlow = ai.defineFlow(
         const nextRoundSnap = await nextRoundQuery.get();
         const scheduledIds = new Set(nextRoundSnap.docs.flatMap(d => [d.data().team1Id, d.data().team2Id]));
 
-        const finalWinnersToSchedule = winnersToSchedule.filter(w => !scheduledIds.has(w.winnerId));
+        const finalWinnersToSchedule = winnersToSchedule.filter(w => !scheduledIds.has(w));
 
         // Implement seeded pairing: 1 vs n, 2 vs n-1, etc.
         let left = 0;
         let right = finalWinnersToSchedule.length - 1;
 
         while (left < right) {
-             const team1Id = finalWinnersToSchedule[left].winnerId;
-             const team2Id = finalWinnersToSchedule[right].winnerId;
+             const team1Id = finalWinnersToSchedule[left];
+             const team2Id = finalWinnersToSchedule[right];
 
             const team1 = teamMap.get(team1Id);
             const team2 = teamMap.get(team2Id);
