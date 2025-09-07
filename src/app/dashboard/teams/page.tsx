@@ -23,11 +23,11 @@ import {
     SelectValue,
 } from '@/components/ui/select';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { MoreHorizontal, Trash2, Edit, CheckCircle, Users, ArrowUpDown } from 'lucide-react';
+import { MoreHorizontal, Trash2, Edit, CheckCircle, Users, ArrowUpDown, DollarSign, BadgeEuro, Banknote } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { db } from '@/lib/firebase';
 import { collection, doc, getDocs, updateDoc, addDoc, deleteDoc, query, where, onSnapshot } from 'firebase/firestore';
-import type { Team, Organization, TeamType } from '@/types';
+import type { Team, Organization, TeamType, Registration } from '@/types';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -52,6 +52,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { EventBadge } from '@/components/ui/event-badge';
 import { LoadingShuttlecock } from '@/components/ui/loading-shuttlecock';
+import { useAuth } from '@/hooks/use-auth';
+import { Badge } from '@/components/ui/badge';
 
 
 const teamFormSchema = z.object({
@@ -206,8 +208,10 @@ const TeamForm = ({
 
 export default function TeamsPage() {
   const { toast } = useToast();
+  const { user } = useAuth();
   const [teams, setTeams] = useState<Team[]>([]);
   const [organizations, setOrganizations] = useState<Organization[]>([]);
+  const [registrations, setRegistrations] = useState<Map<string, Registration>>(new Map());
   const [isLoading, setIsLoading] = useState(true);
   const [teamToDelete, setTeamToDelete] = useState<Team | null>(null);
   const [teamToEdit, setTeamToEdit] = useState<Team | null>(null);
@@ -225,27 +229,31 @@ export default function TeamsPage() {
 
   const fetchData = useCallback(async () => {
     setIsLoading(true);
-    try {
-      const [teamsSnap, orgsSnap] = await Promise.all([
-        getDocs(collection(db, 'teams')),
-        getDocs(collection(db, 'organizations')),
-      ]);
-      
-      const fetchedTeams = teamsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Team));
-      setTeams(fetchedTeams);
+    const orgsUnsub = onSnapshot(collection(db, 'organizations'), (snap) => {
+        setOrganizations(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Organization)));
+    });
+    const teamsUnsub = onSnapshot(collection(db, 'teams'), (snap) => {
+        setTeams(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Team)));
+    });
+    const regsUnsub = onSnapshot(collection(db, 'registrations'), (snap) => {
+        const newRegs = new Map<string, Registration>();
+        snap.forEach(doc => newRegs.set(doc.id, { id: doc.id, ...doc.data() } as Registration));
+        setRegistrations(newRegs);
+    });
 
-      const fetchedOrgs = orgsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Organization));
-      setOrganizations(fetchedOrgs);
-      
-    } catch (error) {
-      toast({ title: 'Error', description: 'Failed to fetch data.', variant: 'destructive' });
-    } finally {
-        setIsLoading(false);
+    setIsLoading(false);
+    return () => {
+        orgsUnsub();
+        teamsUnsub();
+        regsUnsub();
     }
-  }, [toast]);
+  }, []);
 
   useEffect(() => {
-    fetchData();
+    const unsubPromise = fetchData();
+    return () => {
+        unsubPromise.then(unsub => unsub && unsub());
+    }
   }, [fetchData]);
   
   const handleOpenEditDialog = useCallback((team: Team) => {
@@ -314,7 +322,7 @@ export default function TeamsPage() {
               description: `Team "${dataToSave.player1Name}${dataToSave.player2Name ? ' & ' + dataToSave.player2Name : ''}" has been registered.`,
             });
         }
-        fetchData(); 
+        // No need to call fetchData here as onSnapshot handles it
         resetFormAndClose();
     } catch(error) {
         console.error(error);
@@ -360,7 +368,7 @@ export default function TeamsPage() {
 
     try {
         await updateDoc(doc(db, 'teams', teamId), { lotNumber: newLotNumber ?? null });
-        setTeams(prevTeams => prevTeams.map(t => t.id === teamId ? { ...t, lotNumber: newLotNumber } : t));
+        // State update will be handled by onSnapshot
         toast({
             title: 'Lot Number Updated',
             description: `Lot number for ${team.player1Name}${team.player2Name ? ` & ${team.player2Name}` : ''} has been updated.`,
@@ -504,27 +512,40 @@ export default function TeamsPage() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {filteredAndSortedTeams.map((t) => (
-                      <TableRow key={t.id}>
-                        <TableCell>
-                          <Input type="number" className="w-20" defaultValue={t.lotNumber ?? ''}
-                            onBlur={(e) => handleLotNumberChange(t.id, e.target.value)} placeholder=""
-                          />
-                        </TableCell>
-                        <TableCell><EventBadge eventType={t.type} /></TableCell>
-                        <TableCell>{t.player1Name}{t.player2Name ? ` & ${t.player2Name}`: ''}</TableCell>
-                        <TableCell>{getOrgName(t.organizationId)}</TableCell>
-                        <TableCell className="text-right">
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild><Button variant="ghost" className="h-8 w-8 p-0"><MoreHorizontal className="h-4 w-4" /></Button></DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                              <DropdownMenuItem onSelect={() => handleOpenEditDialog(t)}><Edit className="mr-2 h-4 w-4" />Edit</DropdownMenuItem>
-                              <DropdownMenuItem className="text-destructive focus:text-destructive" onSelect={() => setTeamToDelete(t)}><Trash2 className="mr-2 h-4 w-4" />Delete</DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                        </TableCell>
-                      </TableRow>
-                    ))}
+                    {filteredAndSortedTeams.map((t) => {
+                      const registration = registrations.get(t.id);
+                      const isPaid = registration?.paymentStatus === 'paid';
+                      const canOverride = user?.role === 'admin' || user?.role === 'super';
+                      const isLotDisabled = !isPaid && !canOverride;
+
+                      return (
+                        <TableRow key={t.id}>
+                            <TableCell>
+                                <div className="flex items-center gap-2">
+                                <Input type="number" className="w-20" defaultValue={t.lotNumber ?? ''}
+                                    onBlur={(e) => handleLotNumberChange(t.id, e.target.value)} placeholder=""
+                                    disabled={isLotDisabled}
+                                />
+                                {isLotDisabled && (
+                                    <Badge variant="destructive" className="whitespace-nowrap">Payment Pending</Badge>
+                                )}
+                                </div>
+                            </TableCell>
+                            <TableCell><EventBadge eventType={t.type} /></TableCell>
+                            <TableCell>{t.player1Name}{t.player2Name ? ` & ${t.player2Name}`: ''}</TableCell>
+                            <TableCell>{getOrgName(t.organizationId)}</TableCell>
+                            <TableCell className="text-right">
+                            <DropdownMenu>
+                                <DropdownMenuTrigger asChild><Button variant="ghost" className="h-8 w-8 p-0"><MoreHorizontal className="h-4 w-4" /></Button></DropdownMenuTrigger>
+                                <DropdownMenuContent align="end">
+                                <DropdownMenuItem onSelect={() => handleOpenEditDialog(t)}><Edit className="mr-2 h-4 w-4" />Edit</DropdownMenuItem>
+                                <DropdownMenuItem className="text-destructive focus:text-destructive" onSelect={() => setTeamToDelete(t)}><Trash2 className="mr-2 h-4 w-4" />Delete</DropdownMenuItem>
+                                </DropdownMenuContent>
+                            </DropdownMenu>
+                            </TableCell>
+                        </TableRow>
+                      )
+                    })}
                   </TableBody>
                 </Table>
              )}
