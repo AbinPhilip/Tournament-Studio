@@ -233,9 +233,7 @@ export default function RegistrationPage() {
     });
 
     return Object.entries(teamsByOrg).map(([orgId, orgTeams]) => {
-      const totalKits = orgTeams.reduce((sum, team) => {
-          return sum + (team.type.includes('doubles') ? 2 : 1);
-      }, 0);
+      const totalKits = orgTeams.length;
       const totalFee = orgTeams.length * (tournament?.registrationFee || 0);
       const paidAmount = orgTeams.reduce((sum, team) => sum + (team.paymentAmount || 0), 0);
       
