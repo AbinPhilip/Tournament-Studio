@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { db } from '@/lib/firebase';
 import { doc, onSnapshot, Unsubscribe, Timestamp, updateDoc } from 'firebase/firestore';
@@ -41,6 +41,8 @@ export default function LiveScorerPage() {
     const [team1Points, setTeam1Points] = useState(0);
     const [team2Points, setTeam2Points] = useState(0);
     const [currentScores, setCurrentScores] = useState<{ team1: number, team2: number }[]>([]);
+    const debounceTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
 
     useEffect(() => {
         if (!matchId) return;
@@ -64,9 +66,11 @@ export default function LiveScorerPage() {
                 }
 
                 setMatch(matchData);
-                // Sync local state with Firestore
-                setTeam1Points(matchData.live?.team1Points ?? 0);
-                setTeam2Points(matchData.live?.team2Points ?? 0);
+                // Sync local state with Firestore, but only if not currently typing
+                if (!debounceTimeoutRef.current) {
+                    setTeam1Points(matchData.live?.team1Points ?? 0);
+                    setTeam2Points(matchData.live?.team2Points ?? 0);
+                }
                 setCurrentScores(matchData.scores ?? []);
             } else {
                 toast({ title: "Error", description: "Match not found.", variant: 'destructive' });
@@ -81,30 +85,53 @@ export default function LiveScorerPage() {
 
         return () => unsubscribe();
     }, [matchId, router, toast]);
+
+    const pushLiveScore = useCallback((p1: number, p2: number) => {
+        if (debounceTimeoutRef.current) {
+            clearTimeout(debounceTimeoutRef.current);
+        }
+        debounceTimeoutRef.current = setTimeout(async () => {
+            try {
+                await recordMatchResult({
+                    matchId,
+                    status: 'LIVE_UPDATE',
+                    team1Points: p1,
+                    team2Points: p2,
+                });
+                debounceTimeoutRef.current = null;
+            } catch (e) {
+                 console.error("Live score update error:", e);
+                 // Optional: toast on error
+            }
+        }, 500); // 500ms debounce delay
+    }, [matchId]);
     
     const handlePointChange = useCallback((team: 'team1' | 'team2', delta: 1 | -1) => {
-        const newPoints = (team === 'team1' ? team1Points : team2Points) + delta;
-        if (newPoints < 0) return;
-
+        let p1 = team1Points;
+        let p2 = team2Points;
+        
         if (team === 'team1') {
-            setTeam1Points(newPoints);
+            p1 = Math.max(0, p1 + delta);
+            setTeam1Points(p1);
         } else {
-            setTeam2Points(newPoints);
+            p2 = Math.max(0, p2 + delta);
+            setTeam2Points(p2);
         }
-    }, [team1Points, team2Points]);
+        pushLiveScore(p1, p2);
+    }, [team1Points, team2Points, pushLiveScore]);
 
     
     const handleFinalizeSet = useCallback(async () => {
         if (!match) return;
         setIsSubmitting(true);
+        if (debounceTimeoutRef.current) clearTimeout(debounceTimeoutRef.current);
+
         const newScores = [...currentScores, { team1: team1Points, team2: team2Points }];
         try {
             await recordMatchResult({
                 matchId: match.id,
                 scores: newScores,
                 status: 'IN_PROGRESS',
-                team1Points: 0,
-                team2Points: 0,
             });
             // Reset points for next set
             setTeam1Points(0);
@@ -122,10 +149,12 @@ export default function LiveScorerPage() {
     const handleFinalizeMatch = useCallback(async (isForfeited = false, winnerId?: string) => {
          if (!match) return;
          setIsSubmitting(true);
+         if (debounceTimeoutRef.current) clearTimeout(debounceTimeoutRef.current);
+
          try {
             // Include final set scores if any
             let finalScores = [...currentScores];
-            if (team1Points > 0 || team2Points > 0) {
+            if ((team1Points > 0 || team2Points > 0) && !isForfeited) {
                 finalScores.push({ team1: team1Points, team2: team2Points });
             }
 

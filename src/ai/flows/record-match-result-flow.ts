@@ -21,7 +21,7 @@ const RecordMatchResultInputSchema = z.object({
   })).optional(),
   winnerId: z.string().optional(),
   isForfeited: z.boolean().optional(),
-  status: z.enum(['IN_PROGRESS', 'COMPLETED']),
+  status: z.enum(['IN_PROGRESS', 'COMPLETED', 'LIVE_UPDATE']),
   team1Points: z.number().int().min(0).optional(),
   team2Points: z.number().int().min(0).optional(),
 });
@@ -40,14 +40,25 @@ const recordMatchResultFlow = ai.defineFlow(
     outputSchema: z.void(),
   },
   async (input) => {
-    const batch = adminDb.batch();
     const matchRef = adminDb.collection('matches').doc(input.matchId);
-    const matchSnap = await matchRef.get();
 
+    // For simple live updates, just update the live object and return.
+    if (input.status === 'LIVE_UPDATE') {
+        await matchRef.update({
+            'live.team1Points': input.team1Points ?? 0,
+            'live.team2Points': input.team2Points ?? 0,
+            'lastUpdateTime': Timestamp.now()
+        });
+        return;
+    }
+
+
+    const matchSnap = await matchRef.get();
     if (!matchSnap.exists) {
         throw new Error('Match not found');
     }
     const completedMatch = matchSnap.data() as Match;
+    const batch = adminDb.batch();
     
     const updates: Partial<Match> & { 'live.currentSet'?: number, 'live.team1Points'?: number, 'live.team2Points'?: number } = {};
     
@@ -91,16 +102,10 @@ const recordMatchResultFlow = ai.defineFlow(
     const finalUpdates: any = { ...updates };
     if (updates.status === 'IN_PROGRESS') {
         finalUpdates['live.currentSet'] = (updates.scores?.length || 0) + 1;
-        finalUpdates['live.team1Points'] = input.team1Points ?? 0;
-        finalUpdates['live.team2Points'] = input.team2Points ?? 0;
-        // If it's a set finalization, reset points for the next set
-        if (input.team1Points === 0 && input.team2Points === 0) {
-           finalUpdates['live.team1Points'] = 0;
-           finalUpdates['live.team2Points'] = 0;
-        }
+        finalUpdates['live.team1Points'] = 0;
+        finalUpdates['live.team2Points'] = 0;
     } else if (updates.status === 'COMPLETED') {
-        // Use a non-batched update here to ensure live is cleared before batch commit
-        await matchRef.update({ live: null, lastUpdateTime: Timestamp.now() });
+        await matchRef.update({ live: null }); // Clear live field first
         delete finalUpdates.live;
     }
 
@@ -124,33 +129,27 @@ const recordMatchResultFlow = ai.defineFlow(
     if (tournament.tournamentType === 'knockout' && completedMatch.round) {
         const matchesRef = adminDb.collection('matches');
         
-        // Query for all matches in the same round and event
         const currentRoundQuery = matchesRef
             .where('eventType', '==', completedMatch.eventType)
             .where('round', '==', completedMatch.round);
         const currentRoundSnap = await currentRoundQuery.get();
         
-        // Get all matches for this round and event, including the one just completed.
         const roundMatches = currentRoundSnap.docs.map(doc => {
             if (doc.id === input.matchId) {
-                // Use the new, updated data for the match that just finished
                 return { id: doc.id, ...completedMatch, ...updates } as Match;
             }
             return { id: doc.id, ...doc.data() } as Match;
         });
         
-        // Check if all matches in this round are now complete.
         const allMatchesInRoundCompleted = roundMatches.every(
             match => match.status === 'COMPLETED'
         );
 
         if (!allMatchesInRoundCompleted) {
-            // Not all matches in the round are done, so don't schedule the next round yet.
             await batch.commit();
             return;
         }
 
-        // All matches in the round are complete, proceed to schedule next round.
         const allTeamsSnap = await adminDb.collection("teams").get();
         const allTeams = allTeamsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Team));
         const teamMap = new Map(allTeams.map(team => [team.id, team]));
@@ -165,22 +164,18 @@ const recordMatchResultFlow = ai.defineFlow(
         
         if (isFinalRound) {
             await batch.commit();
-            return; // It was the final round, nothing more to schedule.
+            return; 
         }
         
-        // Get winners and calculate point differentials for sorting
         const winnersWithInfo = roundMatches
             .filter(match => match.winnerId && match.winnerId !== 'BYE')
             .map(match => {
                 const winnerId = match.winnerId!;
-                // If it's a BYE from round 1, point differential should be considered neutral (0) for sorting.
-                // Otherwise, use the calculated point differential.
                 const pointDiff = (match.team2Id === 'BYE' && match.round === 1) ? 0 : (match.pointDifferential || 0);
                 const lotNumber = teamMap.get(winnerId)?.lotNumber ?? Infinity;
                 return { winnerId, pointDiff, lotNumber };
             });
 
-        // Sort by point differential (desc), then by lot number (asc) as a tie-breaker
         winnersWithInfo.sort((a, b) => {
             if (a.pointDiff !== b.pointDiff) {
                 return b.pointDiff - a.pointDiff;
@@ -190,19 +185,16 @@ const recordMatchResultFlow = ai.defineFlow(
         
         let winnersToSchedule = winnersWithInfo.map(w => w.winnerId);
         
-        // If there's an odd number of winners for the next round, the top-ranked one gets a bye.
         if (winnersToSchedule.length % 2 !== 0 && winnersToSchedule.length > 1) {
-            // Find teams that have already had a BYE in this event
             const byeHistoryQuery = matchesRef.where('eventType', '==', completedMatch.eventType).where('team2Id', '==', 'BYE');
             const byeHistorySnap = await byeHistoryQuery.get();
             const teamsWithPastByes = new Set(byeHistorySnap.docs.map(doc => doc.data().team1Id));
 
-            // Find the index of the highest-ranked winner who hasn't had a BYE yet
             const byeWinnerIndex = winnersWithInfo.findIndex(w => !teamsWithPastByes.has(w.winnerId));
 
             if (byeWinnerIndex !== -1) {
-                const [byeWinner] = winnersWithInfo.splice(byeWinnerIndex, 1); // Remove from info list
-                winnersToSchedule = winnersWithInfo.map(w => w.winnerId); // Re-create ID list
+                const [byeWinner] = winnersWithInfo.splice(byeWinnerIndex, 1);
+                winnersToSchedule = winnersWithInfo.map(w => w.winnerId);
                 const byeWinnerId = byeWinner.winnerId;
 
                 const byeWinnerTeam = teamMap.get(byeWinnerId);
@@ -220,7 +212,7 @@ const recordMatchResultFlow = ai.defineFlow(
                         team2OrgName: 'BYE',
                         eventType: completedMatch.eventType,
                         courtName: '', 
-                        startTime: Timestamp.now() as any, // Cast needed for type mismatch
+                        startTime: Timestamp.now() as any,
                         lastUpdateTime: Timestamp.now() as any,
                         status: 'COMPLETED',
                         winnerId: byeWinnerId,
@@ -238,7 +230,6 @@ const recordMatchResultFlow = ai.defineFlow(
 
         const finalWinnersToSchedule = winnersToSchedule.filter(w => !scheduledIds.has(w));
 
-        // Implement seeded pairing: 1 vs n, 2 vs n-1, etc.
         let left = 0;
         let right = finalWinnersToSchedule.length - 1;
 
@@ -259,7 +250,6 @@ const recordMatchResultFlow = ai.defineFlow(
             const orgsCollection = await adminDb.collection('organizations').get();
             const orgNameMap = new Map(orgsCollection.docs.map(doc => [doc.id, doc.data().name]));
             
-            // Create the new match fixture without assigning court or time.
             const newMatchRef = adminDb.collection('matches').doc();
             const newMatchData: Omit<Match, 'id'> = {
                 team1Id: team1Id,
@@ -269,9 +259,9 @@ const recordMatchResultFlow = ai.defineFlow(
                 team1OrgName: orgNameMap.get(team1.organizationId) || '',
                 team2OrgName: orgNameMap.get(team2.organizationId) || '',
                 eventType: completedMatch.eventType,
-                courtName: '', // Left blank for manual assignment
-                startTime: Timestamp.now() as any, // Placeholder time
-                status: 'PENDING', // Set to PENDING for manual scheduling
+                courtName: '',
+                startTime: Timestamp.now() as any, 
+                status: 'PENDING',
                 round: completedMatch.round + 1,
             };
             batch.set(newMatchRef, newMatchData);
