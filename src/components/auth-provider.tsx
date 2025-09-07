@@ -5,7 +5,6 @@ import React, { createContext, useState, useEffect, useCallback } from 'react';
 import type { User } from '@/types';
 import { db } from '@/lib/firebase';
 import { collection, query, where, getDocs } from 'firebase/firestore';
-import { getAuth, onAuthStateChanged, signOut, signInAnonymously, isSignInWithEmailLink, signInWithEmailLink } from 'firebase/auth';
 
 
 interface AuthContextType {
@@ -41,13 +40,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // Check for critical Firebase configuration errors on startup
     const checkConfig = async () => {
         try {
-            await getDocs(collection(db, 'users')); 
+            // A simple read to check if firestore is configured and rules allow access
+            await getDocs(query(collection(db, 'users'), where('username', '==', 'nonexistentuser'))); 
         } catch (error: any) {
             console.error("CRITICAL: Firebase configuration is invalid or a required API is not enabled.", error.message);
             if (error.code === 'permission-denied' || error.code === 'unauthenticated') {
                  console.error("ACTION REQUIRED: Please check your Firestore Security Rules to allow read/write access.");
-            }
-             if (error.message.includes("auth/configuration-not-found")) {
+            } else if (error.message.includes('auth/configuration-not-found') || error.message.includes('identitytoolkit.googleapis.com')) {
                 console.error("ACTION REQUIRED: Please enable the 'Identity Toolkit API' for your project in the Google Cloud Console.");
                 console.error("You can enable it here: https://console.cloud.google.com/apis/library/identitytoolkit.googleapis.com");
             }
@@ -111,8 +110,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const logout = useCallback(() => {
-    const auth = getAuth();
-    signOut(auth).catch(error => console.error("Error signing out:", error));
     sessionStorage.removeItem('battledore_user');
     setUser(null);
   }, []);
