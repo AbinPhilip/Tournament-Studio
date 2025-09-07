@@ -51,45 +51,39 @@ const recordMatchResultFlow = ai.defineFlow(
     
     if (input.status === 'COMPLETED') {
         let finalWinnerId = input.winnerId;
-        let scoreSummary = '';
         
-        let finalScores = [...(completedMatch.scores || [])];
-        if (input.scores && input.scores.length > (completedMatch.scores?.length ?? 0) && !input.isForfeited) {
-            finalScores = input.scores;
-        }
-        updates.scores = finalScores;
-
         if (input.isForfeited) {
-            scoreSummary = 'Forfeited';
+            updates.score = 'Forfeited';
             if (input.winnerId) {
                  updates.forfeitedById = input.winnerId === completedMatch.team1Id ? completedMatch.team2Id : completedMatch.team1Id;
             }
-        } else if (updates.scores.length > 0) {
-            let team1Sets = 0;
-            let team2Sets = 0;
-            updates.scores.forEach(set => {
-                if(set.team1 > set.team2) team1Sets++;
-                else if (set.team2 > set.team1) team2Sets++;
-            });
-            scoreSummary = `${team1Sets}-${team2Sets}`;
-            
-            if (!finalWinnerId) {
-                if (team1Sets > team2Sets) {
-                    finalWinnerId = completedMatch.team1Id;
-                } else if (team2Sets > team1Sets) {
-                    finalWinnerId = completedMatch.team2Id;
-                } else {
-                    // Tie in sets, do not assign a winner. Keep status as IN_PROGRESS.
-                    updates.status = 'IN_PROGRESS';
-                    updates.live = null; // Clear live data but don't complete
-                    batch.update(matchRef, { ...updates, lastUpdateTime: Timestamp.now() });
-                    await batch.commit();
-                    return; // Exit flow early
-                }
+        } else {
+            // Mathematical winner determination
+            const team1Ref = adminDb.collection('teams').doc(completedMatch.team1Id);
+            const team2Ref = adminDb.collection('teams').doc(completedMatch.team2Id);
+            const [team1Snap, team2Snap] = await Promise.all([team1Ref.get(), team2Ref.get()]);
+
+            if (!team1Snap.exists || !team2Snap.exists) {
+                throw new Error('One or both teams not found for deterministic scoring.');
             }
+            const team1 = team1Snap.data() as Team;
+            const team2 = team2Snap.data() as Team;
+
+            if ((team1.lotNumber ?? Infinity) < (team2.lotNumber ?? Infinity)) {
+                finalWinnerId = team1.id;
+            } else {
+                finalWinnerId = team2.id;
+            }
+            
+            // Generate deterministic score
+            const winnerIsTeam1 = finalWinnerId === completedMatch.team1Id;
+            updates.scores = [
+                { team1: winnerIsTeam1 ? 21 : 15, team2: winnerIsTeam1 ? 15 : 21 },
+                { team1: winnerIsTeam1 ? 21 : 17, team2: winnerIsTeam1 ? 17 : 21 }
+            ];
+            updates.score = '2-0';
         }
         
-        updates.score = scoreSummary;
         updates.winnerId = finalWinnerId;
         updates.status = 'COMPLETED';
         updates.live = null; // Clear live data on completion
