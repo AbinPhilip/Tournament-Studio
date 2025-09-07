@@ -7,10 +7,9 @@ import { db } from '@/lib/firebase';
 import { doc, onSnapshot, Unsubscribe, Timestamp, updateDoc } from 'firebase/firestore';
 import type { Match } from '@/types';
 import { useToast } from '@/hooks/use-toast';
-import { ArrowLeft, Send, Repeat, CheckCircle, Smartphone, AlertTriangle, Minus, Plus } from 'lucide-react';
+import { ArrowLeft, CheckCircle, Minus, Plus } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { updateLiveScore } from '@/ai/flows/update-live-score-flow';
 import { recordMatchResult } from '@/ai/flows/record-match-result-flow';
 import {
   AlertDialog,
@@ -24,7 +23,6 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { Separator } from '@/components/ui/separator';
-import { LoadingShuttlecock } from '@/components/ui/loading-shuttlecock';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 
@@ -42,7 +40,6 @@ export default function LiveScorerPage() {
     // Local state for UI responsiveness
     const [team1Points, setTeam1Points] = useState(0);
     const [team2Points, setTeam2Points] = useState(0);
-    const [servingTeamId, setServingTeamId] = useState<string | null>(null);
     const [currentScores, setCurrentScores] = useState<{ team1: number, team2: number }[]>([]);
 
     useEffect(() => {
@@ -59,7 +56,6 @@ export default function LiveScorerPage() {
                      const initialLiveState = {
                         team1Points: 0,
                         team2Points: 0,
-                        servingTeamId: matchData.team1Id,
                         currentSet: (matchData.scores?.length || 0) + 1,
                     };
                     updateDoc(matchRef, { status: 'IN_PROGRESS', live: initialLiveState });
@@ -71,7 +67,6 @@ export default function LiveScorerPage() {
                 // Sync local state with Firestore
                 setTeam1Points(matchData.live?.team1Points ?? 0);
                 setTeam2Points(matchData.live?.team2Points ?? 0);
-                setServingTeamId(matchData.live?.servingTeamId ?? matchData.team1Id);
                 setCurrentScores(matchData.scores ?? []);
             } else {
                 toast({ title: "Error", description: "Match not found.", variant: 'destructive' });
@@ -97,29 +92,7 @@ export default function LiveScorerPage() {
             setTeam2Points(newPoints);
         }
     }, [team1Points, team2Points]);
-    
-    const handleServingTeamChange = useCallback((teamId: string) => {
-        setServingTeamId(teamId);
-    }, []);
 
-    const handleUpdateLiveScore = useCallback(async () => {
-         if (!match || servingTeamId === null) return;
-         setIsSubmitting(true);
-         try {
-            await updateLiveScore({
-                matchId: match.id,
-                team1Points: team1Points,
-                team2Points: team2Points,
-                servingTeamId: servingTeamId,
-            });
-            toast({ title: "Score Updated", description: "The live score has been pushed." });
-         } catch(e) {
-             console.error("Score update error:", e);
-             toast({ title: "Error", description: "Could not update score.", variant: "destructive" });
-         } finally {
-             setIsSubmitting(false);
-         }
-    }, [match, team1Points, team2Points, servingTeamId, toast]);
     
     const handleFinalizeSet = useCallback(async () => {
         if (!match) return;
@@ -130,7 +103,12 @@ export default function LiveScorerPage() {
                 matchId: match.id,
                 scores: newScores,
                 status: 'IN_PROGRESS',
+                team1Points: 0,
+                team2Points: 0,
             });
+            // Reset points for next set
+            setTeam1Points(0);
+            setTeam2Points(0);
             toast({ title: "Set Finalized", description: `Set ${newScores.length} result has been recorded.` });
         } catch(e) {
             console.error("Set finalization error:", e);
@@ -201,8 +179,6 @@ export default function LiveScorerPage() {
                         points={team1Points}
                         setsWon={team1SetsWon}
                         onPointChange={(delta) => handlePointChange('team1', delta)}
-                        isServing={servingTeamId === match.team1Id}
-                        onServeChange={() => handleServingTeamChange(match.team1Id)}
                         disabled={isSubmitting}
                      />
                      <TeamScorer 
@@ -211,18 +187,13 @@ export default function LiveScorerPage() {
                         points={team2Points}
                         setsWon={team2SetsWon}
                         onPointChange={(delta) => handlePointChange('team2', delta)}
-                        isServing={servingTeamId === match.team2Id}
-                        onServeChange={() => handleServingTeamChange(match.team2Id)}
                         disabled={isSubmitting}
                      />
                   </div>
                   
                   <Separator />
 
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                        <Button variant="secondary" onClick={handleUpdateLiveScore} disabled={isSubmitting}>
-                            <Send className="mr-2"/> Push Live Score
-                        </Button>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                         <Button variant="outline" onClick={handleFinalizeSet} disabled={isSubmitting || !canFinalizeSet}>
                             <CheckCircle className="mr-2"/> Finalize Set
                         </Button>
@@ -238,8 +209,8 @@ export default function LiveScorerPage() {
                                     </AlertDialogDescription>
                                 </AlertDialogHeader>
                                 <div className="space-y-4 py-4">
-                                     <Button onClick={() => handleFinalizeMatch(false, team1Points > team2Points ? match.team1Id : match.team2Id)} className="w-full bg-green-600 hover:bg-green-700" disabled={isSubmitting}>
-                                        {team1Points > team2Points ? match.team1Name : match.team2Name} Wins
+                                     <Button onClick={() => handleFinalizeMatch(false, team1Points > team2Points ? match.team1Id : match.team2Id)} className="w-full bg-green-600 hover:bg-green-700" disabled={isSubmitting || (!canFinalizeSet && currentScores.length < 1)}>
+                                        Declare Winner by Points
                                     </Button>
                                     <div className="relative">
                                         <div className="absolute inset-0 flex items-center"><span className="w-full border-t" /></div>
@@ -284,20 +255,18 @@ interface TeamScorerProps {
   points: number;
   setsWon: number;
   onPointChange: (delta: 1 | -1) => void;
-  isServing: boolean;
-  onServeChange: () => void;
   disabled?: boolean;
 }
 
-function TeamScorer({ teamName, orgName, points, setsWon, onPointChange, isServing, onServeChange, disabled }: TeamScorerProps) {
+function TeamScorer({ teamName, orgName, points, setsWon, onPointChange, disabled }: TeamScorerProps) {
     return (
-        <div className={cn("p-4 sm:p-6 rounded-lg border-2", isServing ? "border-primary bg-primary/5" : "border-muted")}>
+        <div className={cn("p-4 sm:p-6 rounded-lg border-2 border-muted")}>
             <div className="flex justify-between items-start mb-4">
                 <div>
                     <h3 className="text-xl md:text-2xl font-semibold break-words">{teamName}</h3>
                     <p className="text-sm text-muted-foreground">{orgName}</p>
                 </div>
-                <Badge variant={isServing ? "default" : "secondary"} className="text-lg">{setsWon}</Badge>
+                <Badge variant="secondary" className="text-lg">{setsWon}</Badge>
             </div>
             
             <div className="flex items-center justify-center gap-4 my-4">
@@ -309,15 +278,6 @@ function TeamScorer({ teamName, orgName, points, setsWon, onPointChange, isServi
                     <Plus />
                 </Button>
             </div>
-
-            <Button
-                variant={isServing ? "default" : "outline"}
-                className="w-full"
-                onClick={onServeChange}
-                disabled={disabled}
-            >
-                {isServing ? "Serving" : "Set as Server"}
-            </Button>
         </div>
     );
 }

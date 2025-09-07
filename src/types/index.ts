@@ -92,7 +92,6 @@ export interface Match {
     live?: {
         team1Points: number;
         team2Points: number;
-        servingTeamId: string;
         currentSet: number;
     } | null;
     // Client-side properties

@@ -21,7 +21,9 @@ const RecordMatchResultInputSchema = z.object({
   })).optional(),
   winnerId: z.string().optional(),
   isForfeited: z.boolean().optional(),
-  status: z.enum(['IN_PROGRESS', 'COMPLETED']).optional(),
+  status: z.enum(['IN_PROGRESS', 'COMPLETED']),
+  team1Points: z.number().int().min(0).optional(),
+  team2Points: z.number().int().min(0).optional(),
 });
 export type RecordMatchResultInput = z.infer<typeof RecordMatchResultInputSchema>;
 
@@ -87,10 +89,15 @@ const recordMatchResultFlow = ai.defineFlow(
     }
     
     const finalUpdates: any = { ...updates };
-    if (updates.status !== 'COMPLETED' && updates.scores) {
-      finalUpdates['live.currentSet'] = updates.scores.length + 1;
-      finalUpdates['live.team1Points'] = 0;
-      finalUpdates['live.team2Points'] = 0;
+    if (updates.status === 'IN_PROGRESS') {
+        finalUpdates['live.currentSet'] = (updates.scores?.length || 0) + 1;
+        finalUpdates['live.team1Points'] = input.team1Points ?? 0;
+        finalUpdates['live.team2Points'] = input.team2Points ?? 0;
+        // If it's a set finalization, reset points for the next set
+        if (input.team1Points === 0 && input.team2Points === 0) {
+           finalUpdates['live.team1Points'] = 0;
+           finalUpdates['live.team2Points'] = 0;
+        }
     } else if (updates.status === 'COMPLETED') {
         // Use a non-batched update here to ensure live is cleared before batch commit
         await matchRef.update({ live: null, lastUpdateTime: Timestamp.now() });
