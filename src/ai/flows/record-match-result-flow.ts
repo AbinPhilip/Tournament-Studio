@@ -70,12 +70,18 @@ const recordMatchResultFlow = ai.defineFlow(
             if (input.winnerId) {
                  updates.forfeitedById = input.winnerId === completedMatch.team1Id ? completedMatch.team2Id : completedMatch.team1Id;
             }
-        } else if(input.scores) {
+        } else if(input.scores && input.scores.length > 0) {
+            updates.scores = input.scores;
             // Determine winner from scores if not forfeited
             const team1SetsWon = input.scores.filter(s => s.team1 > s.team2).length;
             const team2SetsWon = input.scores.filter(s => s.team2 > s.team1).length;
-            finalWinnerId = team1SetsWon > team2SetsWon ? completedMatch.team1Id : completedMatch.team2Id;
-            updates.scores = input.scores;
+            
+            if (team1SetsWon === team2SetsWon) { // Typically for single-set matches
+                const lastSet = input.scores[input.scores.length - 1];
+                finalWinnerId = lastSet.team1 > lastSet.team2 ? completedMatch.team1Id : completedMatch.team2Id;
+            } else {
+                finalWinnerId = team1SetsWon > team2SetsWon ? completedMatch.team1Id : completedMatch.team2Id;
+            }
             updates.score = `${team1SetsWon}-${team2SetsWon}`;
         }
         

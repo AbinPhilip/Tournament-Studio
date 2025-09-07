@@ -238,8 +238,8 @@ export default function LiveScorerPage() {
                                     </AlertDialogDescription>
                                 </AlertDialogHeader>
                                 <div className="space-y-4 py-4">
-                                     <Button onClick={() => handleFinalizeMatch(false, team1Points > team2Points ? match.team1Id : match.team2Id)} className="w-full bg-green-600 hover:bg-green-700" disabled={isSubmitting || (!canFinalizeSet && currentScores.length < 1)}>
-                                        Declare Winner by Points
+                                     <Button onClick={() => handleFinalizeMatch(false, undefined)} className="w-full bg-green-600 hover:bg-green-700" disabled={isSubmitting}>
+                                        Declare Winner by Points/Sets
                                     </Button>
                                     <div className="relative">
                                         <div className="absolute inset-0 flex items-center"><span className="w-full border-t" /></div>
