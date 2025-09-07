@@ -69,7 +69,7 @@ import { useToast } from '@/hooks/use-toast';
 import { db } from '@/lib/firebase';
 import { collection, getDocs, addDoc, deleteDoc, doc, query, where, updateDoc, writeBatch, onSnapshot } from 'firebase/firestore';
 import { useRouter } from 'next/navigation';
-import { mockUsers, mockOrganizations, mockTeams } from '@/lib/mock-data';
+import { seedDatabase } from '@/app/actions/seedDatabase';
 
 
 function RoleBadge({ role }: { role: UserRole }) {
@@ -90,6 +90,7 @@ const userFormSchema = z.object({
   email: z.string().email({ message: "Please enter a valid email." }),
   phoneNumber: z.string().regex(/^\d{10}$/, { message: 'Please enter a valid 10-digit phone number.' }),
   role: z.enum(['individual', 'update', 'admin', 'inquiry', 'super']),
+  courtName: z.string().optional(),
 });
 
 const userRoles: UserRole[] = ['super', 'admin', 'update', 'inquiry', 'individual'];
@@ -165,9 +166,6 @@ export default function SettingsPage() {
         } else {
             const fetchedPerms = snapshot.docs.reduce((acc, doc) => {
                 const modules = doc.data().modules || [];
-                if (!modules.includes('presenter')) modules.push('presenter');
-                if (!modules.includes('image-uploader')) modules.push('image-uploader');
-                if (!modules.includes('registration')) modules.push('registration');
                 acc[doc.id as UserRole] = modules;
                 return acc;
             }, {} as RolePermissions);
@@ -243,7 +241,7 @@ export default function SettingsPage() {
     if (!userToEdit) return;
     try {
         const userRef = doc(db, 'users', userToEdit.id);
-        await updateDoc(userRef, values);
+        await updateDoc(userRef, values as any);
         setIsEditUserOpen(false);
         setUserToEdit(null);
         setSuccessModalTitle('User Updated');
@@ -256,44 +254,13 @@ export default function SettingsPage() {
 
   const handleSeed = async () => {
     setIsSeeding(true);
-    try {
-      const batch = writeBatch(db);
-      
-      const collectionsToDelete = ['users', 'organizations', 'teams', 'matches', 'tournaments', 'sponsors', 'images'];
-      for (const collectionName of collectionsToDelete) {
-          const snapshot = await getDocs(collection(db, collectionName));
-          snapshot.forEach(doc => batch.delete(doc.ref));
-      }
-
-      // Add Organizations
-      const orgRefs: Record<string, string> = {};
-      for (const org of mockOrganizations) {
-        const orgRef = doc(collection(db, 'organizations'));
-        batch.set(orgRef, org);
-        orgRefs[org.name] = orgRef.id;
-      }
-      
-      // Add Users
-      mockUsers.forEach(user => {
-        const userRef = doc(collection(db, 'users'));
-        batch.set(userRef, user);
-      });
-
-      // Add Teams
-      mockTeams.forEach(team => {
-        const teamRef = doc(collection(db, 'teams'));
-        const { organizationName, ...teamData } = team;
-        batch.set(teamRef, { ...teamData, organizationId: orgRefs[organizationName] });
-      });
-
-      await batch.commit();
-      toast({ title: 'Database Seeded', description: 'Your database has been reset with mock data.' });
-    } catch (error) {
-      console.error('Seeding failed:', error);
-      toast({ title: 'Seeding Failed', description: 'Could not seed the database.', variant: 'destructive' });
-    } finally {
-      setIsSeeding(false);
+    const result = await seedDatabase();
+    if (result.success) {
+      toast({ title: "Database Seeded", description: "The database has been populated with mock data. You can now log in." });
+    } else {
+      toast({ title: "Seeding Failed", description: result.message, variant: "destructive" });
     }
+    setIsSeeding(false);
   };
   
   const handlePermissionChange = (role: UserRole, moduleId: string, isChecked: boolean) => {
@@ -513,7 +480,7 @@ export default function SettingsPage() {
               <AlertDialogTrigger asChild>
                 <Button variant="destructive" disabled={isSeeding}>
                   {isSeeding ? <div className="animate-spin h-5 w-5 border-2 border-background border-t-transparent rounded-full" /> : <Database className="mr-2" />}
-                  Clear and Reseed Database
+                  {isSeeding ? "Seeding..." : "Clear and Reseed Database"}
                 </Button>
               </AlertDialogTrigger>
               <AlertDialogContent>

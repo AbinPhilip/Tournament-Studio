@@ -1,3 +1,4 @@
+
 "use client"
 
 import Link from "next/link"
@@ -7,7 +8,7 @@ import { LayoutDashboard, ListOrdered, Shield, Cog, Settings, Trophy, Users, Bui
 import type { User, UserRole } from "@/types"
 import { useState, useEffect } from "react"
 import { db } from "@/lib/firebase"
-import { collection, onSnapshot } from "firebase/firestore"
+import { collection, onSnapshot, getDocs, writeBatch, doc } from "firebase/firestore"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 
 type NavItem = {
@@ -55,21 +56,20 @@ export function MainNav({ user, isMobile = false, isCollapsed = false }: { user:
     const permsCollectionRef = collection(db, 'rolePermissions');
     const unsubscribe = onSnapshot(permsCollectionRef, (snapshot) => {
         if (snapshot.empty) {
-            console.warn("No role permissions found in Firestore. Using defaults.");
+            console.warn("No role permissions found in Firestore. Using and saving defaults.");
             setPermissions(defaultPerms);
+            const batch = writeBatch(db);
+            Object.entries(defaultPerms).forEach(([role, modules]) => {
+                if (role === 'court') return;
+                const docRef = doc(db, 'rolePermissions', role);
+                batch.set(docRef, { modules });
+            });
+            batch.commit().catch(err => console.error("Failed to save default permissions:", err));
             return;
         }
+        
         const fetchedPerms = snapshot.docs.reduce((acc, doc) => {
             const modules = doc.data().modules || [];
-            if (!modules.includes('presenter')) {
-                modules.push('presenter');
-            }
-            if (!modules.includes('image-uploader')) {
-              modules.push('image-uploader');
-            }
-            if (!modules.includes('registration')) {
-              modules.push('registration');
-            }
             acc[doc.id as UserRole] = modules;
             return acc;
         }, {} as RolePermissions);
