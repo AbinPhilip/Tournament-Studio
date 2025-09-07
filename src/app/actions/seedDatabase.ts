@@ -2,7 +2,7 @@
 'use server';
 
 import { db } from '@/lib/firebase';
-import { collection, writeBatch, getDocs, doc } from 'firebase/firestore';
+import { collection, writeBatch, getDocs, doc, query } from 'firebase/firestore';
 import { mockUsers, mockOrganizations, mockTeams } from '@/lib/mock-data';
 import { revalidatePath } from 'next/cache';
 import type { Sponsor, Tournament } from '@/types';
@@ -11,13 +11,15 @@ export async function seedDatabase() {
     try {
         // 1. Preserve existing logos
         let tournamentLogoUrl: string | undefined;
-        const tourneySnap = await getDocs(collection(db, 'tournaments'));
+        const tourneyQuery = query(collection(db, 'tournaments'));
+        const tourneySnap = await getDocs(tourneyQuery);
         if (!tourneySnap.empty) {
             tournamentLogoUrl = (tourneySnap.docs[0].data() as Tournament).logoUrl;
         }
 
         const sponsorsWithLogos: { name: string; logoUrl?: string }[] = [];
-        const sponsorsSnap = await getDocs(collection(db, 'sponsors'));
+        const sponsorsQuery = query(collection(db, 'sponsors'));
+        const sponsorsSnap = await getDocs(sponsorsQuery);
         sponsorsSnap.forEach(doc => {
             const sponsor = doc.data() as Sponsor;
             if (sponsor.logoUrl) {
@@ -30,15 +32,13 @@ export async function seedDatabase() {
         // 2. Define collections to clear
         const collectionsToDelete = ['users', 'organizations', 'teams', 'matches', 'tournaments', 'sponsors', 'images', 'registrations'];
         
-        // Clear existing data
         for (const collectionName of collectionsToDelete) {
             const snapshot = await getDocs(collection(db, collectionName));
             snapshot.forEach(doc => batch.delete(doc.ref));
         }
         
-        await batch.commit(); // Commit deletions first
+        await batch.commit();
 
-        // Start a new batch for additions
         const addBatch = writeBatch(db);
 
         // 3. Add Organizations
@@ -65,28 +65,32 @@ export async function seedDatabase() {
                 console.warn(`Organization "${organizationName}" not found for team "${team.player1Name}". Skipping team.`);
             }
         });
-        
-        // 6. Restore logos
-        if (tournamentLogoUrl) {
-            const newTourneyQuery = await getDocs(collection(db, 'tournaments'));
-            if (!newTourneyQuery.empty) {
-                const newTourneyRef = newTourneyQuery.docs[0].ref;
-                addBatch.update(newTourneyRef, { logoUrl: tournamentLogoUrl });
-            }
-        }
-        
-        if (sponsorsWithLogos.length > 0) {
-            for (const sponsorLogoInfo of sponsorsWithLogos) {
-                 const newSponsorQuery = await getDocs(collection(db, 'sponsors'));
-                 const newSponsorDoc = newSponsorQuery.docs.find(d => d.data().name === sponsorLogoInfo.name);
-                 if (newSponsorDoc) {
-                    addBatch.update(newSponsorDoc.ref, { logoUrl: sponsorLogoInfo.logoUrl });
-                 }
-            }
-        }
 
         await addBatch.commit();
-        revalidatePath('/login');
+        
+        // 6. Restore logos in a separate batch
+        const logoBatch = writeBatch(db);
+        
+        if (tournamentLogoUrl) {
+            const newTourneyQuery = query(collection(db, 'tournaments'));
+            const newTourneySnap = await getDocs(newTourneyQuery);
+            if (!newTourneySnap.empty) {
+                const newTourneyRef = newTourneySnap.docs[0].ref;
+                logoBatch.update(newTourneyRef, { logoUrl: tournamentLogoUrl });
+            }
+        }
+        
+        for (const sponsorLogoInfo of sponsorsWithLogos) {
+            const newSponsorQuery = query(collection(db, 'sponsors'), where('name', '==', sponsorLogoInfo.name));
+            const newSponsorSnap = await getDocs(newSponsorQuery);
+             if (!newSponsorSnap.empty) {
+                const newSponsorDocRef = newSponsorSnap.docs[0].ref;
+                logoBatch.update(newSponsorDocRef, { logoUrl: sponsorLogoInfo.logoUrl });
+             }
+        }
+
+        await logoBatch.commit();
+        revalidatePath('/login', 'layout');
         return { success: true, message: 'Database has been reset with mock data.' };
 
     } catch (error) {

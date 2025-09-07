@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { db } from '@/lib/firebase';
 import { collection, addDoc, updateDoc, doc, getDocs, query, where } from 'firebase/firestore';
 import { revalidatePath } from 'next/cache';
+import type { Organization } from '@/types';
 
 const organizationSchema = z.object({
   id: z.string().optional(),
@@ -24,23 +25,26 @@ export async function addOrUpdateOrganization(data: z.infer<typeof organizationS
   const { id, name, location } = validatedFields.data;
 
   try {
-    // Check for duplicate organization name, excluding the current one if editing
-    const q = query(collection(db, 'organizations'), where('name', '==', name));
+    const orgsRef = collection(db, 'organizations');
+    const q = query(orgsRef, where('name', '==', name));
     const querySnapshot = await getDocs(q);
     
-    if (!querySnapshot.empty) {
-        if (!id || querySnapshot.docs[0].id !== id) {
-             return { error: 'An organization with this name already exists.' };
+    let isDuplicate = false;
+    querySnapshot.forEach((doc) => {
+        if (!id || doc.id !== id) {
+            isDuplicate = true;
         }
+    });
+
+    if (isDuplicate) {
+        return { error: 'An organization with this name already exists.' };
     }
 
     if (id) {
-      // Update existing organization
       const orgRef = doc(db, 'organizations', id);
       await updateDoc(orgRef, { name, location });
     } else {
-      // Add new organization
-      await addDoc(collection(db, 'organizations'), { name, location });
+      await addDoc(orgsRef, { name, location });
     }
 
     revalidatePath('/dashboard/organizations');

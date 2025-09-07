@@ -1,7 +1,7 @@
 
 "use client";
 
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -51,6 +51,7 @@ import type { Team, Organization, Registration, Tournament } from '@/types';
 import { EventBadge } from '@/components/ui/event-badge';
 import { IndianRupee, Shirt, HandCoins, PackageCheck } from 'lucide-react';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
+import { LoadingShuttlecock } from '@/components/ui/loading-shuttlecock';
 
 const paymentFormSchema = z.object({
   paymentAmount: z.coerce.number().positive({ message: "Amount must be greater than 0." }),
@@ -81,6 +82,7 @@ export default function RegistrationPage() {
 
   const form = useForm<z.infer<typeof paymentFormSchema>>({
     resolver: zodResolver(paymentFormSchema),
+    defaultValues: { paymentAmount: 0 }
   });
 
   useEffect(() => {
@@ -140,50 +142,46 @@ export default function RegistrationPage() {
   }
 
   const handlePaymentSubmit = async (values: z.infer<typeof paymentFormSchema>) => {
-    if (teamToPay) {
-      // Single team payment
-       try {
-        const regRef = doc(db, 'registrations', teamToPay.id);
+    const processPayment = async (team: MergedTeamData, amount: number) => {
+        const regRef = doc(db, 'registrations', team.id);
         await setDoc(regRef, {
-          paymentStatus: 'paid',
-          paymentAmount: values.paymentAmount,
-          paymentDate: Timestamp.now(),
+            paymentStatus: 'paid',
+            paymentAmount: amount,
+            paymentDate: Timestamp.now(),
         }, { merge: true });
-        toast({ title: 'Payment Confirmed', description: `Payment for ${teamToPay.player1Name}'s team recorded.` });
+    };
+    
+    try {
+        if (teamToPay) {
+            await processPayment(teamToPay, values.paymentAmount);
+            toast({ title: 'Payment Confirmed', description: `Payment for ${teamToPay.player1Name}'s team recorded.` });
+        } else if (orgToPay) {
+            const unpaidTeams = orgToPay.teams.filter(t => t.paymentStatus !== 'paid');
+            if (unpaidTeams.length === 0) {
+                toast({ title: 'No action needed', description: 'All teams in this organization have already paid.'});
+                setOrgToPay(null);
+                return;
+            }
+            const paymentPerTeam = values.paymentAmount / unpaidTeams.length;
+            const batch = writeBatch(db);
+            unpaidTeams.forEach(team => {
+                const regRef = doc(db, 'registrations', team.id);
+                batch.set(regRef, {
+                    paymentStatus: 'paid',
+                    paymentAmount: paymentPerTeam,
+                    paymentDate: Timestamp.now()
+                }, { merge: true });
+            });
+            await batch.commit();
+            toast({ title: 'Group Payment Confirmed', description: `Payment for ${unpaidTeams.length} teams from ${orgToPay.orgName} recorded.`});
+        }
+    } catch (error) {
+         console.error(error);
+         toast({ title: 'Error', description: 'Failed to confirm payment.', variant: 'destructive' });
+    } finally {
         setTeamToPay(null);
-        form.reset();
-      } catch (error) {
-        console.error(error);
-        toast({ title: 'Error', description: 'Failed to confirm payment.', variant: 'destructive' });
-      }
-    } else if (orgToPay) {
-      // Organization group payment
-      const unpaidTeams = orgToPay.teams.filter(t => t.paymentStatus !== 'paid');
-      if (unpaidTeams.length === 0) {
-        toast({ title: 'No action needed', description: 'All teams in this organization have already paid.'});
-        setOrgToPay(null);
-        return;
-      }
-      const paymentPerTeam = values.paymentAmount / unpaidTeams.length;
-
-      try {
-        const batch = writeBatch(db);
-        unpaidTeams.forEach(team => {
-            const regRef = doc(db, 'registrations', team.id);
-            batch.set(regRef, {
-                paymentStatus: 'paid',
-                paymentAmount: paymentPerTeam,
-                paymentDate: Timestamp.now()
-            }, { merge: true });
-        });
-        await batch.commit();
-        toast({ title: 'Group Payment Confirmed', description: `Payment for ${unpaidTeams.length} teams from ${orgToPay.orgName} recorded.`});
         setOrgToPay(null);
         form.reset();
-      } catch (error) {
-        console.error(error);
-        toast({ title: 'Error', description: 'Failed to confirm group payment.', variant: 'destructive' });
-      }
     }
   };
   
@@ -260,7 +258,7 @@ export default function RegistrationPage() {
       </Card>
 
       {isLoading ? (
-        <div className="flex justify-center items-center h-64"><div className="animate-spin h-8 w-8 border-4 border-primary border-t-transparent rounded-full" /></div>
+        <LoadingShuttlecock className="h-64" />
       ) : (
         <Accordion type="single" collapsible className="w-full space-y-4">
           {groupedData.map(group => (

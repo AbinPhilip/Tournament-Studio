@@ -5,11 +5,11 @@ import { useAuth } from '@/hooks/use-auth';
 import dynamic from 'next/dynamic';
 import { LoadingShuttlecock } from '@/components/ui/loading-shuttlecock';
 
-const AdminView = dynamic(() => import('@/app/dashboard/admin-view'), { loading: () => <div className="flex h-full w-full items-center justify-center"><div className="animate-spin h-12 w-12 border-4 border-primary border-t-transparent rounded-full" /></div> });
-const IndividualView = dynamic(() => import('@/components/dashboard/individual-view'), { loading: () => <div className="flex h-full w-full items-center justify-center"><div className="animate-spin h-12 w-12 border-4 border-primary border-t-transparent rounded-full" /></div> });
-const InquiryView = dynamic(() => import('@/components/dashboard/inquiry-view'), { loading: () => <div className="flex h-full w-full items-center justify-center"><div className="animate-spin h-12 w-12 border-4 border-primary border-t-transparent rounded-full" /></div> });
-const UpdateUserView = dynamic(() => import('@/components/dashboard/update-user-view'), { loading: () => <div className="flex h-full w-full items-center justify-center"><div className="animate-spin h-12 w-12 border-4 border-primary border-t-transparent rounded-full" /></div> });
-const CourtUmpireView = dynamic(() => import('@/app/dashboard/court-umpire-view'), { loading: () => <div className="flex h-full w-full items-center justify-center"><div className="animate-spin h-12 w-12 border-4 border-primary border-t-transparent rounded-full" /></div> });
+const AdminView = dynamic(() => import('@/app/dashboard/admin-view'), { loading: () => <LoadingShuttlecock /> });
+const IndividualView = dynamic(() => import('@/components/dashboard/individual-view'), { loading: () => <LoadingShuttlecock /> });
+const InquiryView = dynamic(() => import('@/components/dashboard/inquiry-view'), { loading: () => <LoadingShuttlecock /> });
+const UpdateUserView = dynamic(() => import('@/components/dashboard/update-user-view'), { loading: () => <LoadingShuttlecock /> });
+const CourtUmpireView = dynamic(() => import('@/app/dashboard/court-umpire-view'), { loading: () => <LoadingShuttlecock /> });
 
 
 export default function DashboardPage() {
@@ -17,7 +17,7 @@ export default function DashboardPage() {
 
   const renderDashboardByRole = () => {
     if (!user) {
-        return <div className="flex h-full w-full items-center justify-center"><div className="animate-spin h-12 w-12 border-4 border-primary border-t-transparent rounded-full" /></div>;
+        return <LoadingShuttlecock className="h-full" />;
     }
     
     switch (user?.role) {
